@@ -1,0 +1,58 @@
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+
+# Unity asset meta（保留；此行仅注释说明）
+# 导出的工程
+/ExportedObj/
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# 崩溃日志
+sysinfo.txt
+crashlytics-build.properties
+.DS_Store
+
+# YooAsset 构建产物
+/Bundles/
+
+# HybridCLR 生成物（可用菜单重装/重新生成）
+/HybridCLRData/
+
+# 热更 dll / AOT 元数据（生成物，执行 Copy HotUpdate Dlls 菜单重新生成）
+/Assets/AssetRaw/HotUpdateDlls/*.bytes
+/Assets/AssetRaw/AOTMetadataAssemblies/*.bytes
+/Assets/AssetRaw/HotUpdateDlls/*.bytes.meta
+/Assets/AssetRaw/AOTMetadataAssemblies/*.bytes.meta
+
+# Luban 工具构建中间产物
+/Luban/**/bin/
+/Luban/**/obj/
+
+# 临时
+*.tmp
+
+# 验证日志
+*.log

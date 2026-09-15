@@ -1,0 +1,10 @@
+<module name="">
+    <!-- 道具品质 -->
+    <enum name="EItemQuality">
+        <var name="White" alias="白"/>
+        <var name="Green" alias="绿"/>
+        <var name="Blue" alias="蓝"/>
+        <var name="Purple" alias="紫"/>
+        <var name="Orange" alias="橙"/>
+    </enum>
+</module>

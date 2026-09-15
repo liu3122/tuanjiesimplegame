@@ -1,0 +1,70 @@
+<module name="">
+    <module name="item">
+        <!-- 道具 -->
+        <bean name="Item">
+            <var name="Id" type="int"/>
+            <var name="Name" type="string"/>
+            <var name="Desc" type="string"/>
+            <var name="Quality" type="EItemQuality"/>
+            <var name="Price" type="int"/>
+            <var name="MaxStack" type="int"/>
+        </bean>
+    </module>
+
+    <module name="monster">
+        <!-- 怪物（塔防敌人） -->
+        <bean name="Monster">
+            <var name="Id" type="int"/>
+            <var name="Name" type="string"/>
+            <var name="Hp" type="long"/>
+            <var name="Atk" type="int"/>
+            <var name="MoveSpeed" type="float"/>
+            <var name="Reward" type="int"/>
+            <!-- 掉落道具列表，引用 TbItem 的 id -->
+            <var name="DropList" type="list#sep=|,int#ref=TbItem"/>
+            <!-- 敌人颜色（Q版色块风，程序化生成用） -->
+            <var name="BodyColor" type="string"/>
+        </bean>
+    </module>
+
+    <module name="tower">
+        <!-- 防御塔 -->
+        <bean name="Tower">
+            <var name="Id" type="int"/>
+            <var name="Name" type="string"/>
+            <var name="Cost" type="int"/>
+            <var name="Damage" type="int"/>
+            <var name="AttackInterval" type="float"/>
+            <var name="AttackRange" type="float"/>
+            <var name="BulletSpeed" type="float"/>
+            <!-- 减速比例（0 表示无减速）与持续时间 -->
+            <var name="SlowRate" type="float"/>
+            <var name="SlowDuration" type="float"/>
+            <var name="TowerColor" type="string"/>
+        </bean>
+    </module>
+
+    <module name="wave">
+        <!-- 波次中的一组同类怪物 -->
+        <bean name="WaveItem">
+            <var name="MonsterId" type="int#ref=TbMonster"/>
+            <var name="Count" type="int"/>
+            <var name="Interval" type="float"/>
+        </bean>
+        <!-- 一波可包含多组怪物 -->
+        <bean name="Wave">
+            <var name="Id" type="int"/>
+            <var name="Items" type="list,wave.WaveItem"/>
+        </bean>
+    </module>
+
+    <module name="global">
+        <!-- 全局配置（单例） -->
+        <bean name="Global">
+            <var name="RotateSpeed" type="float"/>
+            <var name="LoginBgMusic" type="string"/>
+            <var name="InitGold" type="int"/>
+            <var name="InitLife" type="int"/>
+        </bean>
+    </module>
+</module>

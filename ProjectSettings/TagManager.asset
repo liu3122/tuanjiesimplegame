@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags:
+  - soldier
+  - Ground
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - 
+  - 
+  - PostProcessing
+  - Obstacle
+  - 
+  - Hero
+  - Player
+  - Monster
+  - PlotActor
+  - HideLayer
+  - DropItem
+  - CutFar
+  - CutMiddle
+  - CutNear
+  - UIEffect
+  - Occsion
+  - Hud
+  - MapGate
+  - 
+  - SureGround
+  - Ground
+  - SceneEffect
+  - Caiji
+  - SafeZone
+  - Monster2
+  - Npc
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0

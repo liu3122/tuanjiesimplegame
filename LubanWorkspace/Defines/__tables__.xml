@@ -1,0 +1,12 @@
+<module name="">
+    <!-- 道具表 -->
+    <table name="TbItem" value="item.Item" index="Id" input="tb_item.xlsx"/>
+    <!-- 怪物表 -->
+    <table name="TbMonster" value="monster.Monster" index="Id" input="tb_monster.xlsx"/>
+    <!-- 防御塔表 -->
+    <table name="TbTower" value="tower.Tower" index="Id" input="tb_tower.xlsx"/>
+    <!-- 波次表 -->
+    <table name="TbWave" value="wave.Wave" index="Id" input="tb_wave.xlsx"/>
+    <!-- 全局配置（单例表） -->
+    <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
+</module>

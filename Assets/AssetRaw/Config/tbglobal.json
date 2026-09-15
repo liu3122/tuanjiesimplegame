@@ -1,0 +1,8 @@
+[
+  {
+    "RotateSpeed": 90,
+    "LoginBgMusic": "audio/bgm_login",
+    "InitGold": 150,
+    "InitLife": 10
+  }
+]

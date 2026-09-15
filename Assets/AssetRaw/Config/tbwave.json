@@ -1,0 +1,67 @@
+[
+  {
+    "Id": 1,
+    "Items": [
+      {
+        "MonsterId": 10001,
+        "Count": 8,
+        "Interval": 1.2
+      }
+    ]
+  },
+  {
+    "Id": 2,
+    "Items": [
+      {
+        "MonsterId": 10001,
+        "Count": 6,
+        "Interval": 1
+      },
+      {
+        "MonsterId": 10002,
+        "Count": 4,
+        "Interval": 2
+      }
+    ]
+  },
+  {
+    "Id": 3,
+    "Items": [
+      {
+        "MonsterId": 10002,
+        "Count": 10,
+        "Interval": 1.2
+      }
+    ]
+  },
+  {
+    "Id": 4,
+    "Items": [
+      {
+        "MonsterId": 10002,
+        "Count": 8,
+        "Interval": 1
+      },
+      {
+        "MonsterId": 10003,
+        "Count": 5,
+        "Interval": 2.5
+      }
+    ]
+  },
+  {
+    "Id": 5,
+    "Items": [
+      {
+        "MonsterId": 10003,
+        "Count": 4,
+        "Interval": 3
+      },
+      {
+        "MonsterId": 20001,
+        "Count": 1,
+        "Interval": 5
+      }
+    ]
+  }
+]

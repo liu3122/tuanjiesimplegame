@@ -1,0 +1,17 @@
+{
+    "name": "Game.HotUpdate",
+    "rootNamespace": "Game.HotUpdate",
+    "references": [
+        "YooAsset",
+        "Luban.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
