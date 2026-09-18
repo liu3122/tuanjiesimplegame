@@ -17,10 +17,14 @@ public sealed partial class Global : Luban.BeanBase
 {
     public Global(JSONNode _buf) 
     {
-        { if(!_buf["RotateSpeed"].IsNumber) { throw new SerializationException(); }  RotateSpeed = _buf["RotateSpeed"]; }
-        { if(!_buf["LoginBgMusic"].IsString) { throw new SerializationException(); }  LoginBgMusic = _buf["LoginBgMusic"]; }
-        { if(!_buf["InitGold"].IsNumber) { throw new SerializationException(); }  InitGold = _buf["InitGold"]; }
-        { if(!_buf["InitLife"].IsNumber) { throw new SerializationException(); }  InitLife = _buf["InitLife"]; }
+        { if(!_buf["ChestInitGold"].IsNumber) { throw new SerializationException(); }  ChestInitGold = _buf["ChestInitGold"]; }
+        { if(!_buf["ChestFreeEliminates"].IsNumber) { throw new SerializationException(); }  ChestFreeEliminates = _buf["ChestFreeEliminates"]; }
+        { if(!_buf["ChestEliminateBaseFee"].IsNumber) { throw new SerializationException(); }  ChestEliminateBaseFee = _buf["ChestEliminateBaseFee"]; }
+        { if(!_buf["ChestEliminateFeeGrowth"].IsNumber) { throw new SerializationException(); }  ChestEliminateFeeGrowth = _buf["ChestEliminateFeeGrowth"]; }
+        { if(!_buf["AuctionFeeRate"].IsNumber) { throw new SerializationException(); }  AuctionFeeRate = _buf["AuctionFeeRate"]; }
+        { if(!_buf["ChestMaxSkillUses"].IsNumber) { throw new SerializationException(); }  ChestMaxSkillUses = _buf["ChestMaxSkillUses"]; }
+        { if(!_buf["AuctionDurationSec"].IsNumber) { throw new SerializationException(); }  AuctionDurationSec = _buf["AuctionDurationSec"]; }
+        { if(!_buf["AuctionBidStepPct"].IsNumber) { throw new SerializationException(); }  AuctionBidStepPct = _buf["AuctionBidStepPct"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -28,10 +32,14 @@ public sealed partial class Global : Luban.BeanBase
         return new global.Global(_buf);
     }
 
-    public readonly float RotateSpeed;
-    public readonly string LoginBgMusic;
-    public readonly int InitGold;
-    public readonly int InitLife;
+    public readonly int ChestInitGold;
+    public readonly int ChestFreeEliminates;
+    public readonly int ChestEliminateBaseFee;
+    public readonly int ChestEliminateFeeGrowth;
+    public readonly float AuctionFeeRate;
+    public readonly int ChestMaxSkillUses;
+    public readonly int AuctionDurationSec;
+    public readonly float AuctionBidStepPct;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -43,10 +51,14 @@ public sealed partial class Global : Luban.BeanBase
     public override string ToString()
     {
         return "{ "
-        + "RotateSpeed:" + RotateSpeed + ","
-        + "LoginBgMusic:" + LoginBgMusic + ","
-        + "InitGold:" + InitGold + ","
-        + "InitLife:" + InitLife + ","
+        + "ChestInitGold:" + ChestInitGold + ","
+        + "ChestFreeEliminates:" + ChestFreeEliminates + ","
+        + "ChestEliminateBaseFee:" + ChestEliminateBaseFee + ","
+        + "ChestEliminateFeeGrowth:" + ChestEliminateFeeGrowth + ","
+        + "AuctionFeeRate:" + AuctionFeeRate + ","
+        + "ChestMaxSkillUses:" + ChestMaxSkillUses + ","
+        + "AuctionDurationSec:" + AuctionDurationSec + ","
+        + "AuctionBidStepPct:" + AuctionBidStepPct + ","
         + "}";
     }
 }

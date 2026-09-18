@@ -1,6 +1,6 @@
 <module name="">
     <module name="item">
-        <!-- 道具 -->
+        <!-- 道具（通用，未来宝箱奖励等场景使用） -->
         <bean name="Item">
             <var name="Id" type="int"/>
             <var name="Name" type="string"/>
@@ -11,60 +11,48 @@
         </bean>
     </module>
 
-    <module name="monster">
-        <!-- 怪物（塔防敌人） -->
-        <bean name="Monster">
+    <module name="chest">
+        <!-- 宝箱档位：固定 20 格金额池，购买时随机洗牌位置 -->
+        <bean name="Chest">
             <var name="Id" type="int"/>
             <var name="Name" type="string"/>
-            <var name="Hp" type="long"/>
-            <var name="Atk" type="int"/>
-            <var name="MoveSpeed" type="float"/>
-            <var name="Reward" type="int"/>
-            <!-- 掉落道具列表，引用 TbItem 的 id -->
-            <var name="DropList" type="list#sep=|,int#ref=TbItem"/>
-            <!-- 敌人颜色（Q版色块风，程序化生成用） -->
-            <var name="BodyColor" type="string"/>
+            <var name="Price" type="int"/>
+            <var name="SlotAmounts" type="list#sep=|,int"/>
+            <var name="ColorHex" type="string"/>
+        </bean>
+        <!-- 收购系数：按已排除次数查表（收购价 = 剩余期望 × 系数） -->
+        <bean name="BankerFactor">
+            <var name="Id" type="int"/>
+            <var name="Factor" type="float"/>
         </bean>
     </module>
 
-    <module name="tower">
-        <!-- 防御塔 -->
-        <bean name="Tower">
+    <module name="character">
+        <!-- 角色：决定携带的技能 -->
+        <bean name="Character">
             <var name="Id" type="int"/>
             <var name="Name" type="string"/>
-            <var name="Cost" type="int"/>
-            <var name="Damage" type="int"/>
-            <var name="AttackInterval" type="float"/>
-            <var name="AttackRange" type="float"/>
-            <var name="BulletSpeed" type="float"/>
-            <!-- 减速比例（0 表示无减速）与持续时间 -->
-            <var name="SlowRate" type="float"/>
-            <var name="SlowDuration" type="float"/>
-            <var name="TowerColor" type="string"/>
-        </bean>
-    </module>
-
-    <module name="wave">
-        <!-- 波次中的一组同类怪物 -->
-        <bean name="WaveItem">
-            <var name="MonsterId" type="int#ref=TbMonster"/>
-            <var name="Count" type="int"/>
-            <var name="Interval" type="float"/>
-        </bean>
-        <!-- 一波可包含多组怪物 -->
-        <bean name="Wave">
-            <var name="Id" type="int"/>
-            <var name="Items" type="list,wave.WaveItem"/>
+            <!-- 技能类型：1=洞察 2=抬价 3=免费排除（热更代码内 switch） -->
+            <var name="SkillType" type="int"/>
+            <var name="SkillName" type="string"/>
+            <var name="SkillDesc" type="string"/>
+            <var name="ColorHex" type="string"/>
         </bean>
     </module>
 
     <module name="global">
         <!-- 全局配置（单例） -->
         <bean name="Global">
-            <var name="RotateSpeed" type="float"/>
-            <var name="LoginBgMusic" type="string"/>
-            <var name="InitGold" type="int"/>
-            <var name="InitLife" type="int"/>
+            <var name="ChestInitGold" type="int"/>
+            <var name="ChestFreeEliminates" type="int"/>
+            <var name="ChestEliminateBaseFee" type="int"/>
+            <var name="ChestEliminateFeeGrowth" type="int"/>
+            <var name="AuctionFeeRate" type="float"/>
+            <!-- 每个宝箱可使用的技能次数上限 -->
+            <var name="ChestMaxSkillUses" type="int"/>
+            <!-- 拍卖时长（秒）与最小加价比例 -->
+            <var name="AuctionDurationSec" type="int"/>
+            <var name="AuctionBidStepPct" type="float"/>
         </bean>
     </module>
 </module>

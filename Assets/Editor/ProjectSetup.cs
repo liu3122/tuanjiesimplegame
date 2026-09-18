@@ -41,7 +41,6 @@ public static class ProjectSetup
     public static void RunSetupNow()
     {
         CreateBootScene();
-        CreateSamplePrefab();
         CreateCollectorSetting();
         AssetDatabase.SaveAssets();
     }
@@ -74,33 +73,6 @@ public static class ProjectSetup
         Debug.Log($"[ProjectSetup] 已创建 Boot 场景：{scenePath}");
     }
 
-    /// <summary>创建示例 prefab（挂热更脚本 Rotator，已存在则跳过）</summary>
-    private static void CreateSamplePrefab()
-    {
-        const string prefabPath = "Assets/AssetRaw/Prefab/Cube.prefab";
-        if (File.Exists(prefabPath))
-        {
-            return;
-        }
-        Directory.CreateDirectory("Assets/AssetRaw/Prefab");
-
-        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        cube.name = "Cube";
-        cube.transform.position = new Vector3(0, 0, 5);
-        // 热更脚本通过反射挂载，保持 AOT 程序集对热更程序集零引用
-        var rotatorType = System.Type.GetType("Game.HotUpdate.Rotator, Game.HotUpdate");
-        if (rotatorType != null)
-        {
-            cube.AddComponent(rotatorType);
-        }
-        else
-        {
-            Debug.LogWarning("[ProjectSetup] 未找到热更脚本 Rotator（Game.HotUpdate 尚未编译？），prefab 未挂脚本");
-        }
-        PrefabUtility.SaveAsPrefabAsset(cube, prefabPath);
-        Object.DestroyImmediate(cube);
-        Debug.Log($"[ProjectSetup] 已创建示例 prefab：{prefabPath}");
-    }
 
     /// <summary>生成 YooAsset 收集器配置（已存在则跳过）</summary>
     private static void CreateCollectorSetting()

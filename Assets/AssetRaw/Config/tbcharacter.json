@@ -1,0 +1,26 @@
+[
+  {
+    "Id": 1,
+    "Name": "探宝者",
+    "SkillType": 1,
+    "SkillName": "洞察",
+    "SkillDesc": "自动排除一个低于剩余平均值的选项（精准排雷）",
+    "ColorHex": "4DD0A5"
+  },
+  {
+    "Id": 2,
+    "Name": "银行家",
+    "SkillType": 2,
+    "SkillName": "抬价",
+    "SkillDesc": "本宝箱下一次系统收购价 +15%",
+    "ColorHex": "E8C35A"
+  },
+  {
+    "Id": 3,
+    "Name": "赌徒",
+    "SkillType": 3,
+    "SkillName": "幸运手",
+    "SkillDesc": "本宝箱接下来 3 次排除免费",
+    "ColorHex": "E05D5D"
+  }
+]

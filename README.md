@@ -1,119 +1,128 @@
-# SimpleProject — YooAsset + HybridCLR + Luban 塔防示例工程
+# SimpleProject — 宝箱商人（YooAsset + HybridCLR + Luban）
 
-一个开箱即用的 Unity 热更工程模板，含一个完整的 **Q 版塔防小游戏**，演示三大框架的标准集成方式：
+基于三大框架的开箱即用 Unity 工程模板，当前承载玩法：**宝箱商人**（排除博弈 + 角色技能 + 拍卖行）。
 
 | 组件 | 版本 | 用途 |
 |---|---|---|
-| Unity | **2019.4.40f1** | 编辑器（HybridCLR 官方推荐版本，本机已装） |
+| Unity | **2019.4.40f1** | 编辑器（HybridCLR 官方推荐版本） |
 | [YooAsset](https://github.com/tuyoogame/YooAsset) | 3.0.5 | 资源管理 / 热更资源管线（本地嵌入包） |
 | [HybridCLR](https://github.com/focus-creative-games/hybridclr) | v8.14.1 | C# 热更新（本地嵌入包） |
-| [Luban](https://github.com/focus-creative-games/luban) | v5.1.0 | 配置表（工具源码 + 自编译） |
+| [Luban](https://github.com/focus-creative-games/luban) | v5.1.0 | 配置表（xlsx 数据源，工具自编译） |
 
-三个包全部内嵌在 `Packages/` 下（离线可复现），HybridCLR 安装源指向 Gitee（无需科学上网）。
+## 玩法说明（联机版，服务端权威）
 
----
+启动服务器后，Unity Play 流程：
+
+1. **登录**：输入玩家名（首次自动注册并发放初始金币，SQLite 持久化，重启不丢）
+2. **主大厅**：商城 / 背包 / 拍卖行 / 排行榜 四个入口
+3. **商城**：购买三档宝箱（木/银/金，20 格金额池，服务端洗牌）
+4. **背包 → 开宝箱**：20 格面板点格子排除（前 5 次免费，之后递增收费）；
+   随时出售给系统（收购价 = 期望 × 系数 0.80→1.00）；或赌到最后一格全额开箱
+5. **开箱时三选一技能**（不再绑定角色）：
+   - 洞察：自动排除一个低于剩余平均值的选项
+   - 抬价：本宝箱下次系统收购价 +15%
+   - 幸运手：本宝箱接下来 3 次排除免费
+   规则：宝箱自带技能额度 3 次（最多 3 个玩家各用一次），每个玩家对每个宝箱限一次，
+   额度耗尽后易主也无法再用；剩余额度影响拍卖价值（机器人出价每点约 +5% EV）
+6. **拍卖行**：挂拍（起拍/一口价）→ 出价（+5% 起，预扣、被超自动退回、有人出价顺延）→
+   一口价/到期成交（卖家抽成 5%），流拍退回；机器人参与竞价
+7. **排行榜**：金币排行（机器人填充展示数据，自己高亮）
+
+> 防作弊：洗牌随机、未揭示格金额、钱包、技能裁决全部在服务端；客户端只拿聚合数值。
+
+## 快速开始
+
+1. 启动服务器：`cd Server && dotnet run --urls http://127.0.0.1:5188`
+2. 用 Unity 2019.4.40f1 打开工程，打开 `Assets/Scenes/Boot.unity`，Play → 登录。
+
+## 配置（LubanWorkspace/Data/*.xlsx，改完双击 gen.bat）
+
+| 文件 | 内容 |
+|---|---|
+| `tb_chest.xlsx` | 宝箱档位：售价 + 20 格金额池 |
+| `tb_banker.xlsx` | 系统收购系数曲线（0.80→1.00） |
+| `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排） |
+| `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 3 次 |
+| `tb_item.xlsx` | 道具表（预留） |
+
+xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
 
 ## 目录结构
 
 ```
-SimpleProject/
-├── Assets/
-│   ├── AssetRaw/                  # YooAsset 收集根目录
-│   │   ├── Config/                # Luban 生成的 json 配置（生成物）
-│   │   ├── Prefab/                # 游戏 prefab（首次打开自动生成示例）
-│   │   ├── HotUpdateDlls/         # 热更 dll（菜单生成，.bytes）
-│   │   └── AOTMetadataAssemblies/ # AOT 补充元数据 dll（菜单生成，.bytes）
-│   ├── GameFramework/GameApp.cs   # AOT 启动引导（不热更）
-│   ├── HotUpdateScripts/          # ★ 热更代码（Game.HotUpdate 程序集）
-│   │   ├── TowerDefense/          # 塔防玩法（热更示例）
-│   │   └── Gen/                   # Luban 生成的 C# 配置代码（生成物）
-│   ├── Scenes/Boot.unity          # 启动场景（首次打开自动生成）
-│   └── Editor/                    # 工程初始化 / 构建辅助脚本
-├── Luban/                         # Luban 工具源码（v5.1.0）
-├── LubanWorkspace/                # ★ 配置表工作区
-│   ├── Defines/                   # 表结构定义（xml）
-│   ├── Data/                      # 表数据（xlsx，Excel 直接编辑）
-│   ├── Tools/Luban/               # 自编译的生成工具
-│   └── gen.bat                    # 双击生成
-├── Packages/                      # manifest + 三个内嵌包
-├── ProjectSettings/
-└── HybridCLRData/                 # HybridCLR 安装/构建产物（打开工程后生成）
+Assets/
+├── AssetRaw/            # YooAsset 收集根（Config 配置 json / 热更 dll 等）
+├── GameFramework/       # AOT 启动引导（GameApp，不热更）
+├── HotUpdateScripts/    # ★ 热更代码（Game.HotUpdate 程序集）
+│   ├── ChestGame/       # 宝箱玩法（Chest 规则 / 主界面 / 拍卖行 / UI 工具）
+│   ├── Gen/             # Luban 生成代码
+│   ├── GameHub.cs       # 主菜单（角色选择）
+│   └── HotUpdateEntry.cs
+├── Editor/              # 工程初始化 / 构建辅助
+LubanWorkspace/          # ★ 配置工作区（Defines 结构 xml + Data xlsx + gen.bat）
+Packages/                # manifest + 三个内嵌包
 ```
 
-带 ★ 的是日常开发最常打交道的目录。
+## 开发流程
 
----
-
-## 快速开始
-
-1. 用 **Unity 2019.4.40f1** 打开本工程（Unity Hub → Add → 选择本目录）。
-2. 首次打开会自动完成：生成 YooAsset 收集器配置、Boot 场景、示例 prefab（Console 可见 `[ProjectSetup]` 日志）。
-3. 打开 `Assets/Scenes/Boot.unity`，点 **Play**，即可进入塔防游戏。
-
-> 首次 Play 前请确保 `LubanWorkspace/gen.bat` 已经跑过（本仓库已提交生成产物，开箱即玩）。
-
-## 塔防玩法说明
-
-- 初始金币/生命来自配置表（默认 150 金币 / 10 生命），共 5 波敌人。
-- 底部按钮选择塔类型（箭塔/炮塔/冰霜塔），再点击地面上的**绿色地块**建造。
-- 波间 8 秒倒计时后自动出兵（也可点「出兵」提前）；全部波次守住即胜利，生命归零失败（可重开）。
-- 敌人不会攻击塔，走到终点即扣生命（塔防常规设计）。
-- 所有数值（塔属性、怪物血量/移速/奖励、波次编成）都在 `LubanWorkspace/Data/*.xlsx`，改完跑 `gen.bat` 再 Play 即生效 —— **这就是配置热更**。
-
-### 自动化冒烟测试（可选）
-无头验证整条链路（初始化 → 自动建塔 → 出兵 → 断言塔打出伤害）：
-```
-Unity.exe -batchmode -projectPath . -executeMethod ProjectSetup.SetupAndSmokeTest -smoketest -logFile smoke.log
-```
-退出码 0 = 通过（日志搜 `[SMOKE] ... PASS`）。
-
-## 日常开发流程
-
-### 改热更代码（塔防玩法在 `Assets/HotUpdateScripts/`）
-直接改代码 → Play。编辑器模拟模式下 Unity 直接使用编译好的热更程序集。
-
-### 改配置表（Excel）
-1. 用 Excel/WPS 打开 `LubanWorkspace/Data/*.xlsx` 直接改数值（第 1 行字段名、第 3 行起数据，A 列为标签列请留空）；
-2. 双击 `LubanWorkspace/gen.bat`，生成物自动落到 `Assets/HotUpdateScripts/Gen/` 与 `Assets/AssetRaw/Config/`；
-3. Play 验证。
-
-xlsx 填写约定（Luban Excel 规范）：
-- 列表字段用 `|` 分隔（如怪物表 DropList 填 `1003|1003`）；
-- 嵌套结构列表（如波次表 Items 列）填 JSON：`[{"MonsterId":10001,"Count":8,"Interval":1.2}]`
- （该列标题声明为 `Items#format=json`）；
-- 枚举填枚举名（White/Green/…），id 引用错误会在生成时报错。
-
-### 测试“真实热更流程”（编辑器内）
-菜单 **Build/HybridCLR/Copy HotUpdate Dlls**：编译热更 dll 并拷贝进收集目录，
-此后 Play 走「从资源包加载 Game.HotUpdate」的真实链路（Console 会打印加载字节数）。
-
-### 真机 / 出包流程
-1. **HybridCLR/Installer** → 点 Install（从 Gitee 拉取，约 30 秒；只需一次）。
-2. **HybridCLR/Generate/All**（生成 link.xml、桥接函数、AOT 泛型补充等）。
-3. **Build/HybridCLR/Copy HotUpdate Dlls**（热更 dll + AOT 元数据进收集目录）。
-4. **YooAsset/AssetBundle Collector** 面板 → Build（产物在 `Bundles/<平台>/DefaultPackage/<版本>`）。
-5. 首包：把 Build 产物按 `EBundledCopyOption` 拷入 StreamingAssets（或手动拷 `PackageOutput` 目录）。
-6. 更新：把产物目录放到 HTTP 服务器，改 `GameApp.RemoteHostURL`，客户端 HostPlayMode 自动比对下载。
-7. 打 APK/EXE（IL2CPP）。注意 `GameApp.DevicePlayMode` 默认 HostPlayMode，
-   无资源服务器时可临时切 `EPlayMode.OfflinePlayMode`（全内置，免服务器）。
-
----
-
-## 关键机制说明
-
-- **启动链路**：`Boot.unity → GameApp(AOT)` → YooAsset 初始化（编辑器 EditorSimulate / 真机 HostPlay）
-  → AOT 补充元数据（真机）→ `Assembly.Load(Game.HotUpdate)` → 反射 `HotUpdateEntry.StartGame()`。
-- **配置加载**：热更代码通过 YooAsset 按文件名加载 json（如 `tbitem`）→ `cfg.Tables`。
-  配置**代码**在热更程序集内、**数据**在资源包内 —— 改表结构与数值都不需要重发 APP。
-- **AOT 与热更隔离**：`Game.HotUpdate.asmdef` 的 `autoReferenced=false`，AOT 侧零引用，
-  Editor 脚本通过反射挂载热更组件（`Rotator`），保证打包关系干净。
-- **收集器**：首次打开由 `ProjectSetup` 自动生成（DefaultPackage，Addressable 模式，
-  收集 Config / Prefab / HotUpdateDlls / AOTMetadataAssemblies 四组）。
+- **改玩法代码**：`Assets/HotUpdateScripts/` 下直接改 → Play（编辑器模拟模式自动使用编译好的热更程序集）。
+- **改数值**：改 xlsx → 双击 `LubanWorkspace/gen.bat` → Play。
+- **测试真实热更链路**：菜单 Build/HybridCLR/Copy HotUpdate Dlls 后 Play。
+- **真机/出包**：HybridCLR/Installer 安装 → HybridCLR/Generate/All → YooAsset Collector 构建 → 资源上 CDN（改 `GameApp.RemoteHostURL`）→ IL2CPP 打包。详见各官方文档。
 
 ## 常见问题
 
-- **HybridCLR 安装失败**：确认 git 可用、Gitee 可访问（默认源 `gitee.com/focus-creative-games/...`）。
-- **IL2CPP 构建报错**：需要 Visual Studio 2019+ 的「使用 C++ 的游戏开发」工作负载。
-- **Luban 生成失败**：需 .NET SDK 8.0+（`dotnet --version` 检查）；改了工具源码后重新
-  `dotnet publish Luban/src/Luban -c Release -o LubanWorkspace/Tools/Luban`。
-- **升级 Unity**：HybridCLR 官方支持 2019.4~6000.x LTS；本工程锁 2019.4.40f1。
+- HybridCLR 安装需 git + Gitee 可达（默认源已指向 Gitee）。
+- IL2CPP 构建需 VS「C++ 游戏开发」工作负载。
+- Luban 生成需 .NET 8 SDK；改工具源码后重新 `dotnet publish Luban/src/Luban -c Release -o LubanWorkspace/Tools/Luban`。
+
+## 自建服务端（SimpleGameServer）
+
+服务端权威架构已就绪：钱包、宝箱生成/揭示、技能额度与按玩家限用、拍卖撮合、机器人竞价全部在服务端，
+未揭示格的金额**绝不下发客户端**（防作弊核心）。
+
+```
+Server/                        # ASP.NET Core 8（与客户端共用 Luban 配置与 json 数据）
+├── Program.cs                 # 路由：登录/选角/买箱/排除/技能/出售/拍卖 + SignalR 推送
+├── Config/GameTables.cs       # 加载 Assets/AssetRaw/Config/*.json（与客户端同一份数据）
+├── Game/Models.cs             # 服务端权威实体（Chest 技能额度/SkillUsedBy 集合等）
+├── Game/GameStore.cs          # 内存仓储（lock 保护；接 MySQL 时以仓储接口替换）
+├── Game/GameService.cs        # 玩法逻辑 + 拍卖结算 + 机器人竞价
+└── Hubs/AuctionHub.cs         # SignalR：竞价/结算实时推送
+```
+
+### 启动与联调
+
+```bash
+cd Server && dotnet run --urls http://127.0.0.1:5188
+# 冒烟自测（登录→买箱→排除→技能→限用校验→出售→拍卖→出价）
+python server_smoke_test.py    # 或按 README 协议用 curl
+```
+
+接口速览（Bearer token 鉴权，JSON）：
+`POST /api/login`、`POST /api/character`、`GET /api/state`、`POST /api/chest/buy`、
+`POST /api/chest/{uid}/eliminate`、`POST /api/chest/{uid}/skill`、`POST /api/chest/{uid}/sell`、
+`GET /api/auction`、`POST /api/auction/list`、`POST /api/auction/{lotId}/bid`、`POST /api/auction/{lotId}/buyout`；
+实时事件：SignalR `/hubs/auction`（`LotChanged` / `LotSettled`）。
+
+配置双端：客户端跑 `gen.bat`，服务端跑 `gen_server.bat`（同一份 xlsx → 两份代码 + 同一份 json 数据）。
+
+客户端接入：`Assets/HotUpdateScripts/ChestGame/ApiClient.cs` 已封装全部接口
+（`UseServer = false` 本地模拟 / `true` 走服务器）；下一步将 ChestGame 的操作改为调 API 并由 `/api/state` 驱动 UI。
+
+存储：当前内存版（重启清档），MySQL/Redis 与账号体系按需接入。
+
+### 本地部署（SQLite 持久化已内置）
+
+```bash
+# 1. 启动（首次自动建库 Server/simplegame.db，之后重启数据自动恢复）
+cd Server && dotnet run --urls http://127.0.0.1:5188
+
+# 2. 回归测试（登录→买→排除→技能限用→出售→拍卖→出价）
+python server_smoke_test.py
+```
+
+- **数据文件**：`Server/simplegame.db`（备份 = 复制该文件；清档 = 删除后重启）
+- **持久化范围**：玩家（金币/预扣/角色）、宝箱（20 格金额/揭示进度/技能额度/增益）、进行中拍品、金币流水（`gold_tx` 表，对账用：`sqlite3 simplegame.db "SELECT * FROM gold_tx"`）
+- **换库路径**：`Db.cs` 是独立持久层（建表/CRUD/恢复），上 MySQL 时替换该实现即可，玩法代码不动
+- 自定义路径：`dotnet run --urls ... --GameDb path/to/db --GameDataDir path/to/config`

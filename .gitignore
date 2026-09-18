@@ -56,3 +56,10 @@ crashlytics-build.properties
 
 # 验证日志
 *.log
+
+# Server 构建产物与本地数据库
+/Server/bin/
+/Server/obj/
+/Server/*.db
+/Server/*.db-shm
+/Server/*.db-wal

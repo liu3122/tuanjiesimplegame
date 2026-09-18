@@ -28,10 +28,14 @@ public partial class TbGlobal
     }
 
 
-     public float RotateSpeed => _data.RotateSpeed;
-     public string LoginBgMusic => _data.LoginBgMusic;
-     public int InitGold => _data.InitGold;
-     public int InitLife => _data.InitLife;
+     public int ChestInitGold => _data.ChestInitGold;
+     public int ChestFreeEliminates => _data.ChestFreeEliminates;
+     public int ChestEliminateBaseFee => _data.ChestEliminateBaseFee;
+     public int ChestEliminateFeeGrowth => _data.ChestEliminateFeeGrowth;
+     public float AuctionFeeRate => _data.AuctionFeeRate;
+     public int ChestMaxSkillUses => _data.ChestMaxSkillUses;
+     public int AuctionDurationSec => _data.AuctionDurationSec;
+     public float AuctionBidStepPct => _data.AuctionBidStepPct;
     
     public void ResolveRef(Tables tables)
     {

@@ -1,12 +1,12 @@
 <module name="">
     <!-- 道具表 -->
     <table name="TbItem" value="item.Item" index="Id" input="tb_item.xlsx"/>
-    <!-- 怪物表 -->
-    <table name="TbMonster" value="monster.Monster" index="Id" input="tb_monster.xlsx"/>
-    <!-- 防御塔表 -->
-    <table name="TbTower" value="tower.Tower" index="Id" input="tb_tower.xlsx"/>
-    <!-- 波次表 -->
-    <table name="TbWave" value="wave.Wave" index="Id" input="tb_wave.xlsx"/>
+    <!-- 宝箱档位表 -->
+    <table name="TbChest" value="chest.Chest" index="Id" input="tb_chest.xlsx"/>
+    <!-- 收购系数表（Id=已排除次数） -->
+    <table name="TbBankerFactor" value="chest.BankerFactor" index="Id" input="tb_banker.xlsx"/>
+    <!-- 角色表 -->
+    <table name="TbCharacter" value="character.Character" index="Id" input="tb_character.xlsx"/>
     <!-- 全局配置（单例表） -->
     <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
 </module>

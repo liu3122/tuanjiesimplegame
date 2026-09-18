@@ -1,5 +1,4 @@
 using cfg;
-using Game.HotUpdate.TowerDefense;
 using Luban.SimpleJSON;
 using UnityEngine;
 using YooAsset;
@@ -8,7 +7,7 @@ namespace Game.HotUpdate
 {
     /// <summary>
     /// 热更入口（由 GameApp 反射调用，可随版本任意修改）。
-    /// 流程：通过 YooAsset 加载 Luban 配置 → 进入 Q 版塔防玩法。
+    /// 流程：通过 YooAsset 加载 Luban 配置 → 进入主菜单（角色选择 → 宝箱商人玩法）。
     /// 注意：热更程序集不可引用 AOT 侧的 Assembly-CSharp，包名等常量在此侧自行维护。
     /// </summary>
     public static class HotUpdateEntry
@@ -32,11 +31,10 @@ namespace Game.HotUpdate
             });
             GameConfig.Tables = tables;
 
-            Debug.Log($"[HotUpdate] 配置加载完成：道具 {tables.TbItem.DataList.Count} 条，怪物 {tables.TbMonster.DataList.Count} 种，" +
-                      $"塔 {tables.TbTower.DataList.Count} 种，波次 {tables.TbWave.DataList.Count} 波");
+            Debug.Log($"[HotUpdate] 配置加载完成：道具 {tables.TbItem.DataList.Count} 条，宝箱 {tables.TbChest.DataList.Count} 档，角色 {tables.TbCharacter.DataList.Count} 个");
 
-            // 2. 进入 Q 版塔防
-            TDGame.StartNewGame();
+            // 2. 进入主菜单（塔防 / 宝箱商人）
+            GameHub.Show();
         }
     }
 }

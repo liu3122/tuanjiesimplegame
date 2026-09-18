@@ -1,8 +1,12 @@
 [
   {
-    "RotateSpeed": 90,
-    "LoginBgMusic": "audio/bgm_login",
-    "InitGold": 150,
-    "InitLife": 10
+    "ChestInitGold": 2000,
+    "ChestFreeEliminates": 5,
+    "ChestEliminateBaseFee": 5,
+    "ChestEliminateFeeGrowth": 5,
+    "AuctionFeeRate": 0.05,
+    "ChestMaxSkillUses": 3,
+    "AuctionDurationSec": 60,
+    "AuctionBidStepPct": 0.05
   }
 ]

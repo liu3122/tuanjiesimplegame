@@ -15,17 +15,17 @@ namespace cfg
 public partial class Tables
 {
     public TbItem TbItem {get; }
-    public TbMonster TbMonster {get; }
-    public TbTower TbTower {get; }
-    public TbWave TbWave {get; }
+    public TbChest TbChest {get; }
+    public TbBankerFactor TbBankerFactor {get; }
+    public TbCharacter TbCharacter {get; }
     public TbGlobal TbGlobal {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
     {
         TbItem = new TbItem(loader("tbitem"));
-        TbMonster = new TbMonster(loader("tbmonster"));
-        TbTower = new TbTower(loader("tbtower"));
-        TbWave = new TbWave(loader("tbwave"));
+        TbChest = new TbChest(loader("tbchest"));
+        TbBankerFactor = new TbBankerFactor(loader("tbbankerfactor"));
+        TbCharacter = new TbCharacter(loader("tbcharacter"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
         ResolveRef();
     }
@@ -33,9 +33,9 @@ public partial class Tables
     private void ResolveRef()
     {
         TbItem.ResolveRef(this);
-        TbMonster.ResolveRef(this);
-        TbTower.ResolveRef(this);
-        TbWave.ResolveRef(this);
+        TbChest.ResolveRef(this);
+        TbBankerFactor.ResolveRef(this);
+        TbCharacter.ResolveRef(this);
         TbGlobal.ResolveRef(this);
     }
 }
