@@ -3,6 +3,8 @@
     <table name="TbItem" value="item.Item" index="Id" input="tb_item.xlsx"/>
     <!-- 宝箱档位表 -->
     <table name="TbChest" value="chest.Chest" index="Id" input="tb_chest.xlsx"/>
+    <!-- 宝箱金额生成器（GenMode=1 时生效） -->
+    <table name="TbChestGen" value="chest.ChestGen" index="ChestId" input="tb_chestgen.xlsx"/>
     <!-- 收购系数表（Id=已排除次数） -->
     <table name="TbBankerFactor" value="chest.BankerFactor" index="Id" input="tb_banker.xlsx"/>
     <!-- 角色表 -->

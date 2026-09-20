@@ -25,7 +25,8 @@
       300,
       500
     ],
-    "ColorHex": "B98B6A"
+    "ColorHex": "B98B6A",
+    "GenMode": 0
   },
   {
     "Id": 2,
@@ -53,7 +54,8 @@
       1500,
       2500
     ],
-    "ColorHex": "B8C4D0"
+    "ColorHex": "B8C4D0",
+    "GenMode": 1
   },
   {
     "Id": 3,
@@ -81,6 +83,7 @@
       6000,
       10000
     ],
-    "ColorHex": "E8C35A"
+    "ColorHex": "E8C35A",
+    "GenMode": 1
   }
 ]

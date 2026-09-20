@@ -55,7 +55,7 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "BAD_SLOT", null);
                 }
-                int cost = chest.NextEliminateCost;
+                int cost = chest.ChargeEliminateCost();
                 if (player.Gold < cost)
                 {
                     return (false, "NOT_ENOUGH_GOLD", null);
@@ -69,7 +69,7 @@ namespace SimpleGameServer.Game
             }
         }
 
-        public (bool ok, string err, object data) UseSkill(Player player, long chestUid, int skillType)
+        public (bool ok, string err, object data) UseSkill(Player player, long chestUid, int skillType, int? slotIndex = null)
         {
             lock (_store.Gate)
             {
@@ -82,13 +82,20 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "BAD_SKILL", null);
                 }
-                string result = chest.UseSkill(player, character.SkillType, character.SkillName);
+                string result = chest.UseSkill(player, character.SkillType, character.SkillName, slotIndex);
                 if (result == null || result.StartsWith("ERR"))
                 {
                     return (false, result ?? "SKILL_FAILED", null);
                 }
                 Db.SaveChest(chest);
-                return (true, null, new { message = result, skillUsesRemaining = chest.SkillUsesRemaining, freeEliminateBuff = chest.FreeEliminateBuff });
+                return (true, null, new
+                {
+                    message = result,
+                    skillUsesRemaining = chest.SkillUsesRemaining,
+                    freeEliminateBuff = chest.FreeEliminateBuff,
+                    peekedSlots = chest.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
+                    detectedSlots = chest.DetectedSlots.ToList(),
+                });
             }
         }
 
@@ -107,11 +114,11 @@ namespace SimpleGameServer.Game
                 long income;
                 if (chest.RemainingCount <= 1)
                 {
-                    income = chest.OpenFinal();
+                    income = chest.SettleIncome(chest.OpenFinal());
                 }
                 else
                 {
-                    income = Math.Max(1, (long)Math.Round(chest.BankerOffer));
+                    income = chest.SettleIncome(Math.Max(1, (long)Math.Round(chest.BankerOffer)));
                     chest.State = ChestState.Finished;
                 }
                 player.Gold += income;
@@ -312,6 +319,7 @@ namespace SimpleGameServer.Game
                     if (!_store.Chests.TryGetValue(lot.ChestUid, out var chest)) continue;
                     double tolerance = 1.0 + _store.Rng.NextDouble() * 0.18;
                     double skillPremium = 1.0 + chest.SkillUsesRemaining * 0.05;
+                    if (chest.Identified) skillPremium += 0.04; // 鉴定拍品信息透明，买家愿意多付
                     if (next > chest.ExpectedValue * tolerance * skillPremium) continue;
 
                     var bot = bots[_store.Rng.Next(bots.Count)];
@@ -357,6 +365,11 @@ namespace SimpleGameServer.Game
                         skillUsedByMe = c.SkillUsedBy.Contains(player.Id),
                         freeEliminateBuff = c.FreeEliminateBuff,
                         priceBuffNext = c.PriceBuffNext,
+                        peekedSlots = c.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
+                        detectedSlots = c.DetectedSlots.ToList(),
+                        insuranceActive = c.InsuranceActive,
+                        taxReductionCount = c.TaxReductionCount,
+                        identified = c.Identified,
                     }).ToList();
 
                 return new
@@ -410,6 +423,10 @@ namespace SimpleGameServer.Game
                         skillUsesMax = g.ChestMaxSkillUses,
                         seller = l.SellerName,
                         isMine = l.SellerId == viewer?.Id,
+                        identified = c?.Identified ?? false,
+                        remainingAmounts = (c != null && c.Identified)
+                            ? Enumerable.Range(0, c.Amounts.Length).Where(i => !c.Eliminated[i]).Select(i => c.Amounts[i]).OrderByDescending(a => a).ToList()
+                            : null,
                         startPrice = l.StartPrice,
                         buyoutPrice = l.BuyoutPrice,
                         currentBid = l.CurrentBid,

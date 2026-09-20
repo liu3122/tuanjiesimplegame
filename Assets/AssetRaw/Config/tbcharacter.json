@@ -22,5 +22,53 @@
     "SkillName": "幸运手",
     "SkillDesc": "本宝箱接下来 3 次排除免费",
     "ColorHex": "E05D5D"
+  },
+  {
+    "Id": 4,
+    "Name": "天眼",
+    "SkillType": 4,
+    "SkillName": "窥视",
+    "SkillDesc": "偷看任意一个未排除选项的金额（不排除，持续可见）",
+    "ColorHex": "6EC6FF"
+  },
+  {
+    "Id": 5,
+    "Name": "罗盘",
+    "SkillType": 5,
+    "SkillName": "探测",
+    "SkillDesc": "随机标记 3 个未排除选项中金额最高的一格（不显示金额）",
+    "ColorHex": "9B8EC4"
+  },
+  {
+    "Id": 6,
+    "Name": "保险箱",
+    "SkillType": 6,
+    "SkillName": "保底",
+    "SkillDesc": "本宝箱系统结算所得低于购买价 60% 时，系统补足到该值",
+    "ColorHex": "7ED957"
+  },
+  {
+    "Id": 7,
+    "Name": "天平",
+    "SkillType": 7,
+    "SkillName": "锁价",
+    "SkillDesc": "锁定当前系统收购价为底价，之后收购价只涨不跌",
+    "ColorHex": "E8C35A"
+  },
+  {
+    "Id": 8,
+    "Name": "鉴定师",
+    "SkillType": 8,
+    "SkillName": "鉴定",
+    "SkillDesc": "本宝箱挂拍后，买家可见完整剩余金额分布（拍品更值钱）",
+    "ColorHex": "D4A5F5"
+  },
+  {
+    "Id": 9,
+    "Name": "税务官",
+    "SkillType": 9,
+    "SkillName": "减免",
+    "SkillDesc": "本宝箱接下来 5 次排除费用减半",
+    "ColorHex": "A8B4C2"
   }
 ]

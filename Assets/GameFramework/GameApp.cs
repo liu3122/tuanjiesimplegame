@@ -47,6 +47,13 @@ public class GameApp : MonoBehaviour
     {
         Debug.Log($"[GameApp] Unity {Application.unityVersion} / EditorSimulate={Application.isEditor}");
 
+#if UNITY_EDITOR
+        if (UiSmokeDriver.IsRequested())
+        {
+            gameObject.AddComponent<UiSmokeDriver>();
+        }
+#endif
+
         // 1. 初始化 YooAsset
         YooAssets.Initialize();
         _package = YooAssets.CreatePackage(PackageName);

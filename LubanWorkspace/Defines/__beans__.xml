@@ -19,6 +19,18 @@
             <var name="Price" type="int"/>
             <var name="SlotAmounts" type="list#sep=|,int"/>
             <var name="ColorHex" type="string"/>
+            <!-- 0=固定金额池（洗牌） 1=算法生成（稀有度模板+EV归一化，见 TbChestGen） -->
+            <var name="GenMode" type="int"/>
+        </bean>
+        <!-- 宝箱金额生成器：权重 Roll 稀有度档 → 档位基准 × 对数正态扰动 → 归一化到固定池期望 -->
+        <bean name="ChestGen">
+            <var name="ChestId" type="int"/>
+            <!-- 5 档稀有度权重（白/绿/蓝/紫/金，不必归一） -->
+            <var name="Weights" type="list#sep=|,float"/>
+            <!-- 5 档基准金额（应使加权均值 ≈ 固定池期望，减少归一化形变） -->
+            <var name="Bases" type="list#sep=|,int"/>
+            <!-- 对数正态扰动强度（0~0.5，档内金额波动） -->
+            <var name="Jitter" type="float"/>
         </bean>
         <!-- 收购系数：按已排除次数查表（收购价 = 剩余期望 × 系数） -->
         <bean name="BankerFactor">

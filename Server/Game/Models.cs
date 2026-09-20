@@ -38,17 +38,38 @@ namespace SimpleGameServer.Game
         public int FreeEliminateBuff { get; set; }
         /// <summary>下次系统收购价 +15%（银行家技能，随宝箱转移）</summary>
         public bool PriceBuffNext { get; set; }
+        // ---- 扩展技能状态（均随宝箱转移） ----
+        /// <summary>窥视结果：格号 → 已知金额（天眼）</summary>
+        public Dictionary<int, int> PeekedSlots { get; } = new();
+        /// <summary>探测标记格（罗盘：3 格中最大的一格）</summary>
+        public HashSet<int> DetectedSlots { get; } = new();
+        /// <summary>保底生效中（保险箱）</summary>
+        public bool InsuranceActive { get; set; }
+        /// <summary>收购价底价（天平锁价）；null=未锁定</summary>
+        public long? PriceFloor { get; set; }
+        /// <summary>减半剩余次数（税务官）</summary>
+        public int TaxReductionCount { get; set; }
+        /// <summary>已鉴定（鉴定师：拍卖时对买家展示剩余金额分布）</summary>
+        public bool Identified { get; set; }
 
         public Chest(long uid, cfg.chest.Chest config, Random rng)
         {
             Uid = uid;
             ConfigId = config.Id;
-            Amounts = new int[config.SlotAmounts.Count];
-            config.SlotAmounts.CopyTo(Amounts);
-            for (int i = Amounts.Length - 1; i > 0; i--)
+            if (config.GenMode == 1 && Config.GameTables.Tables.TbChestGen.GetOrDefault(config.Id) != null)
             {
-                int j = rng.Next(i + 1);
-                (Amounts[i], Amounts[j]) = (Amounts[j], Amounts[i]);
+                // 算法生成：稀有度模板 + 对数正态扰动 + EV 归一化（总池与固定池一致）
+                Amounts = ChestFactory.Generate(config, rng);
+            }
+            else
+            {
+                Amounts = new int[config.SlotAmounts.Count];
+                config.SlotAmounts.CopyTo(Amounts);
+                for (int i = Amounts.Length - 1; i > 0; i--)
+                {
+                    int j = rng.Next(i + 1);
+                    (Amounts[i], Amounts[j]) = (Amounts[j], Amounts[i]);
+                }
             }
             Eliminated = new bool[Amounts.Length];
             State = ChestState.Owned;
@@ -98,7 +119,9 @@ namespace SimpleGameServer.Game
             get
             {
                 double offer = ExpectedValue * Config.GameTables.Tables.TbBankerFactor[EliminatedCount].Factor;
-                return PriceBuffNext ? offer * 1.15 : offer;
+                if (PriceBuffNext) offer *= 1.15;
+                if (PriceFloor.HasValue) offer = Math.Max(offer, PriceFloor.Value); // 锁价：只涨不跌
+                return offer;
             }
         }
 
@@ -110,8 +133,20 @@ namespace SimpleGameServer.Game
                 var g = Config.GameTables.Tables.TbGlobal;
                 if (EliminatedCount < g.ChestFreeEliminates) return 0;
                 if (RemainingCount <= 1) return 0;
-                return g.ChestEliminateBaseFee + g.ChestEliminateFeeGrowth * (EliminatedCount - g.ChestFreeEliminates);
+                int cost = g.ChestEliminateBaseFee + g.ChestEliminateFeeGrowth * (EliminatedCount - g.ChestFreeEliminates);
+                return cost;
             }
+        }
+
+        /// <summary>扣除税务减免后的实际排除费（消耗一次减半次数）</summary>
+        public int ChargeEliminateCost()
+        {
+            int cost = NextEliminateCost;
+            if (TaxReductionCount > 0 && cost > 0)
+            {
+                cost = cost / 2 + (cost % 2); // 向上取整减半
+            }
+            return cost;
         }
 
         /// <summary>排除指定格：返回被揭示金额；非法返回 -1</summary>
@@ -121,11 +156,14 @@ namespace SimpleGameServer.Game
             Eliminated[slotIndex] = true;
             EliminatedCount++;
             if (FreeEliminateBuff > 0) FreeEliminateBuff--;
+            if (TaxReductionCount > 0) TaxReductionCount--;
+            PeekedSlots.Remove(slotIndex);
+            DetectedSlots.Remove(slotIndex);
             return Amounts[slotIndex];
         }
 
         /// <summary>使用技能（校验额度 + 按玩家限一次）。返回描述；失败返回 null</summary>
-        public string UseSkill(Player player, int skillType, string skillName)
+        public string UseSkill(Player player, int skillType, string skillName, int? slotIndex = null)
         {
             if (State != ChestState.Owned || RemainingCount <= 1) return null;
             if (SkillUsesRemaining <= 0) return "ERR_QUOTA";
@@ -160,9 +198,71 @@ namespace SimpleGameServer.Game
                     SkillUsesRemaining--;
                     SkillUsedBy.Add(player.Id);
                     return $"【{skillName}】接下来 3 次排除免费";
+                case 4: // 窥视：偷看指定未排除格
+                {
+                    if (slotIndex == null || slotIndex < 0 || slotIndex >= Amounts.Length) return "ERR_BAD_SLOT";
+                    if (Eliminated[slotIndex.Value]) return "ERR_SLOT_OPEN";
+                    PeekedSlots[slotIndex.Value] = Amounts[slotIndex.Value];
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】窥视第 {(slotIndex.Value + 1)} 格：{Amounts[slotIndex.Value]}";
+                }
+                case 5: // 探测：随机 3 个未排除格中标记最大的一格
+                {
+                    var pool = Enumerable.Range(0, Amounts.Length).Where(i => !Eliminated[i]).ToList();
+                    if (pool.Count < 2) return "ERR_NO_TARGET";
+                    var pick = pool.OrderBy(_ => Guid.NewGuid()).Take(3).ToList();
+                    int best = pick.OrderByDescending(i => Amounts[i]).First();
+                    foreach (var i in pick) DetectedSlots.Add(i);
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】探测 {pick.Count} 格：第 {best + 1} 格为其中最大（已标记）";
+                }
+                case 6: // 保底
+                    InsuranceActive = true;
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】保底生效：系统结算所得不低于购买价 60%（{PaidPrice * 6 / 10}）";
+                case 7: // 锁价
+                {
+                    long floor = Math.Max(1, (long)BankerOffer);
+                    PriceFloor = floor;
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】收购价已锁定底价 {floor}";
+                }
+                case 8: // 鉴定
+                    Identified = true;
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】已鉴定：挂拍后买家可见完整剩余金额分布";
+                case 9: // 税务减免
+                    TaxReductionCount += 5;
+                    SkillUsesRemaining--;
+                    SkillUsedBy.Add(player.Id);
+                    return $"【{skillName}】接下来 5 次排除费用减半";
                 default:
                     return null;
             }
+        }
+
+        /// <summary>系统结算（出售/开箱）所得，应用保底补差</summary>
+        public long SettleIncome(long rawIncome)
+        {
+            if (!InsuranceActive) return rawIncome;
+            long guarantee = PaidPrice * 6 / 10;
+            return Math.Max(rawIncome, guarantee);
+        }
+
+        /// <summary>从数据库恢复扩展技能状态</summary>
+        public void RestoreExtra(Dictionary<int, int> peeked, int[] detected, bool insurance, long? priceFloor, int taxCount, bool identified)
+        {
+            foreach (var kv in peeked) PeekedSlots[kv.Key] = kv.Value;
+            foreach (var i in detected) DetectedSlots.Add(i);
+            InsuranceActive = insurance;
+            PriceFloor = priceFloor;
+            TaxReductionCount = taxCount;
+            Identified = identified;
         }
 
         /// <summary>终局开箱：返回最终金额</summary>

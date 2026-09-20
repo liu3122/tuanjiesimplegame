@@ -62,8 +62,11 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> EliminateAsync(long chestUid, int slotIndex) =>
             PostAsync($"/api/chest/{chestUid}/eliminate", $"{{\"slotIndex\":{slotIndex}}}");
 
-        public static Task<JSONNode> UseSkillAsync(long chestUid, int skillType) =>
-            PostAsync($"/api/chest/{chestUid}/skill", $"{{\"skillType\":{skillType}}}");
+        public static Task<JSONNode> UseSkillAsync(long chestUid, int skillType, int? slotIndex = null) =>
+            PostAsync($"/api/chest/{chestUid}/skill",
+                slotIndex.HasValue
+                    ? $"{{\"skillType\":{skillType},\"slotIndex\":{slotIndex.Value}}}"
+                    : $"{{\"skillType\":{skillType}}}");
 
         public static Task<JSONNode> GetRankAsync() => GetAsync("/api/rank");
 

@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS gold_tx(
   id INTEGER PRIMARY KEY AUTOINCREMENT, player_id INTEGER NOT NULL, delta INTEGER NOT NULL,
   reason TEXT NOT NULL, ref_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
 );");
+            // 旧库升级：追加新列（已存在则忽略）
+            foreach (var col in new[] { "peeked_slots TEXT NOT NULL DEFAULT '{}'", "detected_slots TEXT NOT NULL DEFAULT '[]'",
+                                        "insurance INTEGER NOT NULL DEFAULT 0", "price_floor INTEGER", "tax_count INTEGER NOT NULL DEFAULT 0",
+                                        "identified INTEGER NOT NULL DEFAULT 0" })
+            {
+                try { Exec(conn, "ALTER TABLE chest ADD COLUMN " + col); }
+                catch (Exception) { /* 列已存在 */ }
+            }
             _log.LogInformation("SQLite 就绪：{Db}", dbPath);
         }
 
@@ -97,16 +105,23 @@ ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e",
 
         public static void SaveChest(Chest c) => Try(conn =>
         {
-            Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price)
-VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp)
+            Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,
+peeked_slots,detected_slots,insurance,price_floor,tax_count,identified)
+VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id)
 ON CONFLICT(uid) DO UPDATE SET owner_id=$o, state=$s, eliminated=$e, skill_uses=$sk,
-skill_used_by=$sub, free_buff=$fb, price_buff=$pb",
+skill_used_by=$sub, free_buff=$fb, price_buff=$pb,
+peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count=$tc, identified=$id",
                 ("$u", c.Uid), ("$cfg", c.ConfigId), ("$o", c.OwnerId), ("$s", (int)c.State),
                 ("$a", JsonSerializer.Serialize(c.Amounts, JsonOpts)),
                 ("$e", JsonSerializer.Serialize(c.Eliminated, JsonOpts)),
                 ("$sk", c.SkillUsesRemaining),
                 ("$sub", JsonSerializer.Serialize(c.SkillUsedBy, JsonOpts)),
-                ("$fb", c.FreeEliminateBuff), ("$pb", c.PriceBuffNext ? 1 : 0), ("$pp", c.PaidPrice));
+                ("$fb", c.FreeEliminateBuff), ("$pb", c.PriceBuffNext ? 1 : 0), ("$pp", c.PaidPrice),
+                ("$pk", JsonSerializer.Serialize(c.PeekedSlots, JsonOpts)),
+                ("$dt", JsonSerializer.Serialize(c.DetectedSlots, JsonOpts)),
+                ("$ins", c.InsuranceActive ? 1 : 0),
+                ("$pf", c.PriceFloor.HasValue ? (object)c.PriceFloor.Value : DBNull.Value),
+                ("$tc", c.TaxReductionCount), ("$id", c.Identified ? 1 : 0));
         }, "SaveChest");
 
         // ---------------- AuctionLot ----------------
@@ -160,7 +175,7 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                 }
             }
 
-            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price FROM chest";
+            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,peeked_slots,detected_slots,insurance,price_floor,tax_count,identified FROM chest";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -172,6 +187,12 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                         r.GetInt32(6),
                         JsonSerializer.Deserialize<long[]>(r.GetString(7), JsonOpts),
                         r.GetInt32(8), r.GetInt32(9) == 1, r.GetInt64(10));
+                    chest.RestoreExtra(
+                        JsonSerializer.Deserialize<Dictionary<int, int>>(r.GetString(11), JsonOpts),
+                        JsonSerializer.Deserialize<int[]>(r.GetString(12), JsonOpts),
+                        r.GetInt32(13) == 1,
+                        r.IsDBNull(14) ? (long?)null : r.GetInt64(14),
+                        r.GetInt32(15), r.GetInt32(16) == 1);
                     store.Chests[chest.Uid] = chest;
                 }
             }

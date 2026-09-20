@@ -24,7 +24,7 @@ namespace Game.HotUpdate.ChestGame
         }
     }
 
-    /// <summary>屏幕导航 + 顶部信息条 + Toast</summary>
+    /// <summary>常驻 UI 层：Canvas、顶部金币、Toast。界面 prefab 由 UIManager 挂到本层下。</summary>
     public class UIRoot : MonoBehaviour
     {
         public static UIRoot Instance { get; private set; }
@@ -65,16 +65,6 @@ namespace Game.HotUpdate.ChestGame
         }
 
         public Transform CanvasTransform => _canvas.transform;
-
-        /// <summary>切换全屏（销毁旧屏，挂新屏）</summary>
-        public void Show(System.Action<Transform> builder)
-        {
-            if (_screen != null) Destroy(_screen);
-            _screen = new GameObject("screen");
-            _screen.transform.SetParent(_canvas.transform, false);
-            builder(_screen.transform);
-            RefreshTop();
-        }
 
         public async void RefreshTop()
         {

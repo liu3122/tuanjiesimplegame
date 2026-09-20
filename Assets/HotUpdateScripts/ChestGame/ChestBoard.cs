@@ -7,8 +7,8 @@ using UnityEngine.UI;
 namespace Game.HotUpdate.ChestGame
 {
     /// <summary>
-    /// 开宝箱界面：20 格面板（点击排除）、系统出售/终局开箱、
-    /// 技能三选一（洞察/抬价/免排 —— 开箱时自选，额度与"每玩家一次"由服务端裁决）。
+    /// 开宝箱界面（prefab Bind 模式）：ChestBoardScreen 加载后挂本组件。
+    /// 20 格排除 / 系统出售与终局开箱 / 技能三选一（额度与"每玩家一次"由服务端裁决）。
     /// </summary>
     public class ChestBoard : MonoBehaviour
     {
@@ -18,78 +18,58 @@ namespace Game.HotUpdate.ChestGame
         private Text _info;
         private Button _sellButton;
         private Text _sellText;
-        private readonly Button[] _skillButtons = new Button[3];
-        private readonly Text[] _skillTexts = new Text[3];
+        private Button _skillsButton;
         private Text _skillHint;
         private bool _busy;
+        /// <summary>窥视选格模式：点技能后，下一次点格触发窥视而非排除</summary>
+        private bool _peekTargeting;
 
-        public static void Open(Transform root, long uid)
+        public static async void Show(long uid)
         {
-            UIRoot.Instance.Show(t =>
-            {
-                var board = new GameObject("ChestBoard").AddComponent<ChestBoard>();
-                board.transform.SetParent(t, false);
-                board._uid = uid;
-                board.Build(t);
-            });
+            UITheme.PreloadAtlas("open");
+            var root = await UIManager.ShowAsync("ChestBoardScreen");
+            if (root == null) { UIRoot.ToastStatic("界面加载失败"); return; }
+
+            var board = root.GetComponent<ChestBoard>();
+            if (board == null) board = root.AddComponent<ChestBoard>();
+            board._uid = uid;
+            await board.Bind(root);
         }
 
-        private async void Build(Transform root)
+        private async Task Bind(GameObject root)
         {
+            var back = UIManager.Find<Button>(root.transform, "btn_back");
+            back.onClick.RemoveAllListeners();
+            back.onClick.AddListener(() => Screens.ShowBag());
+
+            for (int i = 0; i < 20; i++)
+            {
+                int idx = i;
+                var slot = root.transform.Find("slot_" + i);
+                if (slot == null) continue;
+                _slots[i] = slot.gameObject;
+                var btn = slot.GetComponent<Button>();
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => OnEliminate(idx));
+            }
+
+            var panel = root.transform.Find("info_panel");
+            _info = UIManager.Find<Text>(panel, "info");
+            _sellButton = UIManager.Find<Button>(panel, "btn_sell");
+            _sellText = UIManager.Find<Text>(panel, "btn_sell/label");
+            _sellButton.onClick.RemoveAllListeners();
+            _sellButton.onClick.AddListener(OnSell);
+            _skillHint = UIManager.Find<Text>(panel, "skill_hint");
+            _skillsButton = UIManager.Find<Button>(panel, "btn_skills");
+            _skillsButton.onClick.RemoveAllListeners();
+            _skillsButton.onClick.AddListener(OpenSkillPanel);
+
             await RefreshData();
             if (_chest == null)
             {
                 UIRoot.ToastStatic("宝箱不存在");
-                Screens.BuildBag(UIRoot.Instance.CanvasTransform);
+                Screens.ShowBag();
                 return;
-            }
-
-            Screens.BuildHeader(root, "开 宝 箱");
-
-            // 左侧 20 格
-            const float cw = 150, ch = 110, gap = 12;
-            for (int i = 0; i < 20; i++)
-            {
-                int idx = i;
-                var cell = TDUIHelper.MakeButton(root, Vector2.zero, new Vector2(cw, ch), "?");
-                int col = i % 5, row = i / 5;
-                cell.GetComponent<RectTransform>().anchoredPosition = new Vector2(-500 + col * (cw + gap), 130 - row * (ch + gap));
-                cell.onClick.AddListener(() => OnEliminate(idx));
-                _slots[i] = cell.gameObject;
-            }
-
-            // 右侧信息 + 操作
-            var panel = new GameObject("info");
-            panel.transform.SetParent(root, false);
-            var img = panel.AddComponent<Image>();
-            img.color = new Color(0.12f, 0.15f, 0.22f, 0.95f);
-            var rt = panel.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(480, -20);
-            rt.sizeDelta = new Vector2(440, 620);
-
-            _info = TDUIHelper.MakeText(panel.transform, new Vector2(0, -30), TextAnchor.UpperLeft, 24);
-            TDUIHelper.SetSize(_info.rectTransform, 400, 240);
-
-            _sellButton = TDUIHelper.MakeButton(panel.transform, new Vector2(0, -170), new Vector2(380, 80), "");
-            _sellButton.onClick.AddListener(OnSell);
-            _sellText = _sellButton.GetComponentInChildren<Text>();
-
-            _skillHint = TDUIHelper.MakeText(panel.transform, new Vector2(0, -240), TextAnchor.MiddleCenter, 20);
-            _skillHint.color = new Color(0.75f, 0.8f, 0.85f);
-            TDUIHelper.SetSize(_skillHint.rectTransform, 400, 30);
-
-            // 技能三选一（开箱时选择，来自 TbCharacter 配置）
-            for (int i = 0; i < 3; i++)
-            {
-                int skillType = i + 1;
-                var c = GameConfig.Tables.TbCharacter.DataList.FirstOrDefault(x => x.SkillType == skillType);
-                if (c == null) continue;
-                var btn = TDUIHelper.MakeButton(panel.transform, new Vector2(0, -290 - i * 84), new Vector2(380, 74), $"{c.SkillName} · {c.SkillDesc}");
-                btn.GetComponentInChildren<Text>().fontSize = 20;
-                btn.onClick.AddListener(() => OnSkill(skillType));
-                _skillButtons[i] = btn;
-                _skillTexts[i] = btn.GetComponentInChildren<Text>();
             }
             Redraw();
         }
@@ -111,10 +91,12 @@ namespace Game.HotUpdate.ChestGame
         {
             if (_chest == null) return;
             var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == _chest["configId"].AsInt);
-            var baseColor = TDUIHelper.ColorFromString(config.ColorHex) * 0.35f + new Color(0.1f, 0.12f, 0.16f);
+            var lockedSprite = UITheme.Load("slot_locked");
+            var openSprite = UITheme.Load("slot_open");
 
             for (int i = 0; i < 20; i++)
             {
+                if (_slots[i] == null) continue;
                 var text = _slots[i].GetComponentInChildren<Text>();
                 var img = _slots[i].GetComponent<Image>();
                 bool eliminated = _chest["eliminated"][i].AsBool;
@@ -124,14 +106,33 @@ namespace Game.HotUpdate.ChestGame
                     text.text = amount.IsNull ? "?" : amount.AsInt.ToString("N0");
                     text.fontSize = 24;
                     text.color = new Color(0.55f, 0.58f, 0.62f);
-                    img.color = new Color(0.1f, 0.12f, 0.15f, 0.6f);
+                    if (openSprite != null) img.sprite = openSprite;
                 }
                 else
                 {
-                    text.text = "?";
-                    text.fontSize = 40;
-                    text.color = Color.white;
-                    img.color = baseColor;
+                    var peekedNode = _chest["peekedSlots"];
+                    var detectedNode = _chest["detectedSlots"];
+                    bool peeked = peekedNode != null && !peekedNode[i.ToString()].IsNull;
+                    bool detected = detectedNode != null && detectedNode[i.ToString()].AsBool;
+                    if (peeked)
+                    {
+                        text.text = peekedNode[i.ToString()].AsInt.ToString("N0");
+                        text.fontSize = 24;
+                        text.color = UITheme.GoldLight;
+                    }
+                    else if (detected)
+                    {
+                        text.text = "\u25B2";
+                        text.fontSize = 36;
+                        text.color = UITheme.Blue;
+                    }
+                    else
+                    {
+                        text.text = "?";
+                        text.fontSize = 40;
+                        text.color = Color.white;
+                    }
+                    if (lockedSprite != null) img.sprite = lockedSprite;
                 }
             }
 
@@ -144,6 +145,9 @@ namespace Game.HotUpdate.ChestGame
             bool priceBuff = _chest["priceBuffNext"].AsBool;
             string buff = freeBuff > 0 ? "\n免排 ×" + freeBuff : "";
             if (priceBuff) buff += "\n抬价 +15% 已就绪";
+            if (_chest["insuranceActive"].AsBool) buff += "\n保底已生效";
+            if (_chest["taxReductionCount"].AsInt > 0) buff += "\n减税 ×" + _chest["taxReductionCount"].AsInt;
+            if (_chest["identified"].AsBool) buff += "\n已鉴定";
 
             if (remaining <= 1)
             {
@@ -165,18 +169,23 @@ namespace Game.HotUpdate.ChestGame
 
             int quota = _chest["skillUsesRemaining"].AsInt;
             bool iUsed = _chest["skillUsedByMe"].AsBool;
+            int quotaMax = GameConfig.Tables.TbGlobal.ChestMaxSkillUses;
             _skillHint.text = quota <= 0
                 ? "技能额度已耗尽"
-                : "技能额度 " + quota + "/3 · " + (iUsed ? "我已用过" : "我可选一个技能（限一次）");
-            for (int i = 0; i < 3; i++)
-            {
-                if (_skillButtons[i] != null) _skillButtons[i].interactable = quota > 0 && !iUsed && remaining > 1 && !_busy;
-            }
+                : "技能额度 " + quota + "/" + quotaMax + " · " + (iUsed ? "我已用过" : "我可任选一个技能（限一次）");
+            if (_skillsButton != null) _skillsButton.interactable = quota > 0 && !iUsed && remaining > 1 && !_busy;
         }
 
         private async void OnEliminate(int index)
         {
             if (_busy || _chest == null) return;
+            if (_peekTargeting)
+            {
+                _peekTargeting = false;
+                if (_chest["eliminated"][index].AsBool) { UIRoot.ToastStatic("该格已排除，请选未排除的格"); return; }
+                OnSkill(4, index);
+                return;
+            }
             if (_chest["eliminated"][index].AsBool || _chest["remainingCount"].AsInt <= 1)
             {
                 UIRoot.ToastStatic(_chest["remainingCount"].AsInt <= 1 ? "只剩最后一格，点右侧开箱" : "该格已排除");
@@ -196,11 +205,11 @@ namespace Game.HotUpdate.ChestGame
             Redraw();
         }
 
-        private async void OnSkill(int skillType)
+        private async void OnSkill(int skillType, int? slotIndex = null)
         {
             if (_busy) return;
             _busy = true;
-            var r = await ApiClient.UseSkillAsync(_uid, skillType);
+            var r = await ApiClient.UseSkillAsync(_uid, skillType, slotIndex);
             _busy = false;
             if (r == null || !r["ok"].AsBool)
             {
@@ -210,6 +219,54 @@ namespace Game.HotUpdate.ChestGame
             UIRoot.ToastStatic(r["data"]["message"].Value);
             await RefreshData();
             Redraw();
+        }
+
+        /// <summary>技能面板：全部技能（来自 TbCharacter 配置）+ 描述 + 剩余额度</summary>
+        private void OpenSkillPanel()
+        {
+            if (_chest == null || _chest["skillUsesRemaining"].AsInt <= 0 || _chest["skillUsedByMe"].AsBool)
+            {
+                UIRoot.ToastStatic(_chest != null && _chest["skillUsedByMe"].AsBool ? "你对本宝箱已用过技能" : "技能额度已耗尽");
+                return;
+            }
+            int quotaMax = GameConfig.Tables.TbGlobal.ChestMaxSkillUses;
+
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(900, 880));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
+            title.text = "选择技能（额度 " + _chest["skillUsesRemaining"].AsInt + "/" + quotaMax + " · 我限用一次）";
+            TDUIHelper.SetSize(title.rectTransform, 860, 50);
+
+            float y = -110;
+            foreach (var c in GameConfig.Tables.TbCharacter.DataList)
+            {
+                var skill = c;
+                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(840, 62),
+                    "<color=#" + c.ColorHex + ">" + c.SkillName + "</color> · " + c.SkillDesc, "gold", 20);
+                UITheme.SkinButton(row, "blue");
+                var label = row.GetComponentInChildren<Text>();
+                label.alignment = TextAnchor.MiddleLeft;
+                label.fontSize = 19;
+                row.onClick.AddListener(() =>
+                {
+                    Object.Destroy(panel);
+                    if (skill.SkillType == 4)
+                    {
+                        _peekTargeting = true;
+                        UIRoot.ToastStatic("窥视：点击一个未排除的格子查看金额");
+                    }
+                    else
+                    {
+                        OnSkill(skill.SkillType);
+                    }
+                });
+                y -= 72;
+            }
+
+            var closeBtn = UITheme.ThemedButton(panel.transform, new Vector2(0, y + 10), new Vector2(240, 56), "取 消", "red", 24);
+            closeBtn.onClick.AddListener(() => Object.Destroy(panel));
         }
 
         private async void OnSell()
@@ -228,7 +285,7 @@ namespace Game.HotUpdate.ChestGame
                 ? "开箱获得 " + income.ToString("N0") + " 金币！"
                 : "已出售给系统，获得 " + income.ToString("N0"));
             UIRoot.Instance.RefreshTop();
-            Screens.BuildBag(UIRoot.Instance.CanvasTransform);
+            Screens.ShowBag();
         }
     }
 }

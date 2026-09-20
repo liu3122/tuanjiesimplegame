@@ -15,22 +15,16 @@ namespace Game.HotUpdate
         {
             Hide();
             _root = new GameObject("GameHub");
-            var ui = UIRoot.Mount(_root.transform);
-
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new Color(0.13f, 0.15f, 0.2f);
-            }
+            UIRoot.Mount(_root.transform);
+            UITheme.ApplyCameraTheme();
 
             if (ApiClient.UseServer && !ApiClient.LoggedIn)
             {
-                ui.Show(Screens.BuildLogin);
+                Screens.ShowLogin();
             }
             else
             {
-                ui.Show(Screens.BuildMain);
+                Screens.ShowMain();
             }
         }
 

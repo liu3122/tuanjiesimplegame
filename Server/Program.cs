@@ -81,7 +81,7 @@ app.MapPost("/api/chest/{uid}/skill", (long uid, SkillReq req, HttpRequest http,
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    var (ok, err, data) = svc.UseSkill(p, uid, req.SkillType);
+    var (ok, err, data) = svc.UseSkill(p, uid, req.SkillType, req.SlotIndex);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -140,7 +140,7 @@ public record LoginReq(string Name);
 public record CharacterReq(int CharacterId);
 public record BuyReq(int ConfigId);
 public record EliminateReq(int SlotIndex);
-public record SkillReq(int SkillType);
+public record SkillReq(int SkillType, int? SlotIndex = null);
 public record ListReq(long ChestUid, long StartPrice, long BuyoutPrice);
 
 namespace SimpleGameServer.Game
