@@ -11,8 +11,12 @@ namespace SimpleGameServer.Game
         public string Token { get; set; }
         public long Gold { get; set; }
         public int CharacterId { get; set; } = 1;
+        /// <summary>地区码（CDN 头/客户端上报/GeoIP，见 RegionResolver）</summary>
+        public string Region { get; set; } = "CN";
         /// <summary>拍卖出价预扣（lotId → 冻结金额）</summary>
         public Dictionary<long, long> Escrow { get; } = new();
+        /// <summary>技能冷却（skillType → 解冻时刻 Unix 秒）。跨宝箱生效，防止反复刷同一强力技能</summary>
+        public Dictionary<int, long> SkillCooldowns { get; } = new();
     }
 
     /// <summary>
@@ -51,12 +55,35 @@ namespace SimpleGameServer.Game
         public int TaxReductionCount { get; set; }
         /// <summary>已鉴定（鉴定师：拍卖时对买家展示剩余金额分布）</summary>
         public bool Identified { get; set; }
+        // ---- 银行家报价（限时接受/拒绝） ----
+        /// <summary>待处理报价金额；null=无</summary>
+        public long? PendingOffer { get; set; }
+        public DateTime? PendingOfferExpireUtc { get; set; }
+        /// <summary>自上次报价以来的排除数（达到 N 触发报价）</summary>
+        public int ElimsSinceOffer { get; set; }
+        // ---- 特殊格（幸运/陷阱） ----
+        public HashSet<int> LuckySlots { get; } = new();
+        public HashSet<int> TrapSlots { get; } = new();
+        // ---- 每日挑战 ----
+        public bool IsDaily { get; set; }
+        public string DailyDay { get; set; }
 
-        public Chest(long uid, cfg.chest.Chest config, Random rng)
+        /// <summary>每日挑战种子（构造后由 GameService 设置）</summary>
+        public int DailySeed { get; set; }
+        public bool IsDailyShuffle { get; set; }
+
+        public Chest(long uid, cfg.chest.Chest config, Random rng) : this(uid, config, rng, false, 0)
+        {
+        }
+
+        public Chest(long uid, cfg.chest.Chest config, Random rng, bool isDaily, int dailySeed)
         {
             Uid = uid;
             ConfigId = config.Id;
-            if (config.GenMode == 1 && Config.GameTables.Tables.TbChestGen.GetOrDefault(config.Id) != null)
+            IsDaily = isDaily;
+            DailySeed = dailySeed;
+            IsDailyShuffle = isDaily;
+            if (config.GenMode == 1 && !IsDailyShuffle && Config.GameTables.Tables.TbChestGen.GetOrDefault(config.Id) != null)
             {
                 // 算法生成：稀有度模板 + 对数正态扰动 + EV 归一化（总池与固定池一致）
                 Amounts = ChestFactory.Generate(config, rng);
@@ -65,11 +92,24 @@ namespace SimpleGameServer.Game
             {
                 Amounts = new int[config.SlotAmounts.Count];
                 config.SlotAmounts.CopyTo(Amounts);
+                // 每日挑战：日期作种子 → 全服同结构
+                var shuffleRng = IsDailyShuffle ? new Random(DailySeed) : rng;
                 for (int i = Amounts.Length - 1; i > 0; i--)
                 {
-                    int j = rng.Next(i + 1);
+                    int j = shuffleRng.Next(i + 1);
                     (Amounts[i], Amounts[j]) = (Amounts[j], Amounts[i]);
                 }
+            }
+            // 特殊格标记（幸运/陷阱）
+            if (config.Kind == 2 && config.SpecialCount > 0)
+            {
+                foreach (var i in Enumerable.Range(0, Amounts.Length).OrderBy(_ => rng.Next()).Take(config.SpecialCount))
+                    LuckySlots.Add(i);
+            }
+            else if (config.Kind == 3 && config.SpecialCount > 0)
+            {
+                foreach (var i in Enumerable.Range(0, Amounts.Length).OrderBy(_ => rng.Next()).Take(config.SpecialCount))
+                    TrapSlots.Add(i);
             }
             Eliminated = new bool[Amounts.Length];
             State = ChestState.Owned;
@@ -150,16 +190,54 @@ namespace SimpleGameServer.Game
         }
 
         /// <summary>排除指定格：返回被揭示金额；非法返回 -1</summary>
-        public int Eliminate(int slotIndex)
+        /// <summary>排除；返回（揭示金额, 特殊格奖罚, 消息）。锁定时 err=OFFER_PENDING。</summary>
+        public (int revealed, int special, string err) EliminateEx(int slotIndex, Player player)
         {
-            if (State != ChestState.Owned || Eliminated[slotIndex] || RemainingCount <= 1) return -1;
+            if (PendingOffer != null) return (0, 0, "OFFER_PENDING");
+            if (State != ChestState.Owned || Eliminated[slotIndex] || RemainingCount <= 1) return (0, 0, "BAD_SLOT");
             Eliminated[slotIndex] = true;
             EliminatedCount++;
             if (FreeEliminateBuff > 0) FreeEliminateBuff--;
             if (TaxReductionCount > 0) TaxReductionCount--;
             PeekedSlots.Remove(slotIndex);
             DetectedSlots.Remove(slotIndex);
-            return Amounts[slotIndex];
+
+            int special = 0;
+            if (LuckySlots.Contains(slotIndex)) special = Config.GameTables.Tables.TbChest[ConfigId].SpecialValue;
+            else if (TrapSlots.Contains(slotIndex)) special = -Config.GameTables.Tables.TbChest[ConfigId].SpecialValue;
+
+            // 银行家报价触发
+            ElimsSinceOffer++;
+            return (Amounts[slotIndex], special, null);
+        }
+
+        /// <summary>尝试生成银行家报价（排除后调用；每 N 格触发，金额=收购价×随机浮动）</summary>
+        public bool TryMakeOffer(Random rng)
+        {
+            var g = Config.GameTables.Tables.TbGlobal;
+            if (PendingOffer != null || RemainingCount <= 1) return false;
+            if (ElimsSinceOffer < g.OfferEveryNElims) return false;
+            double jitter = 1.0 + (rng.NextDouble() * 2 - 1) * g.OfferJitter;
+            PendingOffer = Math.Max(1, (long)Math.Round(BankerOffer * jitter));
+            PendingOfferExpireUtc = DateTime.UtcNow.AddSeconds(g.OfferValidSec);
+            ElimsSinceOffer = 0;
+            return true;
+        }
+
+        /// <summary>过期视为无报价（懒判定）</summary>
+        public void ExpireOfferIfNeeded()
+        {
+            if (PendingOffer != null && DateTime.UtcNow > PendingOfferExpireUtc)
+            {
+                PendingOffer = null;
+                PendingOfferExpireUtc = null;
+            }
+        }
+
+        public int Eliminate(int slotIndex)
+        {
+            var (revealed, _, err) = EliminateEx(slotIndex, null);
+            return err == null ? revealed : -1;
         }
 
         /// <summary>使用技能（校验额度 + 按玩家限一次）。返回描述；失败返回 null</summary>
@@ -263,6 +341,17 @@ namespace SimpleGameServer.Game
             PriceFloor = priceFloor;
             TaxReductionCount = taxCount;
             Identified = identified;
+        }
+
+        public void RestoreMore(long? pendingOffer, DateTime? offerExpire, int elimsSinceOffer, int[] lucky, int[] trap, bool isDaily, string dailyDay)
+        {
+            PendingOffer = pendingOffer;
+            PendingOfferExpireUtc = offerExpire;
+            ElimsSinceOffer = elimsSinceOffer;
+            foreach (var i in lucky) LuckySlots.Add(i);
+            foreach (var i in trap) TrapSlots.Add(i);
+            IsDaily = isDaily;
+            DailyDay = dailyDay;
         }
 
         /// <summary>终局开箱：返回最终金额</summary>

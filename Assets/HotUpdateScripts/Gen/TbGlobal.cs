@@ -36,6 +36,15 @@ public partial class TbGlobal
      public int ChestMaxSkillUses => _data.ChestMaxSkillUses;
      public int AuctionDurationSec => _data.AuctionDurationSec;
      public float AuctionBidStepPct => _data.AuctionBidStepPct;
+     public int DailyTicketCost => _data.DailyTicketCost;
+     public int DailyAttemptsPerDay => _data.DailyAttemptsPerDay;
+     public int DailyChestId => _data.DailyChestId;
+     public int RushBotFillDelaySec => _data.RushBotFillDelaySec;
+     public int RushBotClaimMinMs => _data.RushBotClaimMinMs;
+     public int RushBotClaimMaxMs => _data.RushBotClaimMaxMs;
+     public int OfferEveryNElims => _data.OfferEveryNElims;
+     public int OfferValidSec => _data.OfferValidSec;
+     public float OfferJitter => _data.OfferJitter;
     
     public void ResolveRef(Tables tables)
     {

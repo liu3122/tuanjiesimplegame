@@ -16,7 +16,10 @@ namespace SimpleGameServer.Game
         {
             _store = store;
             _events = events;
+            Rush = new RushManager(store, this);
         }
+
+        public RushManager Rush { get; }
 
         // ---------------- 宝箱 ----------------
 
@@ -55,17 +58,47 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "BAD_SLOT", null);
                 }
+                chest.ExpireOfferIfNeeded();
                 int cost = chest.ChargeEliminateCost();
                 if (player.Gold < cost)
                 {
                     return (false, "NOT_ENOUGH_GOLD", null);
                 }
                 player.Gold -= cost;
-                int revealed = chest.Eliminate(slotIndex);
+                var (revealed, special, err) = chest.EliminateEx(slotIndex, player);
+                if (err != null)
+                {
+                    return (false, err, null);
+                }
+                string specialMsg = null;
+                if (special > 0)
+                {
+                    player.Gold += special;
+                    Db.AddGoldTx(player.Id, special, "lucky_slot", chest.Uid);
+                    specialMsg = "幸运格 +" + special;
+                }
+                else if (special < 0)
+                {
+                    player.Gold = Math.Max(0, player.Gold + special);
+                    Db.AddGoldTx(player.Id, special, "trap_slot", chest.Uid);
+                    specialMsg = "陷阱格 " + special;
+                }
+                bool offerMade = chest.TryMakeOffer(_store.Rng);
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 if (cost > 0) Db.AddGoldTx(player.Id, -cost, "eliminate_fee", chest.Uid);
-                return (true, null, new { revealedAmount = revealed, cost, gold = player.Gold });
+                return (true, null, new
+                {
+                    revealedAmount = revealed,
+                    cost,
+                    special,
+                    specialMsg,
+                    offerMade,
+                    pendingOffer = chest.PendingOffer,
+                    offerExpireInSec = chest.PendingOfferExpireUtc != null
+                        ? Math.Max(0, (int)(chest.PendingOfferExpireUtc.Value - DateTime.UtcNow).TotalSeconds) : 0,
+                    gold = player.Gold,
+                });
             }
         }
 
@@ -82,12 +115,23 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "BAD_SKILL", null);
                 }
+                // 技能冷却（服务端权威，跨宝箱）：同一技能用过后需等待
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                if (player.SkillCooldowns.TryGetValue(character.SkillType, out var until) && now < until)
+                {
+                    return (false, "ERR_COOLDOWN", new { remainSec = (int)(until - now) });
+                }
                 string result = chest.UseSkill(player, character.SkillType, character.SkillName, slotIndex);
                 if (result == null || result.StartsWith("ERR"))
                 {
                     return (false, result ?? "SKILL_FAILED", null);
                 }
+                if (character.SkillCooldownSec > 0)
+                {
+                    player.SkillCooldowns[character.SkillType] = now + character.SkillCooldownSec;
+                }
                 Db.SaveChest(chest);
+                Db.SavePlayer(player);
                 return (true, null, new
                 {
                     message = result,
@@ -95,8 +139,22 @@ namespace SimpleGameServer.Game
                     freeEliminateBuff = chest.FreeEliminateBuff,
                     peekedSlots = chest.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
                     detectedSlots = chest.DetectedSlots.ToList(),
+                    skillCooldowns = SkillCooldownView(player),
                 });
             }
+        }
+
+        /// <summary>玩家技能冷却视图：skillType → 剩余秒（仅 >0 的）</summary>
+        private static Dictionary<int, int> SkillCooldownView(Player player)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var view = new Dictionary<int, int>();
+            foreach (var kv in player.SkillCooldowns)
+            {
+                int remain = (int)(kv.Value - now);
+                if (remain > 0) view[kv.Key] = remain;
+            }
+            return view;
         }
 
         public (bool ok, string err, object data) SellToBanker(Player player, long chestUid)
@@ -126,7 +184,107 @@ namespace SimpleGameServer.Game
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, income, "sell_banker", chest.Uid);
+                Db.AddGoldTx(player.Id, 0, "chest_settled", chest.Uid); // 开箱完成计数（出售/终局开箱）
+                RecordDailyIfNeed(player, chest, income);
                 return (true, null, new { income, gold = player.Gold, final = chest.EliminatedCount >= 20 });
+            }
+        }
+
+        // ---------------- 银行家报价 ----------------
+
+        public (bool ok, string err, object data) AcceptOffer(Player player, long chestUid)
+        {
+            lock (_store.Gate)
+            {
+                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
+                    return (false, "CHEST_NOT_FOUND", null);
+                chest.ExpireOfferIfNeeded();
+                if (chest.PendingOffer == null) return (false, "NO_OFFER", null);
+                long income = chest.SettleIncome(chest.PendingOffer.Value);
+                chest.PendingOffer = null;
+                chest.PendingOfferExpireUtc = null;
+                chest.State = ChestState.Finished;
+                player.Gold += income;
+                chest.OwnerId = 0;
+                Db.SaveChest(chest);
+                Db.SavePlayer(player);
+                Db.AddGoldTx(player.Id, income, "accept_offer", chest.Uid);
+                Db.AddGoldTx(player.Id, 0, "chest_settled", chest.Uid); // 开箱完成计数（接受报价）
+                RecordDailyIfNeed(player, chest, income);
+                return (true, null, new { income, gold = player.Gold });
+            }
+        }
+
+        public (bool ok, string err, object data) DeclineOffer(Player player, long chestUid)
+        {
+            lock (_store.Gate)
+            {
+                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
+                    return (false, "CHEST_NOT_FOUND", null);
+                chest.ExpireOfferIfNeeded();
+                if (chest.PendingOffer == null) return (false, "NO_OFFER", null);
+                chest.PendingOffer = null;
+                chest.PendingOfferExpireUtc = null;
+                Db.SaveChest(chest);
+                return (true, null, new { declined = true });
+            }
+        }
+
+        // ---------------- 每日挑战 ----------------
+
+        private static string TodayDay() => DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+        public (bool ok, string err, object data) BuyDailyChest(Player player)
+        {
+            lock (_store.Gate)
+            {
+                var g = GameTables.Tables.TbGlobal;
+                if (player.Gold < g.DailyTicketCost) return (false, "NOT_ENOUGH_GOLD", null);
+                string day = TodayDay();
+                int used = Db.DailyAttemptsUsed(day, player.Id);
+                if (used >= g.DailyAttemptsPerDay) return (false, "DAILY_LIMIT", null);
+
+                player.Gold -= g.DailyTicketCost;
+                Db.AddGoldTx(player.Id, -g.DailyTicketCost, "daily_ticket", player.Id);
+
+                var config = GameTables.Tables.TbChest[g.DailyChestId];
+                int seed = day.GetHashCode(); // 全服同构种子
+                var chest = new Chest(_store.AllocChestUid(), config, _store.Rng, true, seed)
+                {
+                    OwnerId = player.Id,
+                    PaidPrice = g.DailyTicketCost,
+                    DailyDay = day,
+                };
+                _store.Chests[chest.Uid] = chest;
+                Db.SaveChest(chest);
+                Db.SavePlayer(player);
+                Db.RecordDailyAttempt(day, player.Id);
+                return (true, null, new { chestUid = chest.Uid, attemptsLeft = g.DailyAttemptsPerDay - used - 1, gold = player.Gold });
+            }
+        }
+
+        /// <summary>结算时若为挑战箱，记录当日最好成绩</summary>
+        private void RecordDailyIfNeed(Player player, Chest chest, long income)
+        {
+            if (!chest.IsDaily || string.IsNullOrEmpty(chest.DailyDay)) return;
+            Db.RecordDailyResult(chest.DailyDay, player.Id, player.Name, income);
+        }
+
+        public object DailyRank(Player viewer)
+        {
+            lock (_store.Gate)
+            {
+                string day = TodayDay();
+                var rows = Db.DailyRank(day);
+                var list = rows.Select((r, i) => new
+                {
+                    rank = i + 1,
+                    name = r.name,
+                    score = r.score,
+                    isMe = r.playerId == viewer.Id,
+                }).ToList();
+                long? mine = Db.MyDailyBest(day, viewer.Id);
+                return new { day, attemptsLeft = Math.Max(0, GameTables.Tables.TbGlobal.DailyAttemptsPerDay - Db.DailyAttemptsUsed(day, viewer.Id)), mine, list };
             }
         }
 
@@ -370,6 +528,13 @@ namespace SimpleGameServer.Game
                         insuranceActive = c.InsuranceActive,
                         taxReductionCount = c.TaxReductionCount,
                         identified = c.Identified,
+                        luckySlots = c.LuckySlots.ToList(),
+                        trapSlots = c.TrapSlots.ToList(),
+                        kind = Config.GameTables.Tables.TbChest[c.ConfigId].Kind,
+                        isDaily = c.IsDaily,
+                        pendingOffer = c.PendingOffer,
+                        offerExpireInSec = c.PendingOfferExpireUtc != null
+                            ? Math.Max(0, (int)(c.PendingOfferExpireUtc.Value - DateTime.UtcNow).TotalSeconds) : 0,
                     }).ToList();
 
                 return new
@@ -377,31 +542,75 @@ namespace SimpleGameServer.Game
                     gold = player.Gold,
                     escrow = player.Escrow.Values.Sum(),
                     characterId = player.CharacterId,
+                    skillCooldowns = SkillCooldownView(player),
                     chests,
                 };
             }
         }
 
-        /// <summary>金币排行榜：真人按余额排序，混入机器人展示数据</summary>
-        public object RankList(Player viewer)
+        /// <summary>四榜查询：gold_total/gold_week/opens_total/opens_week × 全球(global)/本地区(region)</summary>
+        public object RankList(Player viewer, string board, string scope)
         {
-            lock (_store.Gate)
+            string region = scope == "region" ? (viewer?.Region ?? "CN") : null;
+            if (viewer != null && !string.IsNullOrEmpty(region))
             {
-                var fake = new[]
-                {
-                    (name: "沉舟侧畔", gold: 98_000L), (name: "点石成金", gold: 45_300L),
-                    (name: "欧皇本皇", gold: 31_800L), (name: "白嫖大师", gold: 12_400L),
-                    (name: "稳中求胜", gold: 6_900L),
-                };
-                var rows = fake.Select(f => new { name = f.name, gold = f.gold, isMe = false })
-                    .Concat(_store.Players.Values.Where(p => p.Id > 0)
-                        .Select(p => new { name = p.Name, gold = p.Gold, isMe = p != null && p.Id == viewer?.Id }))
-                    .OrderByDescending(r => r.gold)
-                    .Take(10)
-                    .Select((r, i) => new { rank = i + 1, r.name, r.gold, r.isMe })
-                    .ToList();
-                return rows;
+                Db.SavePlayer(viewer); // 确保地区已持久化
             }
+            var rows = Db.QueryBoard(board, region);
+            return new
+            {
+                board,
+                scope,
+                myRegion = viewer?.Region ?? "CN",
+                list = rows.Select((r, i) => new
+                {
+                    rank = i + 1,
+                    name = r.name,
+                    value = r.value,
+                    isMe = viewer != null && r.playerId == viewer.Id,
+                }).ToList(),
+            };
+        }
+
+        // ---------------- 分享 ----------------
+
+        /// <summary>生成分享文案（服务端组装数据，实际分享由客户端 SDK 执行）</summary>
+        public object ShareContent(Player viewer, string contentId)
+        {
+            string title, text;
+            switch (contentId)
+            {
+                case "daily":
+                {
+                    string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                    long? best = Db.MyDailyBest(day, viewer.Id);
+                    title = "宝箱商人·每日挑战";
+                    text = best.HasValue
+                        ? $"我在今日挑战拿到了 {best.Value:N0} 分，你能超过我吗？"
+                        : "今日挑战开始了，全服同一个宝箱，来比比谁卖得更高！";
+                    break;
+                }
+                case "rank":
+                {
+                    var entry = Db.QueryBoard("gold_total", null, 20);
+                    var mine = entry.FirstOrDefault(r => r.playerId == viewer.Id);
+                    title = "宝箱商人·富豪榜";
+                    text = mine.value > 0
+                        ? $"我在富豪榜第 {entry.IndexOf(mine) + 1} 名，身家 {mine.value:N0}，快来追我！"
+                        : "宝箱商人开张了，来和我一较高下！";
+                    break;
+                }
+                default:
+                    title = "宝箱商人";
+                    text = "排除、博弈、拍卖，来开你的宝箱！";
+                    break;
+            }
+            return new { title, text, url = "https://your.game.link/invite?" + viewer.Id };
+        }
+
+        public void ReportShare(Player viewer, string channel, string contentId)
+        {
+            Db.RecordShare(viewer.Id, channel, contentId);
         }
 
         public object AuctionList(Player viewer)

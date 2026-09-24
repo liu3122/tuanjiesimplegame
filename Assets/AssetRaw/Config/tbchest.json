@@ -26,7 +26,10 @@
       500
     ],
     "ColorHex": "B98B6A",
-    "GenMode": 0
+    "GenMode": 0,
+    "Kind": 0,
+    "SpecialCount": 0,
+    "SpecialValue": 0
   },
   {
     "Id": 2,
@@ -55,7 +58,10 @@
       2500
     ],
     "ColorHex": "B8C4D0",
-    "GenMode": 1
+    "GenMode": 1,
+    "Kind": 0,
+    "SpecialCount": 0,
+    "SpecialValue": 0
   },
   {
     "Id": 3,
@@ -84,6 +90,105 @@
       10000
     ],
     "ColorHex": "E8C35A",
-    "GenMode": 1
+    "GenMode": 1,
+    "Kind": 0,
+    "SpecialCount": 0,
+    "SpecialValue": 0
+  },
+  {
+    "Id": 4,
+    "Name": "双头奖木箱",
+    "Price": 90,
+    "SlotAmounts": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      20,
+      20,
+      20,
+      20,
+      20,
+      40,
+      40,
+      40,
+      80,
+      80,
+      150,
+      300,
+      500,
+      500
+    ],
+    "ColorHex": "D4885A",
+    "GenMode": 0,
+    "Kind": 1,
+    "SpecialCount": 0,
+    "SpecialValue": 0
+  },
+  {
+    "Id": 5,
+    "Name": "幸运银箱",
+    "Price": 480,
+    "SlotAmounts": [
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      100,
+      100,
+      100,
+      100,
+      100,
+      200,
+      200,
+      200,
+      400,
+      400,
+      750,
+      750,
+      1500,
+      2500
+    ],
+    "ColorHex": "7ED957",
+    "GenMode": 0,
+    "Kind": 2,
+    "SpecialCount": 3,
+    "SpecialValue": 60
+  },
+  {
+    "Id": 6,
+    "Name": "诅咒金箱",
+    "Price": 1200,
+    "SlotAmounts": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      400,
+      400,
+      400,
+      400,
+      400,
+      800,
+      800,
+      800,
+      1600,
+      1600,
+      3000,
+      3000,
+      6000,
+      10000
+    ],
+    "ColorHex": "9B59B6",
+    "GenMode": 0,
+    "Kind": 3,
+    "SpecialCount": 3,
+    "SpecialValue": 100
   }
 ]

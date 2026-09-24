@@ -7,6 +7,15 @@
     "AuctionFeeRate": 0.05,
     "ChestMaxSkillUses": 5,
     "AuctionDurationSec": 60,
-    "AuctionBidStepPct": 0.05
+    "AuctionBidStepPct": 0.05,
+    "DailyTicketCost": 100,
+    "DailyAttemptsPerDay": 3,
+    "DailyChestId": 2,
+    "RushBotFillDelaySec": 4,
+    "RushBotClaimMinMs": 500,
+    "RushBotClaimMaxMs": 1400,
+    "OfferEveryNElims": 4,
+    "OfferValidSec": 20,
+    "OfferJitter": 0.08
   }
 ]

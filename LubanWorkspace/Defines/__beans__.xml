@@ -21,6 +21,12 @@
             <var name="ColorHex" type="string"/>
             <!-- 0=固定金额池（洗牌） 1=算法生成（稀有度模板+EV归一化，见 TbChestGen） -->
             <var name="GenMode" type="int"/>
+            <!-- 0=普通 1=双头奖（金额池直接配置两个头奖） 2=幸运格 3=陷阱格 -->
+            <var name="Kind" type="int"/>
+            <!-- 特殊格数量（Kind 2/3 生效） -->
+            <var name="SpecialCount" type="int"/>
+            <!-- 每个特殊格的奖/罚金额 -->
+            <var name="SpecialValue" type="int"/>
         </bean>
         <!-- 宝箱金额生成器：权重 Roll 稀有度档 → 档位基准 × 对数正态扰动 → 归一化到固定池期望 -->
         <bean name="ChestGen">
@@ -49,6 +55,35 @@
             <var name="SkillName" type="string"/>
             <var name="SkillDesc" type="string"/>
             <var name="ColorHex" type="string"/>
+            <!-- 技能冷却（秒）：使用后该技能进入冷却，跨宝箱生效，防止反复刷强力技能；0=无冷却 -->
+            <var name="SkillCooldownSec" type="int"/>
+        </bean>
+    </module>
+
+    <module name="rush">
+        <!-- 抢宝房：实时多人抢格（红包玩法） -->
+        <bean name="RushRoom">
+            <var name="Id" type="int"/>
+            <var name="Name" type="string"/>
+            <!-- 门票（金币） -->
+            <var name="Ticket" type="int"/>
+            <!-- 房间人数（含机器人补位） -->
+            <var name="PlayerCount" type="int"/>
+            <!-- 抢宝时长（秒） -->
+            <var name="DurationSec" type="int"/>
+            <!-- 开抢倒计时（秒） -->
+            <var name="CountdownSec" type="int"/>
+            <!-- 奖池 = 门票 × 人数 × 倍率 -->
+            <var name="PoolScale" type="float"/>
+            <var name="ColorHex" type="string"/>
+        </bean>
+    </module>
+
+    <module name="l10n">
+        <!-- 多语言文本：Key = 中文原文；值按语言列 -->
+        <bean name="TextItem">
+            <var name="Key" type="string"/>
+            <var name="En" type="string"/>
         </bean>
     </module>
 
@@ -65,6 +100,18 @@
             <!-- 拍卖时长（秒）与最小加价比例 -->
             <var name="AuctionDurationSec" type="int"/>
             <var name="AuctionBidStepPct" type="float"/>
+            <!-- 每日挑战：门票 / 每日次数 / 使用的宝箱档位 -->
+            <var name="DailyTicketCost" type="int"/>
+            <var name="DailyAttemptsPerDay" type="int"/>
+            <var name="DailyChestId" type="int"/>
+            <!-- 抢宝房：机器人补位前等待秒 / 机器人抢格最小最大间隔毫秒 -->
+            <var name="RushBotFillDelaySec" type="int"/>
+            <var name="RushBotClaimMinMs" type="int"/>
+            <var name="RushBotClaimMaxMs" type="int"/>
+            <!-- 银行家报价：每排除 N 格触发 / 有效期秒 / 浮动幅度 -->
+            <var name="OfferEveryNElims" type="int"/>
+            <var name="OfferValidSec" type="int"/>
+            <var name="OfferJitter" type="float"/>
         </bean>
     </module>
 </module>

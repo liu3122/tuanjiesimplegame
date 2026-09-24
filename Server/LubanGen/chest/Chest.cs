@@ -23,6 +23,9 @@ public sealed partial class Chest : Luban.BeanBase
         { var __json0 = _buf["SlotAmounts"]; if(!__json0.IsArray) { throw new SerializationException(); } SlotAmounts = new System.Collections.Generic.List<int>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { int __v0;  { if(!__e0.IsNumber) { throw new SerializationException(); }  __v0 = __e0; }  SlotAmounts.Add(__v0); }   }
         { if(!_buf["ColorHex"].IsString) { throw new SerializationException(); }  ColorHex = _buf["ColorHex"]; }
         { if(!_buf["GenMode"].IsNumber) { throw new SerializationException(); }  GenMode = _buf["GenMode"]; }
+        { if(!_buf["Kind"].IsNumber) { throw new SerializationException(); }  Kind = _buf["Kind"]; }
+        { if(!_buf["SpecialCount"].IsNumber) { throw new SerializationException(); }  SpecialCount = _buf["SpecialCount"]; }
+        { if(!_buf["SpecialValue"].IsNumber) { throw new SerializationException(); }  SpecialValue = _buf["SpecialValue"]; }
     }
 
     public static Chest DeserializeChest(JSONNode _buf)
@@ -36,6 +39,9 @@ public sealed partial class Chest : Luban.BeanBase
     public readonly System.Collections.Generic.List<int> SlotAmounts;
     public readonly string ColorHex;
     public readonly int GenMode;
+    public readonly int Kind;
+    public readonly int SpecialCount;
+    public readonly int SpecialValue;
    
     public const int __ID__ = 1176552884;
     public override int GetTypeId() => __ID__;
@@ -53,6 +59,9 @@ public sealed partial class Chest : Luban.BeanBase
         + "SlotAmounts:" + Luban.StringUtil.CollectionToString(SlotAmounts) + ","
         + "ColorHex:" + ColorHex + ","
         + "GenMode:" + GenMode + ","
+        + "Kind:" + Kind + ","
+        + "SpecialCount:" + SpecialCount + ","
+        + "SpecialValue:" + SpecialValue + ","
         + "}";
     }
 }

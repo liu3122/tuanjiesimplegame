@@ -25,7 +25,8 @@ namespace SimpleGameServer.Game
             Exec(conn, @"
 CREATE TABLE IF NOT EXISTS player(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, token TEXT, gold INTEGER NOT NULL,
-  character_id INTEGER NOT NULL DEFAULT 1, escrow TEXT NOT NULL DEFAULT '{}'
+  character_id INTEGER NOT NULL DEFAULT 1, escrow TEXT NOT NULL DEFAULT '{}',
+  region TEXT NOT NULL DEFAULT 'CN'
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_player_name ON player(name);
 CREATE TABLE IF NOT EXISTS chest(
@@ -45,7 +46,29 @@ CREATE INDEX IF NOT EXISTS idx_lot_active ON auction_lot(settled, end_time_utc);
 CREATE TABLE IF NOT EXISTS gold_tx(
   id INTEGER PRIMARY KEY AUTOINCREMENT, player_id INTEGER NOT NULL, delta INTEGER NOT NULL,
   reason TEXT NOT NULL, ref_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS daily_attempt(
+  day TEXT NOT NULL, player_id INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day, player_id)
+);
+CREATE TABLE IF NOT EXISTS share_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, player_id INTEGER NOT NULL, channel TEXT NOT NULL,
+  content_id TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS daily_result(
+  day TEXT NOT NULL, player_id INTEGER NOT NULL, name TEXT NOT NULL, best_score INTEGER NOT NULL,
+  PRIMARY KEY(day, player_id)
 );");
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
+            try { Exec(conn, "CREATE INDEX IF NOT EXISTS idx_goldtx_reason ON gold_tx(reason, player_id, created_at)"); } catch (Exception) { }
+            foreach (var col in new[] { "lucky_slots TEXT NOT NULL DEFAULT '[]'", "trap_slots TEXT NOT NULL DEFAULT '[]'",
+                                        "pending_offer INTEGER", "offer_expire TEXT", "elims_since_offer INTEGER NOT NULL DEFAULT 0",
+                                        "is_daily INTEGER NOT NULL DEFAULT 0", "daily_day TEXT" })
+            {
+                try { Exec(conn, "ALTER TABLE chest ADD COLUMN " + col); }
+                catch (Exception) { }
+            }
             // 旧库升级：追加新列（已存在则忽略）
             foreach (var col in new[] { "peeked_slots TEXT NOT NULL DEFAULT '{}'", "detected_slots TEXT NOT NULL DEFAULT '[]'",
                                         "insurance INTEGER NOT NULL DEFAULT 0", "price_floor INTEGER", "tax_count INTEGER NOT NULL DEFAULT 0",
@@ -95,10 +118,12 @@ CREATE TABLE IF NOT EXISTS gold_tx(
 
         public static void SavePlayer(Player p) => Try(conn =>
         {
-            Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow) VALUES($id,$n,$t,$g,$c,$e)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e",
+            Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns) VALUES($id,$n,$t,$g,$c,$e,$cd)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd",
                 ("$id", p.Id), ("$n", p.Name), ("$t", p.Token as object ?? DBNull.Value),
-                ("$g", p.Gold), ("$c", p.CharacterId), ("$e", JsonSerializer.Serialize(p.Escrow, JsonOpts)));
+                ("$g", p.Gold), ("$c", p.CharacterId), ("$e", JsonSerializer.Serialize(p.Escrow, JsonOpts)),
+                ("$cd", JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts)),
+                ("$r", p.Region ?? "CN"));
         }, "SavePlayer");
 
         // ---------------- Chest ----------------
@@ -106,11 +131,13 @@ ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e",
         public static void SaveChest(Chest c) => Try(conn =>
         {
             Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,
-peeked_slots,detected_slots,insurance,price_floor,tax_count,identified)
-VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id)
+peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,
+lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day)
+VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id,$lk,$tp,$po,$ox,$eo,$dd,$dy)
 ON CONFLICT(uid) DO UPDATE SET owner_id=$o, state=$s, eliminated=$e, skill_uses=$sk,
 skill_used_by=$sub, free_buff=$fb, price_buff=$pb,
-peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count=$tc, identified=$id",
+peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count=$tc, identified=$id,
+lucky_slots=$lk, trap_slots=$tp, pending_offer=$po, offer_expire=$ox, elims_since_offer=$eo, is_daily=$dd, daily_day=$dy",
                 ("$u", c.Uid), ("$cfg", c.ConfigId), ("$o", c.OwnerId), ("$s", (int)c.State),
                 ("$a", JsonSerializer.Serialize(c.Amounts, JsonOpts)),
                 ("$e", JsonSerializer.Serialize(c.Eliminated, JsonOpts)),
@@ -121,7 +148,13 @@ peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count
                 ("$dt", JsonSerializer.Serialize(c.DetectedSlots, JsonOpts)),
                 ("$ins", c.InsuranceActive ? 1 : 0),
                 ("$pf", c.PriceFloor.HasValue ? (object)c.PriceFloor.Value : DBNull.Value),
-                ("$tc", c.TaxReductionCount), ("$id", c.Identified ? 1 : 0));
+                ("$tc", c.TaxReductionCount), ("$id", c.Identified ? 1 : 0),
+                ("$lk", JsonSerializer.Serialize(c.LuckySlots, JsonOpts)),
+                ("$tp", JsonSerializer.Serialize(c.TrapSlots, JsonOpts)),
+                ("$po", c.PendingOffer.HasValue ? (object)c.PendingOffer.Value : DBNull.Value),
+                ("$ox", c.PendingOfferExpireUtc.HasValue ? (object)c.PendingOfferExpireUtc.Value.ToString("o") : DBNull.Value),
+                ("$eo", c.ElimsSinceOffer),
+                ("$dd", c.IsDaily ? 1 : 0), ("$dy", c.DailyDay as object ?? DBNull.Value));
         }, "SaveChest");
 
         // ---------------- AuctionLot ----------------
@@ -147,6 +180,132 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                 ("$t", DateTime.UtcNow.ToString("o")));
         }, "AddGoldTx");
 
+        // ---------------- 每日挑战 ----------------
+
+        public static int DailyAttemptsUsed(string day, long playerId)
+        {
+            var v = QueryScalar("SELECT COALESCE(count,0) FROM daily_attempt WHERE day=$d AND player_id=$p", ("$d", day), ("$p", playerId));
+            return v is long l ? (int)l : (v is int i ? i : 0);
+        }
+
+        public static void RecordDailyAttempt(string day, long playerId) => Try(conn => Exec(conn, @"
+INSERT INTO daily_attempt(day,player_id,count) VALUES($d,$p,1)
+ON CONFLICT(day,player_id) DO UPDATE SET count=count+1", ("$d", day), ("$p", playerId)), "RecordDailyAttempt");
+
+        public static void RecordDailyResult(string day, long playerId, string name, long score) => Try(conn => Exec(conn, @"
+INSERT INTO daily_result(day,player_id,name,best_score) VALUES($d,$p,$n,$s)
+ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", day), ("$p", playerId), ("$n", name), ("$s", score)), "RecordDailyResult");
+
+        public static List<(long playerId, string name, long score)> DailyRank(string day)
+        {
+            var list = new List<(long, string, long)>();
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT player_id,name,best_score FROM daily_result WHERE day=$d ORDER BY best_score DESC LIMIT 20";
+                cmd.Parameters.AddWithValue("$d", day);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1), r.GetInt64(2)));
+            }
+            catch (Exception e) { _log.LogError(e, "DailyRank"); }
+            return list;
+        }
+
+        public static long? MyDailyBest(string day, long playerId)
+        {
+            var v = QueryScalar("SELECT best_score FROM daily_result WHERE day=$d AND player_id=$p", ("$d", day), ("$p", playerId));
+            return v as long?;
+        }
+
+        private static object QueryScalar(string sql, params (string, object)[] args)
+        {
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                foreach (var (k, v) in args) cmd.Parameters.AddWithValue(k, v ?? DBNull.Value);
+                return cmd.ExecuteScalar();
+            }
+            catch (Exception e) { _log.LogError(e, "QueryScalar {Sql}", sql); return null; }
+        }
+
+        // ---------------- 排行榜（四榜 × 全球/地区） ----------------
+
+        /// <summary>ISO 周一 0 点 UTC（字符串比较用）</summary>
+        public static string WeekStartUtcIso()
+        {
+            var now = DateTime.UtcNow;
+            int diff = ((int)now.DayOfWeek + 6) % 7;
+            return now.Date.AddDays(-diff).ToString("o");
+        }
+
+        public static List<(long playerId, string name, long value)> QueryBoard(string board, string region, int limit = 20)
+        {
+            string weekStart = WeekStartUtcIso();
+            string sql = board switch
+            {
+                "gold_total" => "SELECT p.id, p.name, p.gold FROM player p WHERE p.id > 0 {REGION} ORDER BY p.gold DESC LIMIT $lim",
+                "gold_week" => "SELECT p.id, p.name, COALESCE(SUM(t.delta),0) FROM gold_tx t JOIN player p ON p.id=t.player_id WHERE t.created_at >= $ws {REGION} GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim",
+                "opens_total" => "SELECT p.id, p.name, COUNT(*) FROM gold_tx t JOIN player p ON p.id=t.player_id WHERE t.reason='chest_settled' {REGION} GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim",
+                "opens_week" => "SELECT p.id, p.name, COUNT(*) FROM gold_tx t JOIN player p ON p.id=t.player_id WHERE t.reason='chest_settled' AND t.created_at >= $ws {REGION} GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim",
+                _ => null,
+            };
+            if (sql == null) return new();
+            string regionFilter = string.IsNullOrEmpty(region) ? "" : " AND p.region = $rg";
+            sql = sql.Replace("{REGION}", regionFilter);
+
+            var list = new List<(long, string, long)>();
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Parameters.AddWithValue("$lim", limit);
+                cmd.Parameters.AddWithValue("$ws", weekStart);
+                if (!string.IsNullOrEmpty(region)) cmd.Parameters.AddWithValue("$rg", region);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1), r.GetInt64(2)));
+            }
+            catch (Exception e) { _log.LogError(e, "QueryBoard {Board}", board); }
+            return list;
+        }
+
+        /// <summary>我在某榜的名次与值（名次 = 榜上比我大的行数 + 1）</summary>
+        public static (int rank, long value)? MyBoardEntry(long playerId, string board, string region)
+        {
+            try
+            {
+                string weekStart = WeekStartUtcIso();
+                var conn0 = Open();
+                conn0.Dispose();
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                string rg = string.IsNullOrEmpty(region) ? "" : " AND p.region = $rg";
+                switch (board)
+                {
+                    case "gold_total":
+                        cmd.CommandText = $"SELECT (SELECT COUNT(*)+1 FROM player p2 WHERE p2.id>0 AND p2.gold > (SELECT gold FROM player WHERE id=$p) {rg.Replace("p.region", "p2.region")} ), (SELECT gold FROM player WHERE id=$p) FROM player WHERE id=$p";
+                        break;
+                    default:
+                        return null; // 周榜/开箱榜我的名次走榜内匹配（简化：仅当上榜时显示）
+                }
+                cmd.Parameters.AddWithValue("$p", playerId);
+                if (!string.IsNullOrEmpty(region)) cmd.Parameters.AddWithValue("$rg", region);
+                using var r = cmd.ExecuteReader();
+                if (r.Read()) return ((int)r.GetInt64(0), r.GetInt64(1));
+                return null;
+            }
+            catch { return null; }
+        }
+
+        // ---------------- 分享 ----------------
+
+        public static void RecordShare(long playerId, string channel, string contentId) => Try(conn => Exec(conn,
+            "INSERT INTO share_log(player_id, channel, content_id, created_at) VALUES($p,$c,$cid,$t)",
+            ("$p", playerId), ("$c", channel ?? "unknown"), ("$cid", contentId ?? ""), ("$t", DateTime.UtcNow.ToString("o"))), "RecordShare");
+
         // ---------------- 启动恢复 ----------------
 
         public static void LoadAll(GameStore store)
@@ -154,7 +313,7 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -166,16 +325,24 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                         Token = r.IsDBNull(2) ? null : r.GetString(2),
                         Gold = r.GetInt64(3),
                         CharacterId = r.GetInt32(4),
+                        Region = r.IsDBNull(6) ? "CN" : r.GetString(6),
                     };
                     foreach (var (lotId, amount) in JsonSerializer.Deserialize<Dictionary<long, long>>(r.GetString(5), JsonOpts) ?? new Dictionary<long, long>())
                     {
                         p.Escrow[lotId] = amount;
                     }
+                    if (!r.IsDBNull(7))
+                    {
+                        foreach (var (skillType, until) in JsonSerializer.Deserialize<Dictionary<int, long>>(r.GetString(7), JsonOpts) ?? new Dictionary<int, long>())
+                        {
+                            p.SkillCooldowns[skillType] = until;
+                        }
+                    }
                     store.Players[p.Id] = p;
                 }
             }
 
-            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,peeked_slots,detected_slots,insurance,price_floor,tax_count,identified FROM chest";
+            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day FROM chest";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -193,6 +360,15 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                         r.GetInt32(13) == 1,
                         r.IsDBNull(14) ? (long?)null : r.GetInt64(14),
                         r.GetInt32(15), r.GetInt32(16) == 1);
+                    // SELECT 列序: 17=lucky 18=trap 19=pending 20=expire 21=elims 22=is_daily 23=daily_day
+                    chest.RestoreMore(
+                        r.IsDBNull(19) ? (long?)null : r.GetInt64(19),
+                        r.IsDBNull(20) ? (DateTime?)null : DateTime.Parse(r.GetString(20)).ToUniversalTime(),
+                        r.GetInt32(21),
+                        JsonSerializer.Deserialize<int[]>(r.GetString(17) ?? "[]", JsonOpts),
+                        JsonSerializer.Deserialize<int[]>(r.GetString(18) ?? "[]", JsonOpts),
+                        r.GetInt32(22) == 1,
+                        r.IsDBNull(23) ? null : r.GetString(23));
                     store.Chests[chest.Uid] = chest;
                 }
             }

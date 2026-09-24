@@ -56,6 +56,23 @@ namespace SimpleGameServer.Game
             }
         }
 
+        private static readonly string[] RushBotNames = { "疾风剑豪", "手速之王", "夜行者", "闪电侠", "快枪手", "无影手" };
+
+        /// <summary>创建抢宝房机器人（不持久化，房间结束即消失）</summary>
+        public Player CreateRushBot()
+        {
+            lock (Gate)
+            {
+                return new Player
+                {
+                    Id = AllocBotId(),
+                    Name = RushBotNames[Rng.Next(RushBotNames.Length)] + Rng.Next(10, 99),
+                    Token = null,
+                    Gold = 0,
+                };
+            }
+        }
+
         /// <summary>启动恢复后修正自增 Id 游标</summary>
         public void RestoreIdCursors()
         {

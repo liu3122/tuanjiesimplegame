@@ -23,6 +23,7 @@ public sealed partial class Character : Luban.BeanBase
         { if(!_buf["SkillName"].IsString) { throw new SerializationException(); }  SkillName = _buf["SkillName"]; }
         { if(!_buf["SkillDesc"].IsString) { throw new SerializationException(); }  SkillDesc = _buf["SkillDesc"]; }
         { if(!_buf["ColorHex"].IsString) { throw new SerializationException(); }  ColorHex = _buf["ColorHex"]; }
+        { if(!_buf["SkillCooldownSec"].IsNumber) { throw new SerializationException(); }  SkillCooldownSec = _buf["SkillCooldownSec"]; }
     }
 
     public static Character DeserializeCharacter(JSONNode _buf)
@@ -36,6 +37,7 @@ public sealed partial class Character : Luban.BeanBase
     public readonly string SkillName;
     public readonly string SkillDesc;
     public readonly string ColorHex;
+    public readonly int SkillCooldownSec;
    
     public const int __ID__ = -259077500;
     public override int GetTypeId() => __ID__;
@@ -53,6 +55,7 @@ public sealed partial class Character : Luban.BeanBase
         + "SkillName:" + SkillName + ","
         + "SkillDesc:" + SkillDesc + ","
         + "ColorHex:" + ColorHex + ","
+        + "SkillCooldownSec:" + SkillCooldownSec + ","
         + "}";
     }
 }

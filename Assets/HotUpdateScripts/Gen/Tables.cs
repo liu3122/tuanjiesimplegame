@@ -19,6 +19,8 @@ public partial class Tables
     public TbChestGen TbChestGen {get; }
     public TbBankerFactor TbBankerFactor {get; }
     public TbCharacter TbCharacter {get; }
+    public TbRushRoom TbRushRoom {get; }
+    public TbText TbText {get; }
     public TbGlobal TbGlobal {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
@@ -28,6 +30,8 @@ public partial class Tables
         TbChestGen = new TbChestGen(loader("tbchestgen"));
         TbBankerFactor = new TbBankerFactor(loader("tbbankerfactor"));
         TbCharacter = new TbCharacter(loader("tbcharacter"));
+        TbRushRoom = new TbRushRoom(loader("tbrushroom"));
+        TbText = new TbText(loader("tbtext"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
         ResolveRef();
     }
@@ -39,6 +43,8 @@ public partial class Tables
         TbChestGen.ResolveRef(this);
         TbBankerFactor.ResolveRef(this);
         TbCharacter.ResolveRef(this);
+        TbRushRoom.ResolveRef(this);
+        TbText.ResolveRef(this);
         TbGlobal.ResolveRef(this);
     }
 }

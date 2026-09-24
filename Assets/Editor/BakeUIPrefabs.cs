@@ -26,6 +26,17 @@ public static class BakeUIPrefabs
         rt.anchorMax = Vector2.one;
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
+
+        // 全局装饰背景（深蓝渐变 + 金色角标）
+        var bgGo = new GameObject("bg");
+        bgGo.transform.SetParent(go.transform, false);
+        var bgImg = bgGo.AddComponent<Image>();
+        bgImg.sprite = Sprite("bg_main");
+        var brt = bgImg.rectTransform;
+        brt.anchorMin = Vector2.zero;
+        brt.anchorMax = Vector2.one;
+        brt.offsetMin = Vector2.zero;
+        brt.offsetMax = Vector2.zero;
         return go;
     }
 
@@ -107,11 +118,22 @@ public static class BakeUIPrefabs
         return go;
     }
 
-    /// <summary>各界面通用的页头（返回按钮 + 标题）</summary>
+    /// <summary>各界面通用的顶部导航条：金色标题 + 金线 + 右上角醒目返回按钮</summary>
     private static void Header(GameObject root, string title)
     {
-        MakeText(root.transform, "title", new Vector2(0, -40), 1200, 60, title, 38);
-        Button(root.transform, "btn_back", new Vector2(820, -44), new Vector2(180, 60), "返回大厅", "blue", 22);
+        Panel(root.transform, "topbar", new Vector2(0, -34), new Vector2(1920, 96), "panel_dark");
+        MakeText(root.transform, "title", new Vector2(0, -14), 900, 64, title, 46).color = new Color(0.96f, 0.82f, 0.35f);
+        var lineGo = new GameObject("goldline");
+        lineGo.transform.SetParent(root.transform, false);
+        var lineImg = lineGo.AddComponent<Image>();
+        lineImg.sprite = Sprite("panel_gold");
+        lineImg.type = Image.Type.Sliced;
+        lineImg.color = new Color(1f, 1f, 1f, 0.5f);
+        var lrt = lineGo.GetComponent<RectTransform>();
+        lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 1f);
+        lrt.anchoredPosition = new Vector2(0, -84);
+        lrt.sizeDelta = new Vector2(1880, 8);
+        Button(root.transform, "btn_back", new Vector2(830, -48), new Vector2(230, 68), "\u25C0 返回大厅", "red", 24);
     }
 
     [MenuItem("Build/UI/Bake UI Prefabs", priority = 200)]
@@ -125,6 +147,8 @@ public static class BakeUIPrefabs
         BakeChestBoard();
         BakeAuction();
         BakeRank();
+        BakeDaily();
+        BakeRush();
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log($"[BakeUI] 全部界面 prefab 已生成 -> {OutDir}");
@@ -143,8 +167,17 @@ public static class BakeUIPrefabs
     private static void BakeLogin()
     {
         var root = Root("LoginScreen");
-        MakeText(root.transform, "title", new Vector2(0, -140), 1200, 90, "<color=#F5D061>宝 箱 商 人</color>", 56);
-        MakeText(root.transform, "sub", new Vector2(0, -240), 1400, 40, "连接服务器（cd Server && dotnet run --urls http://127.0.0.1:5188）", 22).color = new Color(0.7f, 0.75f, 0.8f);
+        MakeText(root.transform, "title", new Vector2(0, -96), 1300, 110, "<color=#F5D061>宝 箱 商 人</color>", 72);
+        MakeText(root.transform, "sub", new Vector2(0, -210), 1400, 40, "排除 · 博弈 · 拍卖 · 抢宝", 24).color = new Color(0.62f, 0.68f, 0.78f);
+
+        var heroGo = new GameObject("hero");
+        heroGo.transform.SetParent(root.transform, false);
+        var heroImg = heroGo.AddComponent<Image>();
+        heroImg.sprite = Sprite("chest_hero");
+        var hrt = heroImg.rectTransform;
+        hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0.5f, 0.5f);
+        hrt.anchoredPosition = new Vector2(0, 120);
+        hrt.sizeDelta = new Vector2(420, 420);
 
         var inputGo = new GameObject("input_name");
         inputGo.transform.SetParent(root.transform, false);
@@ -153,27 +186,28 @@ public static class BakeUIPrefabs
         var input = inputGo.AddComponent<InputField>();
         var irt = inputGo.GetComponent<RectTransform>();
         irt.anchorMin = irt.anchorMax = irt.pivot = new Vector2(0.5f, 0.5f);
-        irt.anchoredPosition = new Vector2(0, -60);
-        irt.sizeDelta = new Vector2(460, 64);
+        irt.anchoredPosition = new Vector2(0, -180);
+        irt.sizeDelta = new Vector2(480, 66);
         var phGo = new GameObject("placeholder");
         phGo.transform.SetParent(inputGo.transform, false);
         var ph = phGo.AddComponent<Text>();
         ph.font = Resources.GetBuiltinResource<Font>("Arial.ttf"); ph.fontSize = 24; ph.color = Color.gray;
-        ph.alignment = TextAnchor.MiddleCenter; ph.text = "输入你的名字";
+        ph.alignment = TextAnchor.MiddleCenter; ph.text = "输入你的名字，开始冒险";
         ph.rectTransform.anchorMin = Vector2.zero; ph.rectTransform.anchorMax = Vector2.one;
         ph.rectTransform.offsetMin = Vector2.zero; ph.rectTransform.offsetMax = Vector2.zero;
         var textGo = new GameObject("text");
         textGo.transform.SetParent(inputGo.transform, false);
         var txt = textGo.AddComponent<Text>();
-        txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf"); txt.fontSize = 24; txt.color = Color.white;
+        txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf"); txt.fontSize = 26; txt.color = Color.white;
         txt.alignment = TextAnchor.MiddleLeft;
         txt.rectTransform.anchorMin = Vector2.zero; txt.rectTransform.anchorMax = Vector2.one;
-        txt.rectTransform.offsetMin = new Vector2(16, 0); txt.rectTransform.offsetMax = Vector2.zero;
+        txt.rectTransform.offsetMin = new Vector2(18, 0); txt.rectTransform.offsetMax = Vector2.zero;
         input.placeholder = ph;
         input.textComponent = txt;
         input.contentType = InputField.ContentType.Standard;
 
-        Button(root.transform, "btn_login", new Vector2(0, -180), new Vector2(360, 72), "登 录", "green", 30);
+        Button(root.transform, "btn_login", new Vector2(0, -290), new Vector2(400, 76), "开 始 冒 险", "green", 32);
+        MakeText(root.transform, "hint", new Vector2(0, -350), 1400, 36, "先启动服务器：cd Server && dotnet run --urls http://127.0.0.1:5188", 18).color = new Color(0.45f, 0.5f, 0.58f);
         Save(root);
     }
 
@@ -182,12 +216,12 @@ public static class BakeUIPrefabs
         var root = Root("MainScreen");
         MakeText(root.transform, "title", new Vector2(0, -120), 1200, 70, "<color=#F5D061>主 大 厅</color>", 44);
 
-        string[,] cards = { { "icon_shop", "card_shop", "商 城" }, { "icon_bag", "card_bag", "背 包" }, { "icon_auction", "card_auction", "拍卖行" }, { "icon_rank", "card_rank", "排行榜" } };
-        for (int i = 0; i < 4; i++)
+        string[,] cards = { { "icon_shop", "card_shop", "商 城" }, { "icon_bag", "card_bag", "背 包" }, { "icon_auction", "card_auction", "拍卖行" }, { "icon_rank", "card_rank", "排行榜" }, { "icon_coin", "card_daily", "每日挑战" }, { "chest_gold", "card_rush", "抢宝房" } };
+        for (int i = 0; i < 6; i++)
         {
-            int x = (i % 2) * 480 - 240;
-            int y = -(i / 2) * 300 + 60;
-            var card = Panel(root.transform, cards[i, 1], new Vector2(x, y), new Vector2(440, 260), "panel_dark");
+            int x = (i % 3) * 480 - 480;
+            int y = -(i / 3) * 300 + 130;
+            var card = Panel(root.transform, cards[i, 1], new Vector2(x, y), new Vector2(440, 260), "panel_card");
             var iconGo = new GameObject("icon");
             iconGo.transform.SetParent(card.transform, false);
             var icon = iconGo.AddComponent<Image>();
@@ -206,27 +240,12 @@ public static class BakeUIPrefabs
     {
         var root = Root("ShopScreen");
         Header(root, "商 城");
-
-        string[] names = { "chest_wood", "chest_silver", "chest_gold" };
-        string[] titles = { "<color=#B98B6A>木宝箱</color>", "<color=#B8C4D0>银宝箱</color>", "<color=#E8C35A>金宝箱</color>" };
-        string[] descs = { "期望 77\n最大 500\n20 格金额池", "期望 385\n最大 2,500\n20 格金额池", "期望 1,540\n最大 10,000\n20 格金额池" };
-        string[] buys = { "购买 75", "购买 375", "购买 1,500" };
-        for (int i = 0; i < 3; i++)
-        {
-            float startX = -(3 - 1) * 480f / 2f;
-            var card = Panel(root.transform, "card_" + i, new Vector2(startX + i * 480, -60), new Vector2(440, 560), "panel_dark");
-            var iconGo = new GameObject("chest_icon");
-            iconGo.transform.SetParent(card.transform, false);
-            var icon = iconGo.AddComponent<Image>();
-            icon.sprite = Sprite(names[i]);
-            var irt = icon.rectTransform;
-            irt.anchorMin = irt.anchorMax = irt.pivot = new Vector2(0.5f, 1f);
-            irt.anchoredPosition = new Vector2(0, -16);
-            irt.sizeDelta = new Vector2(150, 150);
-            MakeText(card.transform, "name", new Vector2(0, -130), 400, 50, titles[i], 36);
-            MakeText(card.transform, "desc", new Vector2(0, -25), 400, 120, descs[i], 24).color = new Color(0.78f, 0.82f, 0.86f);
-            Button(card.transform, "btn_buy", new Vector2(0, 200), new Vector2(280, 76), buys[i], "green", 28);
-        }
+        var list = new GameObject("list");
+        list.transform.SetParent(root.transform, false);
+        var lrt = list.AddComponent<RectTransform>();
+        lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
+        lrt.anchoredPosition = new Vector2(0, -60);
+        lrt.sizeDelta = new Vector2(1900, 620);
         Save(root);
     }
 
@@ -278,16 +297,95 @@ public static class BakeUIPrefabs
         Save(root);
     }
 
+    private static void BakeRush()
+    {
+        var root = Root("RushScreen");
+        Header(root, "抢 宝 房");
+
+        var roomList = new GameObject("room_list");
+        roomList.transform.SetParent(root.transform, false);
+        var rl = roomList.AddComponent<RectTransform>();
+        rl.anchorMin = rl.anchorMax = rl.pivot = new Vector2(0.5f, 0.5f);
+        rl.anchoredPosition = new Vector2(0, -60);
+        rl.sizeDelta = new Vector2(1300, 860);
+
+        var game = new GameObject("game_area");
+        game.transform.SetParent(root.transform, false);
+        var ga = game.AddComponent<RectTransform>();
+        ga.anchorMin = Vector2.zero;
+        ga.anchorMax = Vector2.one;
+        ga.offsetMin = Vector2.zero;
+        ga.offsetMax = Vector2.zero;
+        MakeText(game.transform, "title", new Vector2(0, -100), 900, 60, "", 38);
+        MakeText(game.transform, "status", new Vector2(0, -160), 900, 50, "", 30).color = new Color(0.9f, 0.9f, 0.95f);
+        MakeText(game.transform, "feed", new Vector2(560, 40), 720, 560, "", 24, TextAnchor.UpperLeft).color = new Color(0.8f, 0.85f, 0.9f);
+
+        const float cw = 150, ch = 110, gap = 12;
+        for (int i = 0; i < 20; i++)
+        {
+            int col = i % 5, row = i / 5;
+            var cellGo = new GameObject("slot_" + i);
+            cellGo.transform.SetParent(game.transform, false);
+            var img = cellGo.AddComponent<Image>();
+            img.type = Image.Type.Sliced;
+            img.sprite = Sprite("slot_locked");
+            cellGo.AddComponent<Button>();
+            var rt = cellGo.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(-380 + col * (cw + gap), 40 - row * (ch + gap));
+            rt.sizeDelta = new Vector2(cw, ch);
+            var t = MakeText(cellGo.transform, "label", Vector2.zero, cw, ch, "?", 34);
+            t.rectTransform.anchorMin = Vector2.zero;
+            t.rectTransform.anchorMax = Vector2.one;
+            t.rectTransform.offsetMin = Vector2.zero;
+            t.rectTransform.offsetMax = Vector2.zero;
+        }
+        Save(root);
+    }
+
+    private static void BakeDaily()
+    {
+        var root = Root("DailyScreen");
+        Header(root, "每日挑战");
+        var panel = Panel(root.transform, "info_panel", new Vector2(-380, 0), new Vector2(700, 560), "panel_gold");
+        var info = MakeText(panel.transform, "info", new Vector2(0, -30), 640, 340, "", 26, TextAnchor.UpperLeft);
+        info.color = Color.white;
+        Button(panel.transform, "btn_buy", new Vector2(0, -230), new Vector2(380, 80), "购买挑战箱", "green", 28);
+        var rankPanel = Panel(root.transform, "rank_panel", new Vector2(440, 0), new Vector2(800, 560), "panel_dark");
+        var hb = MakeText(rankPanel.transform, "my_best", new Vector2(0, -30), 740, 40, "", 24, TextAnchor.UpperLeft);
+        hb.color = new Color(0.96f, 0.82f, 0.35f);
+        var list = new GameObject("list");
+        list.transform.SetParent(rankPanel.transform, false);
+        var lrt = list.AddComponent<RectTransform>();
+        lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 1f);
+        lrt.anchoredPosition = new Vector2(0, -90);
+        lrt.sizeDelta = new Vector2(740, 440);
+        Save(root);
+    }
+
     private static void BakeRank()
     {
         var root = Root("RankScreen");
-        Header(root, "排行榜（金币）");
+        Header(root, "排行榜");
+        MakeText(root.transform, "subtitle", new Vector2(0, -78), 1200, 36, "", 26).color = new Color(0.85f, 0.88f, 0.92f);
+
+        string[] boards = { "tab_gold_total|现金总榜", "tab_gold_week|现金周榜", "tab_opens_total|开箱总榜", "tab_opens_week|开箱周榜" };
+        for (int i = 0; i < boards.Length; i++)
+        {
+            var parts = boards[i].Split('|');
+            Button(root.transform, parts[0], new Vector2(-660 + i * 250, -140), new Vector2(230, 56), parts[1], "blue", 20);
+        }
+
+        Button(root.transform, "tab_global", new Vector2(-660, -210), new Vector2(230, 56), "全球榜", "green", 22);
+        Button(root.transform, "tab_region", new Vector2(-410, -210), new Vector2(230, 56), "我的地区", "green", 22);
+        Button(root.transform, "btn_share", new Vector2(820, -210), new Vector2(180, 56), "分 享", "gold", 22);
+
         var list = new GameObject("list");
         list.transform.SetParent(root.transform, false);
         var lrt = list.AddComponent<RectTransform>();
         lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 1f);
-        lrt.anchoredPosition = new Vector2(0, -130);
-        lrt.sizeDelta = new Vector2(900, 800);
+        lrt.anchoredPosition = new Vector2(0, -270);
+        lrt.sizeDelta = new Vector2(900, 760);
         Save(root);
     }
 

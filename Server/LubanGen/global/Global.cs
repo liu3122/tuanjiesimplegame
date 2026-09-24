@@ -25,6 +25,15 @@ public sealed partial class Global : Luban.BeanBase
         { if(!_buf["ChestMaxSkillUses"].IsNumber) { throw new SerializationException(); }  ChestMaxSkillUses = _buf["ChestMaxSkillUses"]; }
         { if(!_buf["AuctionDurationSec"].IsNumber) { throw new SerializationException(); }  AuctionDurationSec = _buf["AuctionDurationSec"]; }
         { if(!_buf["AuctionBidStepPct"].IsNumber) { throw new SerializationException(); }  AuctionBidStepPct = _buf["AuctionBidStepPct"]; }
+        { if(!_buf["DailyTicketCost"].IsNumber) { throw new SerializationException(); }  DailyTicketCost = _buf["DailyTicketCost"]; }
+        { if(!_buf["DailyAttemptsPerDay"].IsNumber) { throw new SerializationException(); }  DailyAttemptsPerDay = _buf["DailyAttemptsPerDay"]; }
+        { if(!_buf["DailyChestId"].IsNumber) { throw new SerializationException(); }  DailyChestId = _buf["DailyChestId"]; }
+        { if(!_buf["RushBotFillDelaySec"].IsNumber) { throw new SerializationException(); }  RushBotFillDelaySec = _buf["RushBotFillDelaySec"]; }
+        { if(!_buf["RushBotClaimMinMs"].IsNumber) { throw new SerializationException(); }  RushBotClaimMinMs = _buf["RushBotClaimMinMs"]; }
+        { if(!_buf["RushBotClaimMaxMs"].IsNumber) { throw new SerializationException(); }  RushBotClaimMaxMs = _buf["RushBotClaimMaxMs"]; }
+        { if(!_buf["OfferEveryNElims"].IsNumber) { throw new SerializationException(); }  OfferEveryNElims = _buf["OfferEveryNElims"]; }
+        { if(!_buf["OfferValidSec"].IsNumber) { throw new SerializationException(); }  OfferValidSec = _buf["OfferValidSec"]; }
+        { if(!_buf["OfferJitter"].IsNumber) { throw new SerializationException(); }  OfferJitter = _buf["OfferJitter"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -40,6 +49,15 @@ public sealed partial class Global : Luban.BeanBase
     public readonly int ChestMaxSkillUses;
     public readonly int AuctionDurationSec;
     public readonly float AuctionBidStepPct;
+    public readonly int DailyTicketCost;
+    public readonly int DailyAttemptsPerDay;
+    public readonly int DailyChestId;
+    public readonly int RushBotFillDelaySec;
+    public readonly int RushBotClaimMinMs;
+    public readonly int RushBotClaimMaxMs;
+    public readonly int OfferEveryNElims;
+    public readonly int OfferValidSec;
+    public readonly float OfferJitter;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -59,6 +77,15 @@ public sealed partial class Global : Luban.BeanBase
         + "ChestMaxSkillUses:" + ChestMaxSkillUses + ","
         + "AuctionDurationSec:" + AuctionDurationSec + ","
         + "AuctionBidStepPct:" + AuctionBidStepPct + ","
+        + "DailyTicketCost:" + DailyTicketCost + ","
+        + "DailyAttemptsPerDay:" + DailyAttemptsPerDay + ","
+        + "DailyChestId:" + DailyChestId + ","
+        + "RushBotFillDelaySec:" + RushBotFillDelaySec + ","
+        + "RushBotClaimMinMs:" + RushBotClaimMinMs + ","
+        + "RushBotClaimMaxMs:" + RushBotClaimMaxMs + ","
+        + "OfferEveryNElims:" + OfferEveryNElims + ","
+        + "OfferValidSec:" + OfferValidSec + ","
+        + "OfferJitter:" + OfferJitter + ","
         + "}";
     }
 }

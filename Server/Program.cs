@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
+using System.Net.WebSockets;
+using System.Text;
+using SimpleGameServer;
 using SimpleGameServer.Config;
 using SimpleGameServer.Game;
 using SimpleGameServer.Hubs;
@@ -37,11 +40,13 @@ Player Auth(HttpRequest request)
 IResult Need(Player p) => p == null ? Results.Json(new { ok = false, error = "UNAUTHORIZED" }, statusCode: 401) : null;
 
 // ---------- 账号 ----------
-app.MapPost("/api/login", (LoginReq req, GameStore store) =>
+app.MapPost("/api/login", (LoginReq req, HttpContext ctx, GameStore store) =>
 {
     if (string.IsNullOrWhiteSpace(req.Name)) return Results.Json(new { ok = false, error = "BAD_NAME" });
     var player = store.LoginOrRegister(req.Name.Trim());
-    return Results.Json(new { ok = true, token = player.Token, playerId = player.Id, name = player.Name, gold = player.Gold });
+    player.Region = RegionResolver.Resolve(ctx, req.Region);
+    Db.SavePlayer(player);
+    return Results.Json(new { ok = true, token = player.Token, playerId = player.Id, name = player.Name, gold = player.Gold, region = player.Region });
 });
 
 app.MapPost("/api/character", (CharacterReq req, HttpRequest http, GameStore store) =>
@@ -85,11 +90,90 @@ app.MapPost("/api/chest/{uid}/skill", (long uid, SkillReq req, HttpRequest http,
     return Results.Json(new { ok, error = err, data });
 });
 
-app.MapGet("/api/rank", (HttpRequest http, GameService svc) =>
+app.MapGet("/api/rank", (HttpRequest http, GameService svc, string board = "gold_total", string scope = "global") =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    return Results.Json(new { ok = true, data = svc.RankList(p) });
+    var valid = new[] { "gold_total", "gold_week", "opens_total", "opens_week" };
+    if (!valid.Contains(board)) return Results.Json(new { ok = false, error = "BAD_BOARD" });
+    if (scope != "global" && scope != "region") scope = "global";
+    return Results.Json(new { ok = true, data = svc.RankList(p, board, scope) });
+});
+
+// ---------- 抢宝房 ----------
+app.MapGet("/api/rush/rooms", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    return Results.Json(new { ok = true, data = svc.Rush.RoomList() });
+});
+
+app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService svc, GameStore store) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, room) = svc.Rush.Join(req.RoomId, p);
+    return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
+});
+
+// 原生 WebSocket：/ws/rush?roomId=1&token=xxx
+app.UseWebSockets();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path == "/ws/rush" && context.WebSockets.IsWebSocketRequest)
+    {
+        var token = context.Request.Query["token"].ToString();
+        var store = context.RequestServices.GetRequiredService<GameStore>();
+        var player = store.Validate(token);
+        if (player == null) { context.Response.StatusCode = 401; return; }
+        if (!int.TryParse(context.Request.Query["roomId"], out int roomId)) { context.Response.StatusCode = 400; return; }
+
+        var svc = context.RequestServices.GetRequiredService<GameService>();
+        var room = svc.Rush.GetRoom(roomId);
+        if (room == null) { context.Response.StatusCode = 404; return; }
+
+        var ws = await context.WebSockets.AcceptWebSocketAsync();
+        room.AttachSocket(player.Id, ws);
+        var buffer = new byte[4096];
+        try
+        {
+            while (ws.State == WebSocketState.Open)
+            {
+                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close) break;
+                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                var json = System.Text.Json.JsonDocument.Parse(msg).RootElement;
+                if (json.GetProperty("type").GetString() == "claim")
+                {
+                    int slot = json.GetProperty("slot").GetInt32();
+                    room.Claim(player.Id, slot);
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            room.DetachSocket(player.Id);
+        }
+        return;
+    }
+    await next();
+});
+
+// ---------- 分享 ----------
+app.MapGet("/api/share/content", (HttpRequest http, GameService svc, string contentId = "default") =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    return Results.Json(new { ok = true, data = svc.ShareContent(p, contentId) });
+});
+
+app.MapPost("/api/share/report", (ShareReq req, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    svc.ReportShare(p, req.Channel, req.ContentId);
+    return Results.Json(new { ok = true });
 });
 
 app.MapPost("/api/chest/{uid}/sell", (long uid, HttpRequest http, GameService svc) =>
@@ -98,6 +182,39 @@ app.MapPost("/api/chest/{uid}/sell", (long uid, HttpRequest http, GameService sv
     var deny = Need(p); if (deny != null) return deny;
     var (ok, err, data) = svc.SellToBanker(p, uid);
     return Results.Json(new { ok, error = err, data });
+});
+
+// ---------- 银行家报价 ----------
+app.MapPost("/api/chest/{uid}/offer/accept", (long uid, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.AcceptOffer(p, uid);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/chest/{uid}/offer/decline", (long uid, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.DeclineOffer(p, uid);
+    return Results.Json(new { ok, error = err, data });
+});
+
+// ---------- 每日挑战 ----------
+app.MapPost("/api/daily/buy", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.BuyDailyChest(p);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapGet("/api/daily/rank", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    return Results.Json(new { ok = true, data = svc.DailyRank(p) });
 });
 
 // ---------- 拍卖 ----------
@@ -136,7 +253,9 @@ app.MapHub<AuctionHub>("/hubs/auction");
 app.Run();
 
 // ---------- 请求模型 ----------
-public record LoginReq(string Name);
+public record LoginReq(string Name, string Region = null);
+public record ShareReq(string Channel, string ContentId = "");
+public record RushJoinReq(int RoomId);
 public record CharacterReq(int CharacterId);
 public record BuyReq(int ConfigId);
 public record EliminateReq(int SlotIndex);
@@ -177,4 +296,26 @@ namespace SimpleGameServer.Game
             }
         }
     }
+}
+
+namespace SimpleGameServer
+{
+    /// <summary>地区解析（优先级：CDN 头 > 客户端上报 > GeoIP 扩展点 > 默认）</summary>
+    public static class RegionResolver
+    {
+        public static string Resolve(HttpContext ctx, string clientHint)
+        {
+            // 1) 反代/CDN 注入的国家码（部署到 CloudFlare/腾讯云 CDN 后自动生效）
+            var cf = ctx.Request.Headers["CF-IPCountry"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(cf)) return cf.ToString().ToUpperInvariant();
+            var xc = ctx.Request.Headers["X-Country-Code"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(xc)) return xc.ToString().ToUpperInvariant();
+            // 2) 客户端上报（SDK 定位/玩家自选）
+            if (!string.IsNullOrEmpty(clientHint)) return clientHint.ToUpperInvariant();
+            // 3) TODO: MaxMind GeoLite2 等离线 IP 库：按 ctx.Connection.RemoteIpAddress 解析
+            //    dotnet add package MaxMind.GeoIP2 && using var reader = new DatabaseReader("GeoLite2-Country.mmdb")
+            return "CN";
+    }
+}
+
 }

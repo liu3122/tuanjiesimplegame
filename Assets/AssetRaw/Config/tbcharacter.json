@@ -5,7 +5,8 @@
     "SkillType": 1,
     "SkillName": "洞察",
     "SkillDesc": "自动排除一个低于剩余平均值的选项（精准排雷）",
-    "ColorHex": "4DD0A5"
+    "ColorHex": "4DD0A5",
+    "SkillCooldownSec": 300
   },
   {
     "Id": 2,
@@ -13,7 +14,8 @@
     "SkillType": 2,
     "SkillName": "抬价",
     "SkillDesc": "本宝箱下一次系统收购价 +15%",
-    "ColorHex": "E8C35A"
+    "ColorHex": "E8C35A",
+    "SkillCooldownSec": 180
   },
   {
     "Id": 3,
@@ -21,7 +23,8 @@
     "SkillType": 3,
     "SkillName": "幸运手",
     "SkillDesc": "本宝箱接下来 3 次排除免费",
-    "ColorHex": "E05D5D"
+    "ColorHex": "E05D5D",
+    "SkillCooldownSec": 180
   },
   {
     "Id": 4,
@@ -29,7 +32,8 @@
     "SkillType": 4,
     "SkillName": "窥视",
     "SkillDesc": "偷看任意一个未排除选项的金额（不排除，持续可见）",
-    "ColorHex": "6EC6FF"
+    "ColorHex": "6EC6FF",
+    "SkillCooldownSec": 60
   },
   {
     "Id": 5,
@@ -37,7 +41,8 @@
     "SkillType": 5,
     "SkillName": "探测",
     "SkillDesc": "随机标记 3 个未排除选项中金额最高的一格（不显示金额）",
-    "ColorHex": "9B8EC4"
+    "ColorHex": "9B8EC4",
+    "SkillCooldownSec": 90
   },
   {
     "Id": 6,
@@ -45,7 +50,8 @@
     "SkillType": 6,
     "SkillName": "保底",
     "SkillDesc": "本宝箱系统结算所得低于购买价 60% 时，系统补足到该值",
-    "ColorHex": "7ED957"
+    "ColorHex": "7ED957",
+    "SkillCooldownSec": 300
   },
   {
     "Id": 7,
@@ -53,7 +59,8 @@
     "SkillType": 7,
     "SkillName": "锁价",
     "SkillDesc": "锁定当前系统收购价为底价，之后收购价只涨不跌",
-    "ColorHex": "E8C35A"
+    "ColorHex": "E8C35A",
+    "SkillCooldownSec": 240
   },
   {
     "Id": 8,
@@ -61,7 +68,8 @@
     "SkillType": 8,
     "SkillName": "鉴定",
     "SkillDesc": "本宝箱挂拍后，买家可见完整剩余金额分布（拍品更值钱）",
-    "ColorHex": "D4A5F5"
+    "ColorHex": "D4A5F5",
+    "SkillCooldownSec": 120
   },
   {
     "Id": 9,
@@ -69,6 +77,7 @@
     "SkillType": 9,
     "SkillName": "减免",
     "SkillDesc": "本宝箱接下来 5 次排除费用减半",
-    "ColorHex": "A8B4C2"
+    "ColorHex": "A8B4C2",
+    "SkillCooldownSec": 150
   }
 ]

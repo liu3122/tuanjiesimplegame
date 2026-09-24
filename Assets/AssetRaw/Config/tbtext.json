@@ -1,0 +1,806 @@
+[
+  {
+    "Key": "20 格金额池",
+    "En": "20-slot pool"
+  },
+  {
+    "Key": "LoginScreen 加载失败",
+    "En": ""
+  },
+  {
+    "Key": "MainScreen 加载失败",
+    "En": ""
+  },
+  {
+    "Key": "[ApiClient] {msg.Method} {msg.RequestUri.PathAndQuery} 失败：{e.Message}",
+    "En": ""
+  },
+  {
+    "Key": "[ApiClient] 登录失败：",
+    "En": ""
+  },
+  {
+    "Key": "[BakeUI] 全部界面 prefab 已生成 -> {OutDir}",
+    "En": ""
+  },
+  {
+    "Key": "[RushWs] 已连接房间",
+    "En": ""
+  },
+  {
+    "Key": "[RushWs] 连接失败：",
+    "En": ""
+  },
+  {
+    "Key": "[UIManager] 已回收无引用资源（界面图集随引用释放）",
+    "En": ""
+  },
+  {
+    "Key": "[UIManager] 控件缺失：{root.name}/{path}",
+    "En": ""
+  },
+  {
+    "Key": "[UIManager] 界面不在资源包中：{name}（先执行烘焙菜单生成 prefab）",
+    "En": ""
+  },
+  {
+    "Key": "[UIManager] 界面加载失败：{name} -> {handle.Error}",
+    "En": ""
+  },
+  {
+    "Key": "[UITheme] Sprite 不存在：{name}（{ResDir}/{name}.png）",
+    "En": ""
+  },
+  {
+    "Key": "[UITheme] 已加载图集:",
+    "En": ""
+  },
+  {
+    "Key": "[已鉴定]",
+    "En": ""
+  },
+  {
+    "Key": "[拍卖中]",
+    "En": ""
+  },
+  {
+    "Key": "\\u25C0 返回大厅",
+    "En": ""
+  },
+  {
+    "Key": "tab_gold_total|现金总榜",
+    "En": ""
+  },
+  {
+    "Key": "tab_gold_week|现金周榜",
+    "En": ""
+  },
+  {
+    "Key": "tab_opens_total|开箱总榜",
+    "En": ""
+  },
+  {
+    "Key": "tab_opens_week|开箱周榜",
+    "En": ""
+  },
+  {
+    "Key": "· 我限用一次）",
+    "En": ""
+  },
+  {
+    "Key": "· 技能",
+    "En": ""
+  },
+  {
+    "Key": "· 最大",
+    "En": ""
+  },
+  {
+    "Key": "—— 结算 ——",
+    "En": "—— Results ——"
+  },
+  {
+    "Key": "一口",
+    "En": ""
+  },
+  {
+    "Key": "一口价",
+    "En": "Buyout"
+  },
+  {
+    "Key": "下次排除",
+    "En": "Next eliminate"
+  },
+  {
+    "Key": "不能竞拍自己的宝箱",
+    "En": "Can't bid your own chest"
+  },
+  {
+    "Key": "主 大 厅",
+    "En": "Lobby"
+  },
+  {
+    "Key": "人同抢 ·",
+    "En": ""
+  },
+  {
+    "Key": "今天还没挑战",
+    "En": "Not played today"
+  },
+  {
+    "Key": "以一口价拿下！",
+    "En": ""
+  },
+  {
+    "Key": "你",
+    "En": "You"
+  },
+  {
+    "Key": "你对本宝箱已用过技能",
+    "En": ""
+  },
+  {
+    "Key": "你已是最高出价",
+    "En": "You are the top bidder"
+  },
+  {
+    "Key": "保底已生效",
+    "En": ""
+  },
+  {
+    "Key": "先启动服务器：cd Server && dotnet run --urls http:\n        Save(root);\n    }\n\n    private static void BakeMain()\n    {\n        var root = Root(",
+    "En": ""
+  },
+  {
+    "Key": "免排 ×",
+    "En": ""
+  },
+  {
+    "Key": "免费",
+    "En": "FREE"
+  },
+  {
+    "Key": "全服同一个宝箱（结构完全相同） 比谁最终卖得更高  门票",
+    "En": ""
+  },
+  {
+    "Key": "全球榜",
+    "En": "Global"
+  },
+  {
+    "Key": "准备！",
+    "En": "Ready!"
+  },
+  {
+    "Key": "减税 ×",
+    "En": ""
+  },
+  {
+    "Key": "出 价",
+    "En": "Bid"
+  },
+  {
+    "Key": "出价",
+    "En": ""
+  },
+  {
+    "Key": "出价失败：",
+    "En": "Bid failed: "
+  },
+  {
+    "Key": "出价成功",
+    "En": "Bid placed: "
+  },
+  {
+    "Key": "出售失败：",
+    "En": ""
+  },
+  {
+    "Key": "出售给系统",
+    "En": "Sell to Banker"
+  },
+  {
+    "Key": "分 享",
+    "En": "Share"
+  },
+  {
+    "Key": "分享成功",
+    "En": "Shared"
+  },
+  {
+    "Key": "分享未完成",
+    "En": "Share not completed"
+  },
+  {
+    "Key": "剩",
+    "En": ""
+  },
+  {
+    "Key": "剩余",
+    "En": "Remaining"
+  },
+  {
+    "Key": "剩余金额分布（已鉴定）：",
+    "En": ""
+  },
+  {
+    "Key": "加 入",
+    "En": "Join"
+  },
+  {
+    "Key": "加入失败：",
+    "En": "Join failed: "
+  },
+  {
+    "Key": "卖家",
+    "En": "Seller"
+  },
+  {
+    "Key": "双头奖箱",
+    "En": "Double Jackpot"
+  },
+  {
+    "Key": "取 消",
+    "En": "Cancel"
+  },
+  {
+    "Key": "取消",
+    "En": "Cancel"
+  },
+  {
+    "Key": "只剩最后一格，点右侧开箱",
+    "En": "Last slot! Open it"
+  },
+  {
+    "Key": "名",
+    "En": ""
+  },
+  {
+    "Key": "商 城",
+    "En": "Shop"
+  },
+  {
+    "Key": "地区榜（",
+    "En": ""
+  },
+  {
+    "Key": "失败：",
+    "En": ""
+  },
+  {
+    "Key": "奖池已生成，点击格子抢夺！",
+    "En": "Pool generated. Grab!"
+  },
+  {
+    "Key": "宝 箱 商 人",
+    "En": "Chest Merchant"
+  },
+  {
+    "Key": "宝箱不存在",
+    "En": "Chest not found"
+  },
+  {
+    "Key": "宝箱技能额度已耗尽",
+    "En": ""
+  },
+  {
+    "Key": "已出售给系统，获得",
+    "En": ""
+  },
+  {
+    "Key": "已复制分享文案",
+    "En": "Share text copied"
+  },
+  {
+    "Key": "已拒绝，继续排除！",
+    "En": "Declined. Continue!"
+  },
+  {
+    "Key": "已挂拍，可到拍卖行围观",
+    "En": "Listed! Watch it in Auction"
+  },
+  {
+    "Key": "已购买",
+    "En": "Purchased"
+  },
+  {
+    "Key": "已鉴定",
+    "En": "Identified"
+  },
+  {
+    "Key": "幸运格排除 +",
+    "En": ""
+  },
+  {
+    "Key": "幸运箱：★ 格排除 +",
+    "En": "Lucky: ★ gives +"
+  },
+  {
+    "Key": "开 始 冒 险",
+    "En": "Start Adventure"
+  },
+  {
+    "Key": "开 宝 箱",
+    "En": "Open"
+  },
+  {
+    "Key": "开 箱（",
+    "En": ""
+  },
+  {
+    "Key": "开抢！",
+    "En": ""
+  },
+  {
+    "Key": "开箱周榜",
+    "En": "Opens Weekly"
+  },
+  {
+    "Key": "开箱总榜",
+    "En": "Opens All-Time"
+  },
+  {
+    "Key": "开箱次数",
+    "En": ""
+  },
+  {
+    "Key": "开箱获得",
+    "En": ""
+  },
+  {
+    "Key": "当前出价",
+    "En": "Current bid"
+  },
+  {
+    "Key": "成交！获得",
+    "En": "Deal! Got "
+  },
+  {
+    "Key": "我可任选一个技能（限一次）",
+    "En": ""
+  },
+  {
+    "Key": "我已用过",
+    "En": ""
+  },
+  {
+    "Key": "我的地区",
+    "En": "My Region"
+  },
+  {
+    "Key": "我的最好：",
+    "En": "My best: "
+  },
+  {
+    "Key": "房间已满，即将开始…",
+    "En": "Room full, starting..."
+  },
+  {
+    "Key": "技 能",
+    "En": "Skills"
+  },
+  {
+    "Key": "技能",
+    "En": ""
+  },
+  {
+    "Key": "技能失败：",
+    "En": "Skill failed: "
+  },
+  {
+    "Key": "技能额度",
+    "En": ""
+  },
+  {
+    "Key": "技能额度已耗尽",
+    "En": "Skill quota used up"
+  },
+  {
+    "Key": "抢 宝 房",
+    "En": ""
+  },
+  {
+    "Key": "抢到",
+    "En": "grabbed"
+  },
+  {
+    "Key": "抢夺中… 剩余",
+    "En": "Rushing... "
+  },
+  {
+    "Key": "抢宝房",
+    "En": "Rush Room"
+  },
+  {
+    "Key": "报价已超时，继续！",
+    "En": ""
+  },
+  {
+    "Key": "抬价 +15% 已就绪",
+    "En": ""
+  },
+  {
+    "Key": "拍 卖 行",
+    "En": ""
+  },
+  {
+    "Key": "拍卖已结束",
+    "En": "Auction ended"
+  },
+  {
+    "Key": "拍卖行",
+    "En": "Auction"
+  },
+  {
+    "Key": "拒 绝",
+    "En": "No Deal"
+  },
+  {
+    "Key": "挂 拍",
+    "En": "List"
+  },
+  {
+    "Key": "挂拍失败：",
+    "En": "List failed: "
+  },
+  {
+    "Key": "挂拍（EV",
+    "En": ""
+  },
+  {
+    "Key": "挑战箱已放入背包（今日剩余",
+    "En": ""
+  },
+  {
+    "Key": "排行榜",
+    "En": "Ranking"
+  },
+  {
+    "Key": "排除 · 博弈 · 拍卖 · 抢宝",
+    "En": "Eliminate · Bid · Auction · Rush"
+  },
+  {
+    "Key": "排除失败：",
+    "En": "Eliminate failed: "
+  },
+  {
+    "Key": "排除揭示：",
+    "En": "Revealed: "
+  },
+  {
+    "Key": "接 受",
+    "En": "Deal!"
+  },
+  {
+    "Key": "接受失败：",
+    "En": ""
+  },
+  {
+    "Key": "无",
+    "En": ""
+  },
+  {
+    "Key": "无一口价",
+    "En": "No buyout"
+  },
+  {
+    "Key": "时长 60 秒，流拍退回；一口价填 0 表示不启用",
+    "En": "60s; 0 = no buyout"
+  },
+  {
+    "Key": "暂无上榜数据",
+    "En": "No data yet"
+  },
+  {
+    "Key": "期望",
+    "En": "EV"
+  },
+  {
+    "Key": "期望 V",
+    "En": "Expected V"
+  },
+  {
+    "Key": "未知错误",
+    "En": "Unknown error"
+  },
+  {
+    "Key": "本局结束",
+    "En": "Round over"
+  },
+  {
+    "Key": "格  EV",
+    "En": ""
+  },
+  {
+    "Key": "格  剩余总和",
+    "En": ""
+  },
+  {
+    "Key": "格 · EV",
+    "En": ""
+  },
+  {
+    "Key": "次 成绩 = 出售/开箱最终所得",
+    "En": ""
+  },
+  {
+    "Key": "次）",
+    "En": ")"
+  },
+  {
+    "Key": "欢迎，{ApiClient.PlayerName}！",
+    "En": ""
+  },
+  {
+    "Key": "每日挑战",
+    "En": "Daily Challenge"
+  },
+  {
+    "Key": "没有低于平均值的选项",
+    "En": ""
+  },
+  {
+    "Key": "玩家",
+    "En": ""
+  },
+  {
+    "Key": "现金周榜",
+    "En": "Gold Weekly"
+  },
+  {
+    "Key": "现金总榜",
+    "En": "Gold All-Time"
+  },
+  {
+    "Key": "界面 prefab 过旧：请执行菜单 Build/UI/Bake UI Prefabs",
+    "En": ""
+  },
+  {
+    "Key": "界面加载失败",
+    "En": "UI load failed"
+  },
+  {
+    "Key": "登录失败：服务器未启动？",
+    "En": "Login failed: server not running?"
+  },
+  {
+    "Key": "秒",
+    "En": "s"
+  },
+  {
+    "Key": "秒 奖池约",
+    "En": ""
+  },
+  {
+    "Key": "窥视：点击一个未排除的格子查看金额",
+    "En": ""
+  },
+  {
+    "Key": "第",
+    "En": "#"
+  },
+  {
+    "Key": "等待玩家中…",
+    "En": ""
+  },
+  {
+    "Key": "终局！最后一格  开箱可得",
+    "En": ""
+  },
+  {
+    "Key": "网络错误",
+    "En": "Network error"
+  },
+  {
+    "Key": "背 包",
+    "En": "Bag"
+  },
+  {
+    "Key": "背包空空如也，去商城买一个宝箱吧",
+    "En": "Your bag is empty. Buy a chest in the shop!"
+  },
+  {
+    "Key": "获取分享内容失败",
+    "En": "Failed to build share"
+  },
+  {
+    "Key": "获取拍品失败",
+    "En": "Failed to load lots"
+  },
+  {
+    "Key": "获取排行失败",
+    "En": "Failed to load ranking"
+  },
+  {
+    "Key": "诅咒箱：☠ 格排除 -",
+    "En": "Cursed: ☠ costs -"
+  },
+  {
+    "Key": "该格已排除",
+    "En": "Already eliminated"
+  },
+  {
+    "Key": "该格已排除，请选未排除的格",
+    "En": ""
+  },
+  {
+    "Key": "购买",
+    "En": ""
+  },
+  {
+    "Key": "购买失败：",
+    "En": "Buy failed: "
+  },
+  {
+    "Key": "购买挑战箱",
+    "En": ""
+  },
+  {
+    "Key": "起",
+    "En": ""
+  },
+  {
+    "Key": "起拍价",
+    "En": "Start price"
+  },
+  {
+    "Key": "起拍价无效",
+    "En": "Invalid start price"
+  },
+  {
+    "Key": "输入你的名字，开始冒险",
+    "En": "Enter your name to begin"
+  },
+  {
+    "Key": "进入房间（",
+    "En": ""
+  },
+  {
+    "Key": "选择左侧拍品  规则：出价至少 +5%，预扣金币； 被超出价自动退回；到期最高价成交（卖家抽成 5%）；一口价直接成交",
+    "En": ""
+  },
+  {
+    "Key": "选择技能（额度",
+    "En": "Choose skill (quota "
+  },
+  {
+    "Key": "金币",
+    "En": "gold"
+  },
+  {
+    "Key": "金币 每天",
+    "En": ""
+  },
+  {
+    "Key": "金币不足",
+    "En": "Not enough gold"
+  },
+  {
+    "Key": "金币！",
+    "En": ""
+  },
+  {
+    "Key": "银行家出价",
+    "En": "Banker Offer"
+  },
+  {
+    "Key": "银行家报价中，请先做出决定！",
+    "En": "Banker is offering. Decide first!"
+  },
+  {
+    "Key": "门票",
+    "En": "Ticket"
+  },
+  {
+    "Key": "陷阱格排除 -",
+    "En": ""
+  },
+  {
+    "Key": "（剩余",
+    "En": "(left "
+  },
+  {
+    "Key": "（我已用）",
+    "En": ""
+  },
+  {
+    "Key": "（每日挑战）",
+    "En": ""
+  },
+  {
+    "Key": "，到背包查看",
+    "En": ""
+  },
+  {
+    "Key": "木宝箱",
+    "En": "Wood Chest"
+  },
+  {
+    "Key": "银宝箱",
+    "En": "Silver Chest"
+  },
+  {
+    "Key": "金宝箱",
+    "En": "Gold Chest"
+  },
+  {
+    "Key": "双头奖木箱",
+    "En": "Double-Jackpot Wood"
+  },
+  {
+    "Key": "幸运银箱",
+    "En": "Lucky Silver"
+  },
+  {
+    "Key": "诅咒金箱",
+    "En": "Cursed Gold"
+  },
+  {
+    "Key": "新手抢宝房",
+    "En": "Rookie Rush"
+  },
+  {
+    "Key": "豪华抢宝房",
+    "En": "Deluxe Rush"
+  },
+  {
+    "Key": "探宝者",
+    "En": "Scout"
+  },
+  {
+    "Key": "银行家",
+    "En": "Banker"
+  },
+  {
+    "Key": "赌徒",
+    "En": "Gambler"
+  },
+  {
+    "Key": "天眼",
+    "En": "Clairvoyant"
+  },
+  {
+    "Key": "罗盘",
+    "En": "Compass"
+  },
+  {
+    "Key": "保险箱",
+    "En": "Safe"
+  },
+  {
+    "Key": "天平",
+    "En": "Scale"
+  },
+  {
+    "Key": "鉴定师",
+    "En": "Appraiser"
+  },
+  {
+    "Key": "税务官",
+    "En": "Tax Officer"
+  },
+  {
+    "Key": "史莱姆",
+    "En": "Slime"
+  },
+  {
+    "Key": "骷髅兵",
+    "En": "Skeleton"
+  },
+  {
+    "Key": "石像鬼",
+    "En": "Gargoyle"
+  },
+  {
+    "Key": "幼龙",
+    "En": "Wyrmling"
+  },
+  {
+    "Key": "技能冷却中，还剩",
+    "En": "Skill cooling down:"
+  },
+  {
+    "Key": "冷却",
+    "En": "CD"
+  }
+]

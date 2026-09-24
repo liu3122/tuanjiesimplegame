@@ -9,6 +9,10 @@
     <table name="TbBankerFactor" value="chest.BankerFactor" index="Id" input="tb_banker.xlsx"/>
     <!-- 角色表 -->
     <table name="TbCharacter" value="character.Character" index="Id" input="tb_character.xlsx"/>
+    <!-- 抢宝房配置 -->
+    <table name="TbRushRoom" value="rush.RushRoom" index="Id" input="tb_rushroom.xlsx"/>
+    <!-- 多语言文本表（Key = 中文原文） -->
+    <table name="TbText" value="l10n.TextItem" index="Key" input="tb_text.xlsx"/>
     <!-- 全局配置（单例表） -->
     <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
 </module>

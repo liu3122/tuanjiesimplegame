@@ -1,0 +1,22 @@
+[
+  {
+    "Id": 1,
+    "Name": "新手抢宝房",
+    "Ticket": 100,
+    "PlayerCount": 6,
+    "DurationSec": 30,
+    "CountdownSec": 3,
+    "PoolScale": 1.1,
+    "ColorHex": "4DD0A5"
+  },
+  {
+    "Id": 2,
+    "Name": "豪华抢宝房",
+    "Ticket": 500,
+    "PlayerCount": 6,
+    "DurationSec": 30,
+    "CountdownSec": 3,
+    "PoolScale": 1.15,
+    "ColorHex": "E8C35A"
+  }
+]

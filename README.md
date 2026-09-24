@@ -30,9 +30,19 @@
    - 减免：本宝箱接下来 5 次排除费用减半
    规则：宝箱自带技能额度 5 次（最多 5 个玩家各用一次），每个玩家对每个宝箱限一次，
    额度耗尽后易主也无法再用；剩余额度影响拍卖价值（机器人出价每点约 +5% EV，已鉴定再 +4%）
+   **技能冷却**：同一技能使用后进入冷却，**跨宝箱生效**（服务端权威 + SQLite 持久化，重启不丢），
+   冷却期间即使买新宝箱也不能重复使用同一技能，防止反复刷强力技能；时长配于 `tb_character.xlsx`
+   的 `SkillCooldownSec` 列（洞察/保底 300s、锁价 240s、抬价/幸运手/减免 180s、鉴定 120s、探测 90s、窥视 60s）；
+   技能面板实时显示倒计时并禁用冷却中的技能，到点自动解锁
 6. **拍卖行**：挂拍（起拍/一口价）→ 出价（+5% 起，预扣、被超自动退回、有人出价顺延）→
    一口价/到期成交（卖家抽成 5%），流拍退回；机器人参与竞价
-7. **排行榜**：金币排行（机器人填充展示数据，自己高亮）
+7. **排行榜（四榜 × 地区）**：现金总榜/现金周榜/开箱总榜/开箱周榜 × 全球榜/地区榜；
+   地区来源：CDN 国家码头（CF-IPCountry/X-Country-Code，部署到 CDN 后自动生效）> 客户端上报（接 SDK 后换定位/自选）> GeoIP 扩展点（代码留 TODO）
+8. **抢宝房（即时玩法）**：多档房间配置于 `TbRushRoom`（新手房门票 100 / 豪华房 500），
+   门票入池 → 机器人补满 6 人 → 3 秒倒计时 → 30 秒实时抢 20 格（点格即得，全房广播）→ 结算入账；
+   原生 WebSocket（`/ws/rush`）双向推送；奖池 = 门票×人数×倍率（金字塔分布）
+9. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
+   接微信/抖音 SDK：实现 `IShareProvider` 并启动时 `ShareBridge.SetProvider(...)` 即可
 
 > 防作弊：洗牌随机、未揭示格金额、钱包、技能裁决全部在服务端；客户端只拿聚合数值。
 
@@ -60,11 +70,31 @@
 | `tb_chest.xlsx` | 宝箱档位：售价 + 20 格金额池 + GenMode（0 固定/1 算法生成） |
 | `tb_chestgen.xlsx` | 生成器参数：稀有度权重 / 档位基准 / 扰动强度 |
 | `tb_banker.xlsx` | 系统收购系数曲线（0.80→1.00） |
-| `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排） |
+| `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排…9减免 + 每技能冷却秒数 `SkillCooldownSec`） |
 | `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 3 次 |
 | `tb_item.xlsx` | 道具表（预留） |
 
 xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
+
+## 多语言
+
+`tb_text.xlsx`（Key = 中文原文，En 列英文，当前 199 条）：双端共用。客户端 `L10n`（`UI/Common/L10n.cs`）：
+- 中文即 Key —— zh 环境零查找；en 查表回退原文
+- prefab 静态文本：`UIManager.ShowAsync` 实例化后 `L10n.LocalizeTransform` 自动翻译
+- 动态拼接文案：代码中 `L10n.Get("...")`（已替换 88 处）
+- 语言切换：登录屏/主大厅右上角 EN/中文 按钮（PlayerPrefs 持久化）
+
+## UI 代码结构（按模块分文件夹）
+
+```
+Assets/HotUpdateScripts/
+├── Core/            # ApiClient / OnlineState / GameConfig（通信与全局状态）
+├── HotUpdateEntry.cs / GameHub.cs
+└── UI/              # 全部界面类
+    ├── Common/      # UIManager / UIRoot / UITheme / TDUIHelper / L10n / ShareBridge / ScreenCommon(ErrText)
+    ├── Login/ Lobby/ Shop/ Bag/ Chest/ Auction/ Rank/ Daily/ Rush/
+    │                # Screens 按 partial 拆分到各模块（LoginScreen.cs 等）+ 各界面组件
+```
 
 ## UI 主题（秘宝暗金）
 
