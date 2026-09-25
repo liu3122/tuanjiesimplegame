@@ -112,6 +112,19 @@
             <var name="OfferEveryNElims" type="int"/>
             <var name="OfferValidSec" type="int"/>
             <var name="OfferJitter" type="float"/>
+            <!-- 镜像对决：入场金 / 使用宝箱档位 / 单局时限秒（抽成沿用 AuctionFeeRate，补位等待沿用 RushBotFillDelaySec） -->
+            <var name="DuelStake" type="int"/>
+            <var name="DuelChestId" type="int"/>
+            <var name="DuelMatchSec" type="int"/>
+        </bean>
+    </module>
+
+    <module name="feature">
+        <!-- 玩法开关：服务端拦截对应路由/WS，客户端隐藏入口；缺行 = 默认开启 -->
+        <bean name="Feature">
+            <var name="Id" type="string"/>
+            <var name="Enabled" type="bool"/>
+            <var name="Desc" type="string"/>
         </bean>
     </module>
 </module>

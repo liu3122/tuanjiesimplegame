@@ -34,6 +34,9 @@ public sealed partial class Global : Luban.BeanBase
         { if(!_buf["OfferEveryNElims"].IsNumber) { throw new SerializationException(); }  OfferEveryNElims = _buf["OfferEveryNElims"]; }
         { if(!_buf["OfferValidSec"].IsNumber) { throw new SerializationException(); }  OfferValidSec = _buf["OfferValidSec"]; }
         { if(!_buf["OfferJitter"].IsNumber) { throw new SerializationException(); }  OfferJitter = _buf["OfferJitter"]; }
+        { if(!_buf["DuelStake"].IsNumber) { throw new SerializationException(); }  DuelStake = _buf["DuelStake"]; }
+        { if(!_buf["DuelChestId"].IsNumber) { throw new SerializationException(); }  DuelChestId = _buf["DuelChestId"]; }
+        { if(!_buf["DuelMatchSec"].IsNumber) { throw new SerializationException(); }  DuelMatchSec = _buf["DuelMatchSec"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -58,6 +61,9 @@ public sealed partial class Global : Luban.BeanBase
     public readonly int OfferEveryNElims;
     public readonly int OfferValidSec;
     public readonly float OfferJitter;
+    public readonly int DuelStake;
+    public readonly int DuelChestId;
+    public readonly int DuelMatchSec;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -86,6 +92,9 @@ public sealed partial class Global : Luban.BeanBase
         + "OfferEveryNElims:" + OfferEveryNElims + ","
         + "OfferValidSec:" + OfferValidSec + ","
         + "OfferJitter:" + OfferJitter + ","
+        + "DuelStake:" + DuelStake + ","
+        + "DuelChestId:" + DuelChestId + ","
+        + "DuelMatchSec:" + DuelMatchSec + ","
         + "}";
     }
 }

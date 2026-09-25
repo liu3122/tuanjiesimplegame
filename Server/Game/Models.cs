@@ -139,6 +139,16 @@ namespace SimpleGameServer.Game
 
         public int RemainingCount => Amounts.Length - EliminatedCount;
 
+        /// <summary>打乱格位（金额池不变；镜像对决用：同池不同位，对手揭示不暴露我的格位）</summary>
+        public void ShuffleAmounts(Random rng)
+        {
+            for (int i = Amounts.Length - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (Amounts[i], Amounts[j]) = (Amounts[j], Amounts[i]);
+            }
+        }
+
         public long RemainingSum
         {
             get

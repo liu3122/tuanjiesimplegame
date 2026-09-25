@@ -33,7 +33,7 @@ namespace Game.HotUpdate.ChestGame
             ResourcePackage package = YooAssets.GetPackage(PackageName);
             if (!package.IsLocationValid(name))
             {
-                Debug.LogError($L10n.Get("[UIManager] 界面不在资源包中：{name}（先执行烘焙菜单生成 prefab）"));
+                Debug.LogError($"[UIManager] 界面不在资源包中：{name}（先执行烘焙菜单生成 prefab）");
                 return null;
             }
 
@@ -41,7 +41,7 @@ namespace Game.HotUpdate.ChestGame
             await handle;
             if (handle.Status != EOperationStatus.Succeeded)
             {
-                Debug.LogError($L10n.Get("[UIManager] 界面加载失败：{name} -> {handle.Error}"));
+                Debug.LogError($"[UIManager] 界面加载失败：{name} -> {handle.Error}");
                 return null;
             }
 
@@ -84,7 +84,7 @@ namespace Game.HotUpdate.ChestGame
             var t = root.Find(path);
             if (t == null)
             {
-                Debug.LogError($L10n.Get("[UIManager] 控件缺失：{root.name}/{path}"));
+                Debug.LogError($"[UIManager] 控件缺失：{root.name}/{path}");
                 return null;
             }
             return t.GetComponent<T>();

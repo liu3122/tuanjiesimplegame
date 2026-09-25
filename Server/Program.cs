@@ -105,6 +105,7 @@ app.MapGet("/api/rush/rooms", (HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Rush)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     return Results.Json(new { ok = true, data = svc.Rush.RoomList() });
 });
 
@@ -112,11 +113,22 @@ app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService sv
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Rush)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     var (ok, err, room) = svc.Rush.Join(req.RoomId, p);
     return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
 });
 
-// 原生 WebSocket：/ws/rush?roomId=1&token=xxx
+// ---------- 镜像对决 ----------
+app.MapPost("/api/duel/join", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Duel)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, room) = svc.Duel.Join(p);
+    return Results.Json(new { ok, error = err, data = room != null ? new { duelId = room.DuelId } : null });
+});
+
+// 原生 WebSocket：/ws/rush?roomId=1&token=xxx 或 /ws/duel?token=xxx
 app.UseWebSockets();
 app.Use(async (context, next) =>
 {
@@ -126,6 +138,7 @@ app.Use(async (context, next) =>
         var store = context.RequestServices.GetRequiredService<GameStore>();
         var player = store.Validate(token);
         if (player == null) { context.Response.StatusCode = 401; return; }
+        if (!Features.IsOn(Features.Rush)) { context.Response.StatusCode = 403; return; }
         if (!int.TryParse(context.Request.Query["roomId"], out int roomId)) { context.Response.StatusCode = 400; return; }
 
         var svc = context.RequestServices.GetRequiredService<GameService>();
@@ -157,6 +170,56 @@ app.Use(async (context, next) =>
         }
         return;
     }
+
+    if (context.Request.Path == "/ws/duel" && context.WebSockets.IsWebSocketRequest)
+    {
+        var token = context.Request.Query["token"].ToString();
+        var store = context.RequestServices.GetRequiredService<GameStore>();
+        var player = store.Validate(token);
+        if (player == null) { context.Response.StatusCode = 401; return; }
+        if (!Features.IsOn(Features.Duel)) { context.Response.StatusCode = 403; return; }
+
+        var svc = context.RequestServices.GetRequiredService<GameService>();
+        var room = svc.Duel.FindRoomOf(player.Id);
+        if (room == null) { context.Response.StatusCode = 404; return; }
+
+        var ws = await context.WebSockets.AcceptWebSocketAsync();
+        room.AttachSocket(player.Id, ws);
+        var buffer = new byte[4096];
+        try
+        {
+            while (ws.State == WebSocketState.Open)
+            {
+                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close) break;
+                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                var json = System.Text.Json.JsonDocument.Parse(msg).RootElement;
+                switch (json.GetProperty("type").GetString())
+                {
+                    case "eliminate":
+                        room.Eliminate(player.Id, json.GetProperty("slot").GetInt32());
+                        break;
+                    case "skill":
+                    {
+                        int skillType = json.GetProperty("skillType").GetInt32();
+                        int? slotIndex = json.TryGetProperty("slotIndex", out var sv) && sv.ValueKind == System.Text.Json.JsonValueKind.Number ? sv.GetInt32() : null;
+                        room.Skill(player.Id, skillType, slotIndex);
+                        break;
+                    }
+                    case "sell": room.Sell(player.Id); break;
+                    case "accept": room.AcceptOffer(player.Id); break;
+                    case "decline": room.DeclineOffer(player.Id); break;
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            room.DetachSocket(player.Id);
+        }
+        return;
+    }
+
     await next();
 });
 
@@ -206,6 +269,7 @@ app.MapPost("/api/daily/buy", (HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Daily)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     var (ok, err, data) = svc.BuyDailyChest(p);
     return Results.Json(new { ok, error = err, data });
 });
@@ -214,6 +278,7 @@ app.MapGet("/api/daily/rank", (HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Daily)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     return Results.Json(new { ok = true, data = svc.DailyRank(p) });
 });
 
@@ -221,6 +286,7 @@ app.MapGet("/api/daily/rank", (HttpRequest http, GameService svc) =>
 app.MapGet("/api/auction", (HttpRequest http, GameService svc, GameStore store) =>
 {
     var p = Auth(http);
+    if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     store.EnsureBotLots();
     return Results.Json(new { ok = true, data = svc.AuctionList(p) });
 });
@@ -229,6 +295,7 @@ app.MapPost("/api/auction/list", (ListReq req, HttpRequest http, GameService svc
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     var (ok, err, data) = svc.ListChest(p, req.ChestUid, req.StartPrice, req.BuyoutPrice);
     return Results.Json(new { ok, error = err, data });
 });
@@ -237,6 +304,7 @@ app.MapPost("/api/auction/{lotId}/bid", (long lotId, HttpRequest http, GameServi
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     var (ok, err, data) = svc.Bid(p, lotId);
     return Results.Json(new { ok, error = err, data });
 });
@@ -245,6 +313,7 @@ app.MapPost("/api/auction/{lotId}/buyout", (long lotId, HttpRequest http, GameSe
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     var (ok, err, data) = svc.Buyout(p, lotId);
     return Results.Json(new { ok, error = err, data });
 });

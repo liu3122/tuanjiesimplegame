@@ -16,6 +16,9 @@
     "RushBotClaimMaxMs": 1400,
     "OfferEveryNElims": 4,
     "OfferValidSec": 20,
-    "OfferJitter": 0.08
+    "OfferJitter": 0.08,
+    "DuelStake": 100,
+    "DuelChestId": 1,
+    "DuelMatchSec": 120
   }
 ]

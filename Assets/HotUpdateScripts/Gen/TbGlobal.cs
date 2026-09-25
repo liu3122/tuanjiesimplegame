@@ -45,6 +45,9 @@ public partial class TbGlobal
      public int OfferEveryNElims => _data.OfferEveryNElims;
      public int OfferValidSec => _data.OfferValidSec;
      public float OfferJitter => _data.OfferJitter;
+     public int DuelStake => _data.DuelStake;
+     public int DuelChestId => _data.DuelChestId;
+     public int DuelMatchSec => _data.DuelMatchSec;
     
     public void ResolveRef(Tables tables)
     {

@@ -82,6 +82,8 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> JoinRushAsync(int roomId) =>
             PostAsync("/api/rush/join", $"{{\"roomId\":{roomId}}}");
 
+        public static Task<JSONNode> JoinDuelAsync() => PostAsync("/api/duel/join", "{}");
+
         public static Task<JSONNode> GetShareContentAsync(string contentId = "default") =>
             GetAsync($"/api/share/content?contentId={contentId}");
 
@@ -144,7 +146,7 @@ namespace Game.HotUpdate.ChestGame
             }
             catch (Exception e)
             {
-                Debug.LogError($L10n.Get("[ApiClient] {msg.Method} {msg.RequestUri.PathAndQuery} 失败：{e.Message}"));
+                Debug.LogError($"[ApiClient] {msg.Method} {msg.RequestUri.PathAndQuery} 失败：{e.Message}");
                 return null;
             }
         }

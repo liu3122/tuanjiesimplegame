@@ -21,6 +21,7 @@ public partial class Tables
     public TbCharacter TbCharacter {get; }
     public TbRushRoom TbRushRoom {get; }
     public TbText TbText {get; }
+    public TbFeature TbFeature {get; }
     public TbGlobal TbGlobal {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
@@ -32,6 +33,7 @@ public partial class Tables
         TbCharacter = new TbCharacter(loader("tbcharacter"));
         TbRushRoom = new TbRushRoom(loader("tbrushroom"));
         TbText = new TbText(loader("tbtext"));
+        TbFeature = new TbFeature(loader("tbfeature"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
         ResolveRef();
     }
@@ -45,6 +47,7 @@ public partial class Tables
         TbCharacter.ResolveRef(this);
         TbRushRoom.ResolveRef(this);
         TbText.ResolveRef(this);
+        TbFeature.ResolveRef(this);
         TbGlobal.ResolveRef(this);
     }
 }

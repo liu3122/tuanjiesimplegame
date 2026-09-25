@@ -17,9 +17,12 @@ namespace SimpleGameServer.Game
             _store = store;
             _events = events;
             Rush = new RushManager(store, this);
+            Duel = new DuelManager(store);
         }
 
         public RushManager Rush { get; }
+
+        public DuelManager Duel { get; }
 
         // ---------------- 宝箱 ----------------
 
@@ -145,7 +148,7 @@ namespace SimpleGameServer.Game
         }
 
         /// <summary>玩家技能冷却视图：skillType → 剩余秒（仅 >0 的）</summary>
-        private static Dictionary<int, int> SkillCooldownView(Player player)
+        internal static Dictionary<int, int> SkillCooldownView(Player player)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var view = new Dictionary<int, int>();
@@ -543,6 +546,7 @@ namespace SimpleGameServer.Game
                     escrow = player.Escrow.Values.Sum(),
                     characterId = player.CharacterId,
                     skillCooldowns = SkillCooldownView(player),
+                    featureFlags = Features.View(),
                     chests,
                 };
             }

@@ -1,0 +1,22 @@
+[
+  {
+    "Id": "rush",
+    "Enabled": true,
+    "Desc": "抢宝房：实时抢 20 格红包玩法"
+  },
+  {
+    "Id": "auction",
+    "Enabled": true,
+    "Desc": "拍卖行：挂拍/竞价/一口价"
+  },
+  {
+    "Id": "daily",
+    "Enabled": true,
+    "Desc": "每日挑战：全服同构宝箱"
+  },
+  {
+    "Id": "duel",
+    "Enabled": true,
+    "Desc": "镜像对决：1v1 同种子宝箱实时对抗"
+  }
+]

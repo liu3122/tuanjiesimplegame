@@ -30,7 +30,7 @@ namespace Game.HotUpdate.ChestGame
                 ApiClient.PlayerName = string.IsNullOrEmpty(input.text) ? L10n.Get("玩家") + Random.Range(100, 999) : input.text;
                 if (await ApiClient.LoginAsync())
                 {
-                    UIRoot.ToastStatic($L10n.Get("欢迎，{ApiClient.PlayerName}！"));
+                    UIRoot.ToastStatic($"欢迎，{ApiClient.PlayerName}！");
                     ShowMain(true);
                 }
                 else

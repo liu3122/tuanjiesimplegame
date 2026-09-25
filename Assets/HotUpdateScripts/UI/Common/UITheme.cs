@@ -98,7 +98,7 @@ namespace Game.HotUpdate.ChestGame
                 return s;
             }
 #endif
-            Debug.LogWarning($L10n.Get("[UITheme] Sprite 不存在：{name}（{ResDir}/{name}.png）"));
+            Debug.LogWarning($"[UITheme] Sprite 不存在：{name}（{ResDir}/{name}.png）");
             return null;
         }
 

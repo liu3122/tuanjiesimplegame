@@ -21,6 +21,15 @@ namespace Game.HotUpdate.ChestGame
             return cds != null ? Mathf.Max(0, cds[skillType.ToString()].AsInt) : 0;
         }
 
+        /// <summary>玩法开关（服务端 featureFlags 下发；无数据/缺项默认开启）</summary>
+        public static bool FeatureOn(string id)
+        {
+            var flags = State != null && State["data"] != null ? State["data"]["featureFlags"] : null;
+            if (flags == null) return true;
+            var v = flags[id];
+            return v.IsNull || v.AsBool;
+        }
+
         public static async Task<bool> Refresh()
         {
             var r = await ApiClient.GetStateAsync();

@@ -41,8 +41,18 @@
 8. **抢宝房（即时玩法）**：多档房间配置于 `TbRushRoom`（新手房门票 100 / 豪华房 500），
    门票入池 → 机器人补满 6 人 → 3 秒倒计时 → 30 秒实时抢 20 格（点格即得，全房广播）→ 结算入账；
    原生 WebSocket（`/ws/rush`）双向推送；奖池 = 门票×人数×倍率（金字塔分布）
-9. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
+9. **镜像对决（即时 1v1 对抗）**：入场金 100 → 3 秒倒计时 → 双方各开一个「同金额池、不同格位」的镜像宝箱，
+   并行排除（对决内免费）+ 技能（沿用技能冷却，跨玩法共享）+ 银行家报价；随时「卖给银行」锁定分数给对手施压，
+   双方锁定或 120 秒超时后比分数：高分赢奖池（入场金×2 扣 5% 抽成），平局退入场金；
+   对手排除的格号与金额实时公开（同池不同位 → 只泄露"池面"不泄露格位，信息战核心）；
+   断线/中途退出按当前收购价锁定（逃跑惩罚）；机器人补位（目标 1.0~2.2 倍入场金，会排除/用洞察/接受报价）；
+   原生 WebSocket（`/ws/duel`）；入口在大厅「对决」按钮（纯代码 UI，无 prefab 依赖）
+10. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
    接微信/抖音 SDK：实现 `IShareProvider` 并启动时 `ShareBridge.SetProvider(...)` 即可
+
+> **玩法开关（tb_feature.xlsx）**：每个玩法一行（rush/auction/daily/duel），`Enabled=false` 时服务端拦截
+> 对应路由与 WebSocket（返回 `FEATURE_DISABLED`），`/api/state` 的 `featureFlags` 同步下发、客户端自动隐藏
+> 大厅入口；改表 → 双击 gen.bat → 重启服务端即生效；缺行默认开启（删行即恢复）。
 
 > 防作弊：洗牌随机、未揭示格金额、钱包、技能裁决全部在服务端；客户端只拿聚合数值。
 
@@ -71,7 +81,8 @@
 | `tb_chestgen.xlsx` | 生成器参数：稀有度权重 / 档位基准 / 扰动强度 |
 | `tb_banker.xlsx` | 系统收购系数曲线（0.80→1.00） |
 | `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排…9减免 + 每技能冷却秒数 `SkillCooldownSec`） |
-| `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 3 次 |
+| `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 5 次、镜像对决（入场金 `DuelStake`/档位 `DuelChestId`/时限 `DuelMatchSec`） |
+| `tb_feature.xlsx` | **玩法开关**：rush/auction/daily/duel 每行一个 Enabled 布尔 |
 | `tb_item.xlsx` | 道具表（预留） |
 
 xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
@@ -160,6 +171,9 @@ Server/                        # ASP.NET Core 8（与客户端共用 Luban 配�
 cd Server && dotnet run --urls http://127.0.0.1:5188
 # 冒烟自测（登录→买箱→排除→技能→限用校验→出售→拍卖→出价）
 python server_smoke_test.py    # 或按 README 协议用 curl
+# 镜像对决回归（需 pip install websockets）
+python duel_e2e_test.py        # 双人镜像对决全流程
+python duel_bot_test.py        # 单人 + 机器人补位 + 金币一致性
 ```
 
 接口速览（Bearer token 鉴权，JSON）：
