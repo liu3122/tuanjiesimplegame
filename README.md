@@ -108,6 +108,21 @@
 
 xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
 
+## 上线换库（SQLite → MySQL，老数据完整平移）
+
+`Server/migrate_to_mysql.py`（迁移 + 对账一体，源库只读，绝不修改；simplegame.db 原文件即回滚保险）：
+
+```bash
+cd Server
+python migrate_to_mysql.py --check-only                 # 1) 迁移前自检：金币守恒（流水净额==存量，含预扣修正）
+python migrate_to_mysql.py --host <h> --user <u> --password <p> --db simplegame   # 2) 停服后迁移（目标非空会拒绝；--fresh 清空重迁）
+python migrate_to_mysql.py --host <h> ... --check-only-target                       # 3) 迁移后对账：9 表行数+顺序无关逐行校验和全比对
+```
+
+要点：JSON TEXT 列原样平移、gold_tx 保留原自增 id、MySQL 库需 utf8mb4；对账 FAIL 则勿切换。
+SQL 方言差异（UPSERT 语法/参数前缀/PRAGMA）改 `Db.cs` 即可，业务代码零改动。
+实测对账样例：2598 玩家 / 7300 宝箱 / 10085 流水，金币守恒零误差。
+
 ## 多语言
 
 `tb_text.xlsx`（Key = 中文原文，En 列英文，当前 199 条）：双端共用。客户端 `L10n`（`UI/Common/L10n.cs`）：
