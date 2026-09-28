@@ -36,13 +36,21 @@ namespace SimpleGameServer.Game
         private Timer? _timer;
 
         public int DuelId { get; }
+        /// <summary>对赌房模式：入场金=宝箱售价，赢家独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值</summary>
+        public bool PotMode { get; }
 
-        public DuelRoom(GameStore store, DuelManager manager, int duelId)
+        public DuelRoom(GameStore store, DuelManager manager, int duelId, bool potMode = false)
         {
             _store = store;
             _manager = manager;
             DuelId = duelId;
+            PotMode = potMode;
         }
+
+        /// <summary>入场金：普通对决=DuelStake；对赌房=对决宝箱售价</summary>
+        private long Stake => PotMode
+            ? GameTables.Tables.TbChest[GameTables.Tables.TbGlobal.DuelChestId].Price
+            : GameTables.Tables.TbGlobal.DuelStake;
 
         public int WaitingCount { get { lock (_gate) return _players.Count(p => p.Key > 0); } }
         public bool Joinable { get { lock (_gate) return _phase == Phase.Matching && _players.Count < 2; } }
@@ -57,13 +65,13 @@ namespace SimpleGameServer.Game
                 if (_phase != Phase.Matching) return (false, "ROOM_RUNNING");
                 if (_players.ContainsKey(player.Id)) return (true, null); // 幂等
                 if (_players.Count >= 2) return (false, "ROOM_FULL");
-                int stake = GameTables.Tables.TbGlobal.DuelStake;
+                long stake = Stake;
                 if (player.Gold < stake) return (false, "NOT_ENOUGH_GOLD");
 
                 player.Gold -= stake;
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -stake, "duel_stake", DuelId);
-                Db.RecordStake(player.Id, "duel", DuelId, stake); // 重启退款凭据
+                Db.RecordStake(player.Id, "duel", DuelId, (int)stake); // 重启退款凭据
                 _players[player.Id] = player;
                 Broadcast(new { type = "joined", name = player.Name, count = _players.Count, need = 2 });
                 return (true, null);
@@ -178,12 +186,12 @@ namespace SimpleGameServer.Game
                 var chest = new Chest(_store.AllocChestUid(), config, new Random(poolSeed))
                 {
                     OwnerId = pid,
-                    PaidPrice = g.DuelStake, // 保底技能兜底 60% 入场金（对决内有效）
+                    PaidPrice = Stake, // 保底技能兜底 60% 入场金（对决内有效）
                     FreeEliminateBuff = 99,  // 对决内排除免费（节奏优先）
                 };
                 chest.ShuffleAmounts(new Random(_rng.Next()));
                 _chests[pid] = chest;
-                if (pid < 0) _botTargets[pid] = (double)g.DuelStake * (1.0 + _rng.NextDouble() * 1.2);
+                if (pid < 0) _botTargets[pid] = (double)Stake * (1.0 + _rng.NextDouble() * 1.2);
             }
             _phase = Phase.Match;
             _phaseEndUtc = DateTime.UtcNow.AddSeconds(g.DuelMatchSec);
@@ -327,13 +335,13 @@ namespace SimpleGameServer.Game
 
         private void BotAct()
         {
-            int stake = GameTables.Tables.TbGlobal.DuelStake;
+            double stake = Stake;
             foreach (var bot in _players.Values.Where(p => p.Id < 0).ToList())
             {
                 if (_finished.Contains(bot.Id)) continue;
                 if (!_chests.TryGetValue(bot.Id, out var chest)) continue;
                 chest.ExpireOfferIfNeeded();
-                double target = _botTargets.GetValueOrDefault(bot.Id, (double)stake * 1.5);
+                double target = _botTargets.GetValueOrDefault(bot.Id, stake * 1.5);
 
                 if (chest.PendingOffer != null)
                 {
@@ -365,25 +373,29 @@ namespace SimpleGameServer.Game
             if (_phase == Phase.Settled) return;
             _phase = Phase.Settled;
             var g = GameTables.Tables.TbGlobal;
-            long stake = g.DuelStake;
-            long pot = stake * 2;
-            long rake = (long)Math.Round(pot * g.AuctionFeeRate);
-
+            long stake = Stake;
             var ids = _players.Keys.ToList();
             long s0 = _scores.GetValueOrDefault(ids[0]);
             long s1 = _scores.GetValueOrDefault(ids[1]);
             long winner = s0 > s1 ? ids[0] : s1 > s0 ? ids[1] : 0; // 0 = 平局
 
+            // 对赌房：赢家独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值
+            // 普通对决：赢家得固定奖池（入场金×2 扣抽成）；平局退入场金
+            long potPayout(long pid) => PotMode
+                ? (winner == 0 ? _scores.GetValueOrDefault(pid)
+                    : (pid == winner ? (long)Math.Round((s0 + s1) * (1 - g.AuctionFeeRate)) : 0))
+                : (winner == 0 ? stake : (pid == winner ? (long)Math.Round(stake * 2 * (1 - g.AuctionFeeRate)) : 0));
+
             // 真人入账
             foreach (var pid in ids.Where(id => id > 0))
             {
-                long delta = winner == 0 ? stake : (pid == winner ? pot - rake : 0);
-                if (delta > 0)
+                long payout = potPayout(pid);
+                if (payout > 0)
                 {
                     var p = _players[pid];
-                    p.Gold += delta;
+                    p.Gold += payout;
                     Db.SavePlayer(p);
-                    Db.AddGoldTx(pid, delta, "duel_win", DuelId);
+                    Db.AddGoldTx(pid, payout, PotMode ? "potduel_win" : "duel_win", DuelId);
                 }
             }
 
@@ -397,8 +409,8 @@ namespace SimpleGameServer.Game
 
             foreach (var pid in ids)
             {
-                long myDelta = winner == 0 ? 0 : (pid == winner ? pot - rake - stake : -stake);
-                SendTo(pid, new { type = "settled", board, myDelta, tie = winner == 0 });
+                long myDelta = potPayout(pid) - stake;
+                SendTo(pid, new { type = "settled", board, myDelta, tie = winner == 0, potMode = PotMode });
                 if (pid > 0) Db.ClearStake(pid, "duel", DuelId); // 正常结算，清除重启退款凭据
             }
             _grace.Clear();
@@ -418,6 +430,7 @@ namespace SimpleGameServer.Game
                 {
                     type = "snapshot",
                     duelId = DuelId,
+                    potMode = PotMode,
                     phase = _phase.ToString().ToLowerInvariant(),
                     players = _players.Values.Select(p => new { name = p.Name, isBot = p.Id < 0 }).ToList(),
                     countdownSec = _phase == Phase.Countdown ? (int)Math.Ceiling((_phaseEndUtc - DateTime.UtcNow).TotalSeconds) : 0,
@@ -503,12 +516,13 @@ namespace SimpleGameServer.Game
         }
     }
 
-    /// <summary>镜像对决管理器：单房排队（1v1），结束即回收</summary>
+    /// <summary>镜像对决管理器：普通/对赌双队列（1v1），结束即回收</summary>
     public class DuelManager
     {
         private readonly GameStore _store;
         private readonly object _gate = new();
         private DuelRoom? _current;
+        private DuelRoom? _currentPot;
         private int _nextDuelId = 1;
 
         public DuelManager(GameStore store)
@@ -516,20 +530,21 @@ namespace SimpleGameServer.Game
             _store = store;
         }
 
-        public (bool ok, string err, DuelRoom? room) Join(Player player)
+        public (bool ok, string err, DuelRoom? room) Join(Player player, bool potMode = false)
         {
             lock (_gate)
             {
-                if (_current != null && _current.Joinable)
+                var current = potMode ? _currentPot : _current;
+                if (current != null && current.Joinable)
                 {
-                    var (ok, err) = _current.Join(player);
-                    if (ok) return (true, null, _current);
+                    var (ok, err) = current.Join(player);
+                    if (ok) return (true, null, current);
                     if (err != "ROOM_RUNNING" && err != "ROOM_FULL") return (ok, err, null);
                 }
-                var fresh = new DuelRoom(_store, this, _nextDuelId++);
+                var fresh = new DuelRoom(_store, this, _nextDuelId++, potMode);
                 var (ok2, err2) = fresh.Join(player);
                 if (!ok2) return (ok2, err2, null);
-                _current = fresh;
+                if (potMode) _currentPot = fresh; else _current = fresh;
                 _ = Task.Run(() => fresh.StartLifecycle());
                 return (true, null, fresh);
             }
@@ -540,6 +555,7 @@ namespace SimpleGameServer.Game
             lock (_gate)
             {
                 if (_current != null && _current.HasPlayer(playerId)) return _current;
+                if (_currentPot != null && _currentPot.HasPlayer(playerId)) return _currentPot;
                 return null;
             }
         }
@@ -549,6 +565,7 @@ namespace SimpleGameServer.Game
             lock (_gate)
             {
                 if (_current == room) _current = null;
+                if (_currentPot == room) _currentPot = null;
             }
         }
     }

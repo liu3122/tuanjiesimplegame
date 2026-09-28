@@ -18,6 +18,8 @@ namespace Game.HotUpdate.ChestGame
         private JSONNode _opp;
         private string _phase = "matching";
         private bool _finished;
+        /// <summary>对赌房模式：赢家独得两个宝箱的结算总价值</summary>
+        private bool _potMode;
         private readonly GameObject[] _slots = new GameObject[20];
         private readonly bool[] _oppEliminated = new bool[20];
         private readonly int[] _oppAmounts = new int[20];
@@ -46,15 +48,43 @@ namespace Game.HotUpdate.ChestGame
             public float EndAt;
         }
 
-        public static async void Show()
+        /// <summary>模式选择器：镜像对决（固定奖池）/ 对赌房（赢家通吃）</summary>
+        public static void ShowChooser()
         {
-            if (!OnlineState.FeatureOn("duel"))
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(820, 560));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -230), TextAnchor.MiddleCenter, 34);
+            title.text = "<color=#F5D061>" + L10n.Get("选择对决模式") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 780, 60);
+
+            if (OnlineState.FeatureOn("duel"))
+            {
+                var a = UITheme.ThemedButton(panel.transform, new Vector2(0, -90), new Vector2(700, 120),
+                    "<color=#6EC6FF>镜像对决</color> · 入场金 100\n<color=#9AA3B2>高分者赢固定奖池（入场金×2 扣 5% 抽成）</color>", "blue", 24);
+                UITheme.SkinButton(a, "blue");
+                a.onClick.AddListener(() => { Object.Destroy(panel); Show(false); });
+            }
+            if (OnlineState.FeatureOn("potduel"))
+            {
+                var b = UITheme.ThemedButton(panel.transform, new Vector2(0, -240), new Vector2(700, 120),
+                    "<color=#E05D5D>对赌房</color> · 入场金 = 宝箱售价\n<color=#9AA3B2>同箱对开，赢家独得两个宝箱的全部价值（扣 5%）</color>", "gold", 24);
+                b.onClick.AddListener(() => { Object.Destroy(panel); Show(true); });
+            }
+            var close = UITheme.ThemedButton(panel.transform, new Vector2(0, -440), new Vector2(200, 52), L10n.Get("取 消"), "red", 22);
+            close.onClick.AddListener(() => Object.Destroy(panel));
+        }
+
+        public static async void Show(bool potMode = false)
+        {
+            string flag = potMode ? "potduel" : "duel";
+            if (!OnlineState.FeatureOn(flag))
             {
                 UIRoot.ToastStatic(L10n.Get("该玩法已关闭"));
                 return;
             }
             UIRoot.ToastStatic(L10n.Get("正在匹配对手…"));
-            var r = await ApiClient.JoinDuelAsync();
+            var r = await ApiClient.JoinDuelAsync(potMode);
             if (r == null || !r["ok"].AsBool)
             {
                 UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(r));
@@ -64,13 +94,16 @@ namespace Game.HotUpdate.ChestGame
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             var self = panel.AddComponent<DuelPanel>();
+            self._potMode = potMode;
             self.Bind(panel);
         }
 
         private void Bind(GameObject root)
         {
             var title = TDUIHelper.MakeText(root.transform, new Vector2(0, -350), TextAnchor.MiddleCenter, 34);
-            title.text = "<color=#F5D061>镜像对决 · 1v1</color>";
+            title.text = _potMode
+                ? "<color=#E05D5D>" + L10n.Get("对赌房 · 赢家通吃") + "</color>"
+                : "<color=#F5D061>镜像对决 · 1v1</color>";
             TDUIHelper.SetSize(title.rectTransform, 1240, 50);
             _timer = TDUIHelper.MakeText(root.transform, new Vector2(0, -302), TextAnchor.MiddleCenter, 26);
             _timer.color = UITheme.TextSub;
@@ -277,7 +310,9 @@ namespace Game.HotUpdate.ChestGame
             long delta = e["myDelta"].AsLong;
             bool tie = e["tie"].AsBool;
             _status.text = tie
-                ? "<color=#F5D061>" + L10n.Get("平局！入场金已退回") + "</color>"
+                ? (_potMode
+                    ? "<color=#F5D061>" + L10n.Get("平局！各自落袋自己宝箱的价值") + "</color>"
+                    : "<color=#F5D061>" + L10n.Get("平局！入场金已退回") + "</color>")
                 : (delta > 0 ? "<color=#4DD0A5>" + L10n.Get("胜利！净赚") + " +" + delta.ToString("N0") + "</color>"
                              : "<color=#E05D5D>" + L10n.Get("惜败") + " " + delta.ToString("N0") + "</color>");
             PushFeed("—— " + L10n.Get("结算") + " ——\n" + sb.ToString());

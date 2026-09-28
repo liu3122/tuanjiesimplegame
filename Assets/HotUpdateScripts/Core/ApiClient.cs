@@ -84,7 +84,8 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> JoinRushAsync(int roomId) =>
             PostAsync("/api/rush/join", $"{{\"roomId\":{roomId}}}");
 
-        public static Task<JSONNode> JoinDuelAsync() => PostAsync("/api/duel/join", "{}");
+        public static Task<JSONNode> JoinDuelAsync(bool potMode = false) =>
+            PostAsync("/api/duel/join", potMode ? "{\"mode\":\"pot\"}" : "{}");
 
         public static Task<JSONNode> GetShareContentAsync(string contentId = "default") =>
             GetAsync($"/api/share/content?contentId={contentId}");

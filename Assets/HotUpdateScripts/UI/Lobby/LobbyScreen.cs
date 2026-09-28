@@ -27,11 +27,11 @@ namespace Game.HotUpdate.ChestGame
             var langBtn = UITheme.ThemedButton(root.transform, new Vector2(860, -50), new Vector2(170, 56),
                 L10n.IsZh ? "EN" : L10n.Get("中文"), "blue", 24);
             langBtn.onClick.AddListener(L10n.ToggleLanguage);
-            // 镜像对决入口（纯代码按钮；开关关闭时隐藏）
+            // 对决入口（模式选择器：镜像对决/对赌房；开关关闭时隐藏）
             var duelBtn = UITheme.ThemedButton(root.transform, new Vector2(660, -50), new Vector2(170, 56),
                 L10n.Get("对 决"), "gold", 24);
             duelBtn.name = "btn_duel_entry";
-            duelBtn.onClick.AddListener(() => DuelPanel.Show());
+            duelBtn.onClick.AddListener(() => DuelPanel.ShowChooser());
             UIRoot.Instance.RefreshTop();
 
             ApplyFeatureGates(root, duelBtn.gameObject);
@@ -82,7 +82,7 @@ namespace Game.HotUpdate.ChestGame
             SetCardActive(root, "card_rush", OnlineState.FeatureOn("rush"));
             SetCardActive(root, "card_daily", OnlineState.FeatureOn("daily"));
             SetCardActive(root, "card_auction", OnlineState.FeatureOn("auction"));
-            if (duelBtn != null) duelBtn.SetActive(OnlineState.FeatureOn("duel"));
+            if (duelBtn != null) duelBtn.SetActive(OnlineState.FeatureOn("duel") || OnlineState.FeatureOn("potduel"));
         }
 
         private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn)

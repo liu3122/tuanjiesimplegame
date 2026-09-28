@@ -48,12 +48,16 @@
    对手排除的格号与金额实时公开（同池不同位 → 只泄露"池面"不泄露格位，信息战核心）；
    断线给 8 秒重连宽限，过期/中途退出按当前收购价锁定（逃跑惩罚）；机器人补位（目标 1.0~2.2 倍入场金，会排除/用洞察/接受报价）；
    原生 WebSocket（`/ws/duel`）；入口在大厅「对决」按钮（纯代码 UI，无 prefab 依赖）
-10. **新手教学箱**：0 次开箱的新玩家登录后自动弹「领取教学宝箱」（固定种子免费木箱，一次），
+10. **对赌房（赢家通吃）**：与镜像对决同规则同设施（镜像箱/技能冷却/报价/勇气加成/8s 宽限/机器人补位），
+    但入场金 = 宝箱售价（默认木箱 75），**赢家独得两个宝箱的结算总价值**（扣 5% 抽成），
+    输家一无所有，平局各自落袋自己箱子的价值——风险远高于普通对决，适合搏命翻盘；
+    入口：大厅「对决」→ 模式选择；独立开关 `potduel`；流水 reason `potduel_win`
+11. **新手教学箱**：0 次开箱的新玩家登录后自动弹「领取教学宝箱」（固定种子免费木箱，一次），
     开箱界面三步横幅教学（排除与期望 → 费用与落袋 → 报价抉择），结算即毕业（`POST /api/tutorial/chest`）
-11. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
+12. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
    接微信/抖音 SDK：实现 `IShareProvider` 并启动时 `ShareBridge.SetProvider(...)` 即可
 
-> **玩法开关（tb_feature.xlsx）**：每个玩法一行（rush/auction/daily/duel），`Enabled=false` 时服务端拦截
+> **玩法开关（tb_feature.xlsx）**：每个玩法一行（rush/auction/daily/duel/potduel），`Enabled=false` 时服务端拦截
 > 对应路由与 WebSocket（返回 `FEATURE_DISABLED`），`/api/state` 的 `featureFlags` 同步下发、客户端自动隐藏
 > 大厅入口；改表 → 双击 gen.bat → 重启服务端即生效；缺行默认开启（删行即恢复）。
 
@@ -182,6 +186,7 @@ python duel_e2e_test.py        # 双人镜像对决全流程
 python duel_bot_test.py        # 单人 + 机器人补位 + 金币一致性
 python duel_courage_test.py    # 勇气加成（最后一格开箱 ×1.2）
 python duel_grace_test.py      # 断线重连宽限 + 宽限到期锁定
+python duel_pot_test.py        # 对赌房赢家通吃（两箱总价值扣 5%）
 python admin_tutorial_test.py  # 经济报表鉴权 + 教学箱一次性发放
 # 经济报表（运维）
 curl -H "X-Admin-Token: dev-admin" http://127.0.0.1:5188/api/admin/economy

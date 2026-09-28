@@ -18,5 +18,10 @@
     "Id": "duel",
     "Enabled": true,
     "Desc": "镜像对决：1v1 同种子宝箱实时对抗"
+  },
+  {
+    "Id": "potduel",
+    "Enabled": true,
+    "Desc": "对赌房：同箱对开，赢家独得两个宝箱价值"
   }
 ]

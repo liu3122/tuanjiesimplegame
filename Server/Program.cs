@@ -137,14 +137,15 @@ app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService sv
     return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
 });
 
-// ---------- 镜像对决 ----------
-app.MapPost("/api/duel/join", (HttpRequest http, GameService svc) =>
+// ---------- 镜像对决 / 对赌房 ----------
+app.MapPost("/api/duel/join", (DuelJoinReq req, HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    if (!Features.IsOn(Features.Duel)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
-    var (ok, err, room) = svc.Duel.Join(p);
-    return Results.Json(new { ok, error = err, data = room != null ? new { duelId = room.DuelId } : null });
+    bool potMode = string.Equals(req?.Mode, "pot", StringComparison.OrdinalIgnoreCase);
+    if (!Features.IsOn(potMode ? Features.PotDuel : Features.Duel)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, room) = svc.Duel.Join(p, potMode);
+    return Results.Json(new { ok, error = err, data = room != null ? new { duelId = room.DuelId, potMode = room.PotMode } : null });
 });
 
 // 原生 WebSocket：/ws/rush?roomId=1&token=xxx 或 /ws/duel?token=xxx
@@ -196,11 +197,11 @@ app.Use(async (context, next) =>
         var store = context.RequestServices.GetRequiredService<GameStore>();
         var player = store.Validate(token);
         if (player == null) { context.Response.StatusCode = 401; return; }
-        if (!Features.IsOn(Features.Duel)) { context.Response.StatusCode = 403; return; }
 
         var svc = context.RequestServices.GetRequiredService<GameService>();
         var room = svc.Duel.FindRoomOf(player.Id);
         if (room == null) { context.Response.StatusCode = 404; return; }
+        if (!Features.IsOn(room.PotMode ? Features.PotDuel : Features.Duel)) { context.Response.StatusCode = 403; return; }
 
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         room.AttachSocket(player.Id, ws);
@@ -344,6 +345,7 @@ app.Run();
 public record LoginReq(string Name, string Region = null);
 public record ShareReq(string Channel, string ContentId = "");
 public record RushJoinReq(int RoomId);
+public record DuelJoinReq(string Mode = "stake");
 public record CharacterReq(int CharacterId);
 public record BuyReq(int ConfigId);
 public record EliminateReq(int SlotIndex);
