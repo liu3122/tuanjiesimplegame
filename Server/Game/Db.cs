@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS share_log(
 CREATE TABLE IF NOT EXISTS daily_result(
   day TEXT NOT NULL, player_id INTEGER NOT NULL, name TEXT NOT NULL, best_score INTEGER NOT NULL,
   PRIMARY KEY(day, player_id)
+);
+CREATE TABLE IF NOT EXISTS active_stake(
+  player_id INTEGER NOT NULL, kind TEXT NOT NULL, ref_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY(player_id, kind, ref_id)
 );");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
@@ -72,7 +77,7 @@ CREATE TABLE IF NOT EXISTS daily_result(
             // 旧库升级：追加新列（已存在则忽略）
             foreach (var col in new[] { "peeked_slots TEXT NOT NULL DEFAULT '{}'", "detected_slots TEXT NOT NULL DEFAULT '[]'",
                                         "insurance INTEGER NOT NULL DEFAULT 0", "price_floor INTEGER", "tax_count INTEGER NOT NULL DEFAULT 0",
-                                        "identified INTEGER NOT NULL DEFAULT 0" })
+                                        "identified INTEGER NOT NULL DEFAULT 0", "is_tutorial INTEGER NOT NULL DEFAULT 0" })
             {
                 try { Exec(conn, "ALTER TABLE chest ADD COLUMN " + col); }
                 catch (Exception) { /* 列已存在 */ }
@@ -132,12 +137,12 @@ ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, reg
         {
             Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,
 peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,
-lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day)
-VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id,$lk,$tp,$po,$ox,$eo,$dd,$dy)
+lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day,is_tutorial)
+VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id,$lk,$tp,$po,$ox,$eo,$dd,$dy,$it)
 ON CONFLICT(uid) DO UPDATE SET owner_id=$o, state=$s, eliminated=$e, skill_uses=$sk,
 skill_used_by=$sub, free_buff=$fb, price_buff=$pb,
 peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count=$tc, identified=$id,
-lucky_slots=$lk, trap_slots=$tp, pending_offer=$po, offer_expire=$ox, elims_since_offer=$eo, is_daily=$dd, daily_day=$dy",
+lucky_slots=$lk, trap_slots=$tp, pending_offer=$po, offer_expire=$ox, elims_since_offer=$eo, is_daily=$dd, daily_day=$dy, is_tutorial=$it",
                 ("$u", c.Uid), ("$cfg", c.ConfigId), ("$o", c.OwnerId), ("$s", (int)c.State),
                 ("$a", JsonSerializer.Serialize(c.Amounts, JsonOpts)),
                 ("$e", JsonSerializer.Serialize(c.Eliminated, JsonOpts)),
@@ -154,7 +159,8 @@ lucky_slots=$lk, trap_slots=$tp, pending_offer=$po, offer_expire=$ox, elims_sinc
                 ("$po", c.PendingOffer.HasValue ? (object)c.PendingOffer.Value : DBNull.Value),
                 ("$ox", c.PendingOfferExpireUtc.HasValue ? (object)c.PendingOfferExpireUtc.Value.ToString("o") : DBNull.Value),
                 ("$eo", c.ElimsSinceOffer),
-                ("$dd", c.IsDaily ? 1 : 0), ("$dy", c.DailyDay as object ?? DBNull.Value));
+                ("$dd", c.IsDaily ? 1 : 0), ("$dy", c.DailyDay as object ?? DBNull.Value),
+                ("$it", c.IsTutorial ? 1 : 0));
         }, "SaveChest");
 
         // ---------------- AuctionLot ----------------
@@ -179,6 +185,109 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                 ("$p", playerId), ("$d", delta), ("$r", reason), ("$ref", refId),
                 ("$t", DateTime.UtcNow.ToString("o")));
         }, "AddGoldTx");
+
+        /// <summary>玩家已开箱结算次数（教学引导用：0 = 新玩家）</summary>
+        public static int OpensCount(long playerId)
+        {
+            var v = QueryScalar("SELECT COUNT(*) FROM gold_tx WHERE reason='chest_settled' AND player_id=$p", ("$p", playerId));
+            return v is long l ? (int)l : 0;
+        }
+
+        // ---------------- 在场质押（重启退款） ----------------
+
+        /// <summary>进房记录质押（抢宝门票/对决入场金）；服务端异常重启后据此退款</summary>
+        public static void RecordStake(long playerId, string kind, long refId, int amount) => Try(conn => Exec(conn, @"
+INSERT OR REPLACE INTO active_stake(player_id,kind,ref_id,amount,created_at) VALUES($p,$k,$r,$a,$t)",
+            ("$p", playerId), ("$k", kind), ("$r", refId), ("$a", amount), ("$t", DateTime.UtcNow.ToString("o"))), "RecordStake");
+
+        /// <summary>正常结算后清除质押记录</summary>
+        public static void ClearStake(long playerId, string kind, long refId) => Try(conn => Exec(conn,
+            "DELETE FROM active_stake WHERE player_id=$p AND kind=$k AND ref_id=$r",
+            ("$p", playerId), ("$k", kind), ("$r", refId)), "ClearStake");
+
+        /// <summary>启动恢复：房间随进程消失，孤立质押退款（按玩家合并）</summary>
+        public static void RefundOrphanStakes(GameStore store)
+        {
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT player_id, SUM(amount) FROM active_stake GROUP BY player_id";
+                var refunds = new List<(long pid, long amount)>();
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read()) refunds.Add((r.GetInt64(0), r.GetInt64(1)));
+                }
+                foreach (var (pid, amount) in refunds)
+                {
+                    if (store.Players.TryGetValue(pid, out var p) && amount > 0)
+                    {
+                        p.Gold += amount;
+                        Db.SavePlayer(p);
+                        Db.AddGoldTx(pid, amount, "stake_refund", 0);
+                        _log.LogInformation("质押退款：玩家 {Pid} +{Amount}", pid, amount);
+                    }
+                }
+                if (refunds.Count > 0)
+                {
+                    using var del = conn.CreateCommand();
+                    del.CommandText = "DELETE FROM active_stake";
+                    del.ExecuteNonQuery();
+                }
+            }
+            catch (Exception e) { _log.LogError(e, "RefundOrphanStakes"); }
+        }
+
+        // ---------------- 经济报表（管理端） ----------------
+
+        /// <summary>按 reason 聚合流水（区分真人/机器人），加上近 7 日真人净流入与存量</summary>
+        public static object EconomyReport()
+        {
+            var byReason = new List<object>();
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+SELECT reason,
+  SUM(CASE WHEN player_id>0 THEN delta ELSE 0 END) AS human_delta,
+  SUM(CASE WHEN player_id<0 THEN delta ELSE 0 END) AS bot_delta,
+  COUNT(*) AS cnt
+FROM gold_tx GROUP BY reason ORDER BY 2";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        byReason.Add(new { reason = r.GetString(0), humanDelta = r.GetInt64(1), botDelta = r.GetInt64(2), count = r.GetInt64(3) });
+                    }
+                }
+
+                var daily = new List<object>();
+                using var cmd2 = conn.CreateCommand();
+                cmd2.CommandText = @"
+SELECT substr(created_at,1,10) AS day, SUM(CASE WHEN player_id>0 THEN delta ELSE 0 END)
+FROM gold_tx WHERE player_id>0 AND created_at >= $ws GROUP BY day ORDER BY day";
+                cmd2.Parameters.AddWithValue("$ws", DateTime.UtcNow.AddDays(-7).ToString("o"));
+                using (var r = cmd2.ExecuteReader())
+                {
+                    while (r.Read()) daily.Add(new { day = r.GetString(0), humanNet = r.GetInt64(1) });
+                }
+
+                long humanGold = 0, botGold = 0, humanCount = 0;
+                using var cmd3 = conn.CreateCommand();
+                cmd3.CommandText = "SELECT COALESCE(SUM(CASE WHEN id>0 THEN gold END),0), COALESCE(SUM(CASE WHEN id<0 THEN gold END),0), COUNT(CASE WHEN id>0 THEN 1 END) FROM player";
+                using (var r = cmd3.ExecuteReader())
+                {
+                    if (r.Read()) { humanGold = r.GetInt64(0); botGold = r.GetInt64(1); humanCount = r.GetInt64(2); }
+                }
+                return new { humanGold, botGold, humanCount, byReason, daily };
+            }
+            catch (Exception e)
+            {
+                _log.LogError(e, "EconomyReport");
+                return new { error = "REPORT_FAILED" };
+            }
+        }
 
         // ---------------- 每日挑战 ----------------
 
@@ -342,7 +451,7 @@ ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", 
                 }
             }
 
-            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day FROM chest";
+            cmd.CommandText = "SELECT uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day,is_tutorial FROM chest";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -369,6 +478,7 @@ ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", 
                         JsonSerializer.Deserialize<int[]>(r.GetString(18) ?? "[]", JsonOpts),
                         r.GetInt32(22) == 1,
                         r.IsDBNull(23) ? null : r.GetString(23));
+                    chest.IsTutorial = r.GetInt32(24) == 1;
                     store.Chests[chest.Uid] = chest;
                 }
             }

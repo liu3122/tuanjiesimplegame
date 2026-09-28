@@ -30,6 +30,8 @@ namespace SimpleGameServer.Game
         private readonly Dictionary<long, long> _scores = new();
         private readonly HashSet<long> _finished = new();
         private readonly Dictionary<long, double> _botTargets = new();
+        /// <summary>断线宽限（重连窗口；过期未归按收购价锁定）</summary>
+        private readonly Dictionary<long, DateTime> _grace = new();
         private DateTime _phaseEndUtc;
         private Timer? _timer;
 
@@ -61,6 +63,7 @@ namespace SimpleGameServer.Game
                 player.Gold -= stake;
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -stake, "duel_stake", DuelId);
+                Db.RecordStake(player.Id, "duel", DuelId, stake); // 重启退款凭据
                 _players[player.Id] = player;
                 Broadcast(new { type = "joined", name = player.Name, count = _players.Count, need = 2 });
                 return (true, null);
@@ -69,7 +72,11 @@ namespace SimpleGameServer.Game
 
         public void AttachSocket(long playerId, WebSocket socket)
         {
-            lock (_gate) { _sockets[playerId] = socket; }
+            lock (_gate)
+            {
+                _sockets[playerId] = socket;
+                _grace.Remove(playerId); // 宽限期内重连：恢复对局
+            }
             SendTo(playerId, PersonalSnapshot(playerId));
         }
 
@@ -78,10 +85,10 @@ namespace SimpleGameServer.Game
             lock (_gate)
             {
                 _sockets.Remove(playerId);
-                // 对局中断线：按当前收购价立即锁定（逃跑惩罚）
-                if (_phase == Phase.Match && !_finished.Contains(playerId) && _chests.ContainsKey(playerId))
+                // 对局中断线：给 8 秒重连宽限，过期未归按当前收购价锁定
+                if (_phase == Phase.Match && playerId > 0 && !_finished.Contains(playerId) && _chests.ContainsKey(playerId))
                 {
-                    LockScore(playerId);
+                    _grace[playerId] = DateTime.UtcNow.AddSeconds(8);
                 }
             }
         }
@@ -122,6 +129,12 @@ namespace SimpleGameServer.Game
                             break;
 
                         case Phase.Match:
+                            // 断线宽限到期：按收购价锁定
+                            foreach (var pid in _grace.Where(kv => DateTime.UtcNow >= kv.Value).Select(kv => kv.Key).ToList())
+                            {
+                                _grace.Remove(pid);
+                                if (!_finished.Contains(pid) && _chests.ContainsKey(pid)) LockScore(pid);
+                            }
                             // 报价过期推送
                             foreach (var (pid, chest) in _chests)
                             {
@@ -165,8 +178,8 @@ namespace SimpleGameServer.Game
                 var chest = new Chest(_store.AllocChestUid(), config, new Random(poolSeed))
                 {
                     OwnerId = pid,
-                    PaidPrice = 0,
-                    FreeEliminateBuff = 99, // 对决内排除免费（节奏优先）
+                    PaidPrice = g.DuelStake, // 保底技能兜底 60% 入场金（对决内有效）
+                    FreeEliminateBuff = 99,  // 对决内排除免费（节奏优先）
                 };
                 chest.ShuffleAmounts(new Random(_rng.Next()));
                 _chests[pid] = chest;
@@ -239,7 +252,8 @@ namespace SimpleGameServer.Game
                 if (!CanAct(pid, out var chest, out var err)) { SendErr(pid, err); return (false, err); }
                 chest.ExpireOfferIfNeeded();
                 long score = chest.RemainingCount <= 1
-                    ? chest.SettleIncome(chest.OpenFinal())
+                    // 勇气加成：撑到最后一格开箱，得分 ×1.2（鼓励风险路线，破解"到价就卖"单一策略）
+                    ? (long)Math.Round(chest.SettleIncome(chest.OpenFinal()) * 1.2)
                     : chest.SettleIncome(Math.Max(1, (long)Math.Round(chest.BankerOffer)));
                 chest.State = ChestState.Finished;
                 LockScore(pid, score);
@@ -385,7 +399,9 @@ namespace SimpleGameServer.Game
             {
                 long myDelta = winner == 0 ? 0 : (pid == winner ? pot - rake - stake : -stake);
                 SendTo(pid, new { type = "settled", board, myDelta, tie = winner == 0 });
+                if (pid > 0) Db.ClearStake(pid, "duel", DuelId); // 正常结算，清除重启退款凭据
             }
+            _grace.Clear();
             _timer?.Dispose();
             _manager.OnRoomFinished(this);
         }

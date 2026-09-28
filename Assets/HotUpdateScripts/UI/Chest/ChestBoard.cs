@@ -35,6 +35,9 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>技能面板中冷却中的行（倒计时结束自动解锁）</summary>
         private readonly List<CdRow> _cooldownRows = new List<CdRow>();
         private float _nextCdRefresh;
+        /// <summary>教学箱引导：0=排除 1=费用与出售 2=报价抉择（isTutorial 箱显示）</summary>
+        private Text _tutBanner;
+        private int _tutStep;
 
         /// <summary>技能面板冷却行</summary>
         private class CdRow
@@ -142,6 +145,8 @@ namespace Game.HotUpdate.ChestGame
                 });
             }
             _offerExpireAt = Time.time + Mathf.Max(1f, _chest["offerExpireInSec"].AsFloat);
+            if (_tutStep < 2) _tutStep = 2; // 教学推进：首个报价出现
+            RefreshTutorial();
         }
 
         private async Task RefreshData()
@@ -256,6 +261,27 @@ namespace Game.HotUpdate.ChestGame
                 ? L10n.Get("技能额度已耗尽")
                 : "技能额度 " + quota + "/" + quotaMax + " · " + (iUsed ? L10n.Get("我已用过") : L10n.Get("我可任选一个技能（限一次）"));
             if (_skillsButton != null) _skillsButton.interactable = quota > 0 && !iUsed && remaining > 1 && !_busy;
+
+            RefreshTutorial();
+        }
+
+        /// <summary>教学箱引导横幅：三步推进（排除 → 费用/出售 → 报价抉择）</summary>
+        private void RefreshTutorial()
+        {
+            if (_chest == null || !_chest["isTutorial"].AsBool) return;
+            if (_tutBanner == null)
+            {
+                _tutBanner = TDUIHelper.MakeText(transform, new Vector2(0, 390), TextAnchor.MiddleCenter, 26);
+                _tutBanner.color = UITheme.GoldLight;
+                TDUIHelper.SetSize(_tutBanner.rectTransform, 1200, 60);
+            }
+            string[] steps =
+            {
+                L10n.Get("教学 1/3：点击任意未排除的格子——注意「剩余总和」与「期望 V」的变化"),
+                L10n.Get("教学 2/3：排除小额会提高期望值，但排除费会递增；随时可点【出售给系统】落袋为安"),
+                L10n.Get("教学 3/3：银行家出价了！接受 = 立即到手，拒绝 = 继续排除博更高——卖或不卖，这是本游戏的核心抉择"),
+            };
+            _tutBanner.text = _tutStep < steps.Length ? steps[_tutStep] : L10n.Get("教学完成：去商城买真正的宝箱吧！");
         }
 
         private async void OnEliminate(int index)
@@ -291,6 +317,7 @@ namespace Game.HotUpdate.ChestGame
             double evBefore = _chest["expectedValue"].AsDouble;
             if (!string.IsNullOrEmpty(specialMsg)) UIRoot.ToastStatic(specialMsg);
             UIRoot.ToastStatic(L10n.Get("排除揭示：") + revealed.ToString("N0"));
+            if (_tutStep == 0) _tutStep = 1; // 教学推进：已排除过一格
             UIRoot.Instance.RefreshTop();
             // 表现层：开格弹跳 + 大额震屏
             StartCoroutine(PopSlot(index));

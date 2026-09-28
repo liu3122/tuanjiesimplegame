@@ -67,6 +67,8 @@ namespace SimpleGameServer.Game
         // ---- 每日挑战 ----
         public bool IsDaily { get; set; }
         public string DailyDay { get; set; }
+        /// <summary>教学箱（新玩家免费固定种子，客户端显示引导步骤）</summary>
+        public bool IsTutorial { get; set; }
 
         /// <summary>每日挑战种子（构造后由 GameService 设置）</summary>
         public int DailySeed { get; set; }

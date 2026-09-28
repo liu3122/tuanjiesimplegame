@@ -273,6 +273,22 @@ namespace SimpleGameServer.Game
             Db.RecordDailyResult(chest.DailyDay, player.Id, player.Name, income);
         }
 
+        /// <summary>新玩家教学箱：固定种子免费木箱（一次），客户端按 isTutorial 显示引导步骤</summary>
+        public (bool ok, string err, object data) TutorialChest(Player player)
+        {
+            lock (_store.Gate)
+            {
+                if (Db.OpensCount(player.Id) > 0) return (false, "NOT_ROOKIE", null);
+                if (_store.Chests.Values.Any(c => c.OwnerId == player.Id && c.IsTutorial)) return (false, "ALREADY_GRANTED", null);
+                var config = GameTables.Tables.TbChest[1];
+                var chest = new Chest(_store.AllocChestUid(), config, new Random(20260928)) { OwnerId = player.Id, PaidPrice = 0 };
+                chest.IsTutorial = true;
+                _store.Chests[chest.Uid] = chest;
+                Db.SaveChest(chest);
+                return (true, null, new { chestUid = chest.Uid });
+            }
+        }
+
         public object DailyRank(Player viewer)
         {
             lock (_store.Gate)
@@ -422,11 +438,12 @@ namespace SimpleGameServer.Game
             if (lot.CurrentBid > 0 && lot.CurrentBidderId != 0)
             {
                 long sellerIncome = (long)Math.Round(lot.CurrentBid * (1f - g.AuctionFeeRate));
-                // 买家：价款已预扣
+                // 买家：价款已预扣（补记支出流水，经济报表对账用）
                 if (_store.Players.TryGetValue(lot.CurrentBidderId, out var buyer))
                 {
                     buyer.Escrow.Remove(lot.LotId);
                     Db.SavePlayer(buyer);
+                    Db.AddGoldTx(lot.CurrentBidderId, -lot.CurrentBid, "auction_buy", lot.LotId);
                 }
                 // 卖家入账（扣抽成）
                 if (_store.Players.TryGetValue(lot.SellerId, out var seller))
@@ -535,6 +552,7 @@ namespace SimpleGameServer.Game
                         trapSlots = c.TrapSlots.ToList(),
                         kind = Config.GameTables.Tables.TbChest[c.ConfigId].Kind,
                         isDaily = c.IsDaily,
+                        isTutorial = c.IsTutorial,
                         pendingOffer = c.PendingOffer,
                         offerExpireInSec = c.PendingOfferExpireUtc != null
                             ? Math.Max(0, (int)(c.PendingOfferExpireUtc.Value - DateTime.UtcNow).TotalSeconds) : 0,
@@ -545,6 +563,7 @@ namespace SimpleGameServer.Game
                     gold = player.Gold,
                     escrow = player.Escrow.Values.Sum(),
                     characterId = player.CharacterId,
+                    opensTotal = Db.OpensCount(player.Id),
                     skillCooldowns = SkillCooldownView(player),
                     featureFlags = Features.View(),
                     chests,

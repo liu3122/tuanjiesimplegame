@@ -25,6 +25,7 @@ Db.Initialize(app.Configuration["GameDb"] ?? "simplegame.db");
 var store0 = app.Services.GetRequiredService<GameStore>();
 Db.LoadAll(store0);
 store0.RestoreIdCursors();
+Db.RefundOrphanStakes(store0); // 房间随进程消失：退还抢宝门票/对决入场金
 app.Logger.LogInformation("Luban 配置加载完成：宝箱 {Chest} 档，角色 {Char} 个",
     GameTables.Tables.TbChest.DataList.Count, GameTables.Tables.TbCharacter.DataList.Count);
 
@@ -72,6 +73,24 @@ app.MapPost("/api/chest/buy", (BuyReq req, HttpRequest http, GameService svc) =>
     var deny = Need(p); if (deny != null) return deny;
     var (ok, err, data) = svc.BuyChest(p, req.ConfigId);
     return Results.Json(new { ok, error = err, data });
+});
+
+// 新玩家教学箱（固定种子免费木箱，一次）
+app.MapPost("/api/tutorial/chest", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.TutorialChest(p);
+    return Results.Json(new { ok, error = err, data });
+});
+
+// 经济报表（管理端）：X-Admin-Token 头校验，token 来自配置 AdminToken（默认 dev-admin）
+app.MapGet("/api/admin/economy", (HttpRequest http) =>
+{
+    string token = http.Headers["X-Admin-Token"].ToString();
+    string expect = app.Configuration["AdminToken"] ?? "dev-admin";
+    if (token != expect) return Results.Json(new { ok = false, error = "FORBIDDEN" }, statusCode: 403);
+    return Results.Json(new { ok = true, data = Db.EconomyReport() });
 });
 
 app.MapPost("/api/chest/{uid}/eliminate", (long uid, EliminateReq req, HttpRequest http, GameService svc) =>

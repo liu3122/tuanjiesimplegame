@@ -409,7 +409,6 @@ namespace Game.HotUpdate.ChestGame
             foreach (var c in GameConfig.Tables.TbCharacter.DataList)
             {
                 var skill = c;
-                if (skill.SkillType == 6) continue; // 保底在对决内无效（PaidPrice=0）
                 string cdTag = skill.SkillCooldownSec > 0 ? " · CD " + skill.SkillCooldownSec + "s" : "";
                 string baseText = "<color=#" + c.ColorHex + ">" + c.SkillName + "</color> · " + c.SkillDesc + cdTag;
                 var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(840, 62), baseText, "gold", 20);

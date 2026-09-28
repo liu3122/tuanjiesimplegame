@@ -42,12 +42,15 @@
    门票入池 → 机器人补满 6 人 → 3 秒倒计时 → 30 秒实时抢 20 格（点格即得，全房广播）→ 结算入账；
    原生 WebSocket（`/ws/rush`）双向推送；奖池 = 门票×人数×倍率（金字塔分布）
 9. **镜像对决（即时 1v1 对抗）**：入场金 100 → 3 秒倒计时 → 双方各开一个「同金额池、不同格位」的镜像宝箱，
-   并行排除（对决内免费）+ 技能（沿用技能冷却，跨玩法共享）+ 银行家报价；随时「卖给银行」锁定分数给对手施压，
+   并行排除（对决内免费）+ 技能（沿用技能冷却，跨玩法共享；保底兜底 60% 入场金）+ 银行家报价；随时「卖给银行」锁定分数给对手施压，
    双方锁定或 120 秒超时后比分数：高分赢奖池（入场金×2 扣 5% 抽成），平局退入场金；
+   **勇气加成**：撑到最后一格开箱得分 ×1.2（鼓励风险路线，避免"到价就卖"单一策略）；
    对手排除的格号与金额实时公开（同池不同位 → 只泄露"池面"不泄露格位，信息战核心）；
-   断线/中途退出按当前收购价锁定（逃跑惩罚）；机器人补位（目标 1.0~2.2 倍入场金，会排除/用洞察/接受报价）；
+   断线给 8 秒重连宽限，过期/中途退出按当前收购价锁定（逃跑惩罚）；机器人补位（目标 1.0~2.2 倍入场金，会排除/用洞察/接受报价）；
    原生 WebSocket（`/ws/duel`）；入口在大厅「对决」按钮（纯代码 UI，无 prefab 依赖）
-10. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
+10. **新手教学箱**：0 次开箱的新玩家登录后自动弹「领取教学宝箱」（固定种子免费木箱，一次），
+    开箱界面三步横幅教学（排除与期望 → 费用与落袋 → 报价抉择），结算即毕业（`POST /api/tutorial/chest`）
+11. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
    接微信/抖音 SDK：实现 `IShareProvider` 并启动时 `ShareBridge.SetProvider(...)` 即可
 
 > **玩法开关（tb_feature.xlsx）**：每个玩法一行（rush/auction/daily/duel），`Enabled=false` 时服务端拦截
@@ -55,6 +58,9 @@
 > 大厅入口；改表 → 双击 gen.bat → 重启服务端即生效；缺行默认开启（删行即恢复）。
 
 > 防作弊：洗牌随机、未揭示格金额、钱包、技能裁决全部在服务端；客户端只拿聚合数值。
+> **运维保障**：抢宝门票/对决入场金入房即记 `active_stake`，服务端异常重启后自动退款（`stake_refund` 流水）；
+> 经济报表 `GET /api/admin/economy`（`X-Admin-Token` 头，token 配置 `AdminToken`，默认 `dev-admin`）：
+> 按流水 reason 聚合真人/机器人收支 + 近 7 日真人净流入 + 存量，用于监控机器人注水与通胀。
 
 ## 快速开始
 
@@ -174,12 +180,18 @@ python server_smoke_test.py    # 或按 README 协议用 curl
 # 镜像对决回归（需 pip install websockets）
 python duel_e2e_test.py        # 双人镜像对决全流程
 python duel_bot_test.py        # 单人 + 机器人补位 + 金币一致性
+python duel_courage_test.py    # 勇气加成（最后一格开箱 ×1.2）
+python duel_grace_test.py      # 断线重连宽限 + 宽限到期锁定
+python admin_tutorial_test.py  # 经济报表鉴权 + 教学箱一次性发放
+# 经济报表（运维）
+curl -H "X-Admin-Token: dev-admin" http://127.0.0.1:5188/api/admin/economy
 ```
 
 接口速览（Bearer token 鉴权，JSON）：
-`POST /api/login`、`POST /api/character`、`GET /api/state`、`POST /api/chest/buy`、
+`POST /api/login`、`POST /api/character`、`GET /api/state`、`POST /api/chest/buy`、`POST /api/tutorial/chest`、
 `POST /api/chest/{uid}/eliminate`、`POST /api/chest/{uid}/skill`、`POST /api/chest/{uid}/sell`、
-`GET /api/auction`、`POST /api/auction/list`、`POST /api/auction/{lotId}/bid`、`POST /api/auction/{lotId}/buyout`；
+`GET /api/auction`、`POST /api/auction/list`、`POST /api/auction/{lotId}/bid`、`POST /api/auction/{lotId}/buyout`、
+`GET /api/admin/economy`（`X-Admin-Token`）；
 实时事件：SignalR `/hubs/auction`（`LotChanged` / `LotSettled`）。
 
 配置双端：客户端跑 `gen.bat`，服务端跑 `gen_server.bat`（同一份 xlsx → 两份代码 + 同一份 json 数据）。

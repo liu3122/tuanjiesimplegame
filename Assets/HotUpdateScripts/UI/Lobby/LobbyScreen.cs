@@ -36,6 +36,42 @@ namespace Game.HotUpdate.ChestGame
 
             ApplyFeatureGates(root, duelBtn.gameObject);
             _ = RefreshFeatureGates(root, duelBtn.gameObject);
+            _ = MaybeShowTutorial();
+        }
+
+        /// <summary>新玩家（0 次开箱且无宝箱）：弹出教学箱领取</summary>
+        private static async Task MaybeShowTutorial()
+        {
+            if (OnlineState.State == null && !await OnlineState.Refresh()) return;
+            var data = OnlineState.State["data"];
+            if (data == null || data["opensTotal"].AsInt > 0) return;
+            if (data["chests"] != null && data["chests"].Count > 0) return; // 已在玩（买过箱）
+
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(660, 420));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -140), TextAnchor.MiddleCenter, 34);
+            title.text = "<color=#F5D061>" + L10n.Get("欢迎来到宝箱商人！") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 620, 60);
+            var desc = TDUIHelper.MakeText(panel.transform, new Vector2(0, -230), TextAnchor.UpperLeft, 24);
+            desc.color = UITheme.TextSub;
+            desc.text = L10n.Get("排除小额提高期望、银行家随时出价、卖或不卖由你抉择。\n先领一个免费教学宝箱（固定内容），三步学会核心玩法。");
+            TDUIHelper.SetSize(desc.rectTransform, 600, 140);
+
+            var take = UITheme.ThemedButton(panel.transform, new Vector2(0, -340), new Vector2(360, 72), L10n.Get("领取教学宝箱"), "green", 28);
+            take.onClick.AddListener(async () =>
+            {
+                take.interactable = false;
+                var r = await ApiClient.TutorialChestAsync();
+                if (r == null || !r["ok"].AsBool)
+                {
+                    take.interactable = true;
+                    UIRoot.ToastStatic(L10n.Get("领取失败：") + Screens.ErrText(r));
+                    return;
+                }
+                Object.Destroy(panel);
+                ChestBoard.Show(r["data"]["chestUid"].AsLong);
+            });
         }
 
         /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决按钮）</summary>

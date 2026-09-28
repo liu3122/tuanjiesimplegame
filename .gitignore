@@ -63,3 +63,7 @@ crashlytics-build.properties
 /Server/*.db
 /Server/*.db-shm
 /Server/*.db-wal
+
+# 运行时产物
+.offer_state.json
+Server/simplegame.db*

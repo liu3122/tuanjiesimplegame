@@ -56,6 +56,7 @@ namespace SimpleGameServer.Game
                 player.Gold -= _config.Ticket;
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -_config.Ticket, "rush_ticket", _config.Id);
+                Db.RecordStake(player.Id, "rush", _config.Id, _config.Ticket); // 重启退款凭据
                 _players[player.Id] = player;
                 Broadcast(new { type = "joined", name = player.Name, count = _players.Count, need = _config.PlayerCount });
                 return (true, null);
@@ -218,9 +219,10 @@ namespace SimpleGameServer.Game
         {
             if (_phase == Phase.Settled) return; // 幂等守卫（Claim 填满与 Tick 超时可能并发触发）
             _phase = Phase.Settled;
-            // 真人入账
+            // 真人入账 + 清除质押（正常结算，不再需要重启退款）
             foreach (var p in _players.Values.Where(p => p.Id > 0))
             {
+                Db.ClearStake(p.Id, "rush", _config.Id);
                 long earn = _earnings.GetValueOrDefault(p.Id);
                 if (earn > 0)
                 {
