@@ -13,6 +13,7 @@ builder.Services.AddSingleton<AuctionEvents>();
 builder.Services.AddSingleton<GameService>();
 builder.Services.AddHostedService<AuctionBotService>();
 builder.Services.AddHostedService<SeasonService>();
+builder.Services.AddHostedService<DbWriterService>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(_ => true).AllowCredentials()));
 
 var app = builder.Build();
@@ -26,7 +27,9 @@ Db.Initialize(app.Configuration["GameDb"] ?? "simplegame.db");
 var store0 = app.Services.GetRequiredService<GameStore>();
 Db.LoadAll(store0);
 store0.RestoreIdCursors();
-Db.RefundOrphanStakes(store0); // 房间随进程消失：退还抢宝门票/对决入场金
+Db.LoadOpenCounts(store0);      // 开箱次数内存化（热路径免 SQL COUNT）
+Db.LoadSeasonRewards(store0);   // 赛季奖励缓存内存化
+Db.RefundOrphanStakes(store0);  // 房间随进程消失：退还抢宝门票/对决入场金
 app.Logger.LogInformation("Luban 配置加载完成：宝箱 {Chest} 档，角色 {Char} 个",
     GameTables.Tables.TbChest.DataList.Count, GameTables.Tables.TbCharacter.DataList.Count);
 
@@ -56,7 +59,7 @@ app.MapPost("/api/character", (CharacterReq req, HttpRequest http, GameStore sto
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
     if (GameTables.Tables.TbCharacter.DataList.All(c => c.Id != req.CharacterId)) return Results.Json(new { ok = false, error = "BAD_CHARACTER" });
-    lock (store.Gate) p.CharacterId = req.CharacterId;
+    lock (p.Sync) p.CharacterId = req.CharacterId;
     return Results.Json(new { ok = true });
 });
 
@@ -364,6 +367,17 @@ public record ListReq(long ChestUid, long StartPrice, long BuyoutPrice);
 namespace SimpleGameServer.Game
 {
     /// <summary>后台服务：机器人竞价 + 到期结算 + SignalR 推送桥</summary>
+    /// <summary>Db 后台单写者宿主：启动写循环；停机时取消并等循环排空剩余写（保证落盘再退出）</summary>
+    public class DbWriterService : BackgroundService
+    {
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(() => Db.RunWriterLoop(stoppingToken), stoppingToken);
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            await base.StopAsync(cancellationToken); // 取消 token → RunWriterLoop 排空后返回
+        }
+    }
+
     public class AuctionBotService : BackgroundService
     {
         private readonly GameService _svc;

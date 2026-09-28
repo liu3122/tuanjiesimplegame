@@ -42,15 +42,19 @@ namespace SimpleGameServer.Game
             if (board.Count == 0) return;
 
             var winners = new List<(long pid, string name, int rank, long amount)>();
-            lock (_store.Gate)
+            lock (_store.SeasonGate)
             {
                 for (int i = 0; i < board.Count; i++)
                 {
                     var (pid, name, _) = board[i];
                     if (!_store.Players.TryGetValue(pid, out var p)) continue;
                     long amount = Rewards[i];
-                    p.Gold += amount;
-                    Db.SavePlayer(p);
+                    lock (p.Sync)
+                    {
+                        p.Gold += amount;
+                        p.LastSeasonReward = new { week = prevWeek, rank = i + 1, amount };
+                        Db.SavePlayer(p);
+                    }
                     Db.AddGoldTx(pid, amount, "season_reward", 0);
                     winners.Add((pid, name, i + 1, amount));
                 }

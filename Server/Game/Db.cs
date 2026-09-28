@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using SimpleGameServer.Config;
@@ -6,9 +7,9 @@ using SimpleGameServer.Config;
 namespace SimpleGameServer.Game
 {
     /// <summary>
-    /// SQLite 持久层（WAL 模式，短连接）。
-    /// 内存模型仍为运行时权威，本层在每个写路径同步落库并支持启动恢复；
-    /// 嵌套结构（金额数组/揭示状态/技能记录/预扣）以 JSON 列存储。
+    /// SQLite 持久层（WAL 模式）。
+    /// 内存模型为运行时权威；写路径经无界 Channel 由后台单写者线程合批落库（事务批量，微秒级入队、毫秒级落盘），
+    /// 读路径短连接直接查（WAL 允许单写多读并发）。启动恢复/迁移走同步直写。
     /// 上线换 MySQL：SQL 基本兼容，替换本实现即可。
     /// </summary>
     public static class Db
@@ -17,6 +18,50 @@ namespace SimpleGameServer.Game
         private static readonly ILogger _log = SimpleGameServer.Logging.SimpleLog.Logger;
 
         private static readonly JsonSerializerOptions JsonOpts = new() { IncludeFields = true };
+
+        // ---------------- 后台单写者 ----------------
+
+        private static readonly Channel<Action<SqliteConnection>> _writes = Channel.CreateUnbounded<Action<SqliteConnection>>();
+
+        /// <summary>入写队列（闭包捕获的必须是入队时刻的快照值，禁止引用可变实体）</summary>
+        private static void EnqueueWrite(Action<SqliteConnection> write) => _writes.Writer.TryWrite(write);
+
+        /// <summary>后台写循环（由 DbWriterService 宿主启动）：攒批 + 单事务提交；停机时排空</summary>
+        public static void RunWriterLoop(CancellationToken token)
+        {
+            using var conn = new SqliteConnection(_connString);
+            conn.Open();
+            while (!token.IsCancellationRequested)
+            {
+                if (!_writes.Reader.TryRead(out var first))
+                {
+                    try { _writes.Reader.WaitToReadAsync(token).AsTask().Wait(token); }
+                    catch (OperationCanceledException) { break; }
+                    catch (AggregateException ae) when (ae.InnerException is OperationCanceledException) { break; }
+                    continue;
+                }
+                DrainBatch(conn, first);
+            }
+            // 停机排空：进程退出前把剩余写全部落盘
+            while (_writes.Reader.TryRead(out var rest)) DrainBatch(conn, rest);
+        }
+
+        private static void DrainBatch(SqliteConnection conn, Action<SqliteConnection> first)
+        {
+            using var tx = conn.BeginTransaction();
+            int n = 1;
+            try
+            {
+                first(conn);
+                while (n < 64 && _writes.Reader.TryRead(out var w)) { w(conn); n++; }
+                tx.Commit();
+            }
+            catch (Exception e)
+            {
+                _log.LogError(e, "SQLite 批量写失败（回滚 {N} 条，内存状态未受影响）", n);
+                try { tx.Rollback(); } catch { }
+            }
+        }
 
         public static void Initialize(string dbPath)
         {
@@ -129,22 +174,44 @@ CREATE TABLE IF NOT EXISTS season_reward(
 
         // ---------------- Player ----------------
 
-        public static void SavePlayer(Player p) => Try(conn =>
+        public static void SavePlayer(Player p)
         {
-            Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr)
+            // 快照在入队前完成（避免后台写读到后续变更）
+            long id = p.Id, gold = p.Gold;
+            int cid = p.CharacterId, xp = p.Xp, lv = p.Level, dr = p.DuelRating;
+            string name = p.Name;
+            string token = p.Token, region = p.Region ?? "CN";
+            string escrow = JsonSerializer.Serialize(p.Escrow, JsonOpts);
+            string cds = JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts);
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr)
 ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr",
-                ("$id", p.Id), ("$n", p.Name), ("$t", p.Token as object ?? DBNull.Value),
-                ("$g", p.Gold), ("$c", p.CharacterId), ("$e", JsonSerializer.Serialize(p.Escrow, JsonOpts)),
-                ("$cd", JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts)),
-                ("$xp", p.Xp), ("$lv", p.Level), ("$dr", p.DuelRating),
-                ("$r", p.Region ?? "CN"));
-        }, "SavePlayer");
+                ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
+                ("$g", gold), ("$c", cid), ("$e", escrow),
+                ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
+                ("$r", region)));
+        }
 
         // ---------------- Chest ----------------
 
-        public static void SaveChest(Chest c) => Try(conn =>
+        public static void SaveChest(Chest c)
         {
-            Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,
+            long uid = c.Uid;
+            int cfg = c.ConfigId, sk = c.SkillUsesRemaining, fb = c.FreeEliminateBuff, tc = c.TaxReductionCount, eo = c.ElimsSinceOffer;
+            long o = c.OwnerId, pp = c.PaidPrice;
+            int s = (int)c.State;
+            bool pb = c.PriceBuffNext, ins = c.InsuranceActive, idf = c.Identified, dd = c.IsDaily, it = c.IsTutorial;
+            string dy = c.DailyDay;
+            string a = JsonSerializer.Serialize(c.Amounts, JsonOpts);
+            string e = JsonSerializer.Serialize(c.Eliminated, JsonOpts);
+            string sub = JsonSerializer.Serialize(c.SkillUsedBy, JsonOpts);
+            string pk = JsonSerializer.Serialize(c.PeekedSlots, JsonOpts);
+            string dt = JsonSerializer.Serialize(c.DetectedSlots, JsonOpts);
+            string lk = JsonSerializer.Serialize(c.LuckySlots, JsonOpts);
+            string tp = JsonSerializer.Serialize(c.TrapSlots, JsonOpts);
+            long? po = c.PendingOffer;
+            DateTime? ox = c.PendingOfferExpireUtc;
+            long? pf = c.PriceFloor;
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO chest(uid,config_id,owner_id,state,amounts,eliminated,skill_uses,skill_used_by,free_buff,price_buff,paid_price,
 peeked_slots,detected_slots,insurance,price_floor,tax_count,identified,
 lucky_slots,trap_slots,pending_offer,offer_expire,elims_since_offer,is_daily,daily_day,is_tutorial)
 VALUES($u,$cfg,$o,$s,$a,$e,$sk,$sub,$fb,$pb,$pp,$pk,$dt,$ins,$pf,$tc,$id,$lk,$tp,$po,$ox,$eo,$dd,$dy,$it)
@@ -152,48 +219,46 @@ ON CONFLICT(uid) DO UPDATE SET owner_id=$o, state=$s, eliminated=$e, skill_uses=
 skill_used_by=$sub, free_buff=$fb, price_buff=$pb,
 peeked_slots=$pk, detected_slots=$dt, insurance=$ins, price_floor=$pf, tax_count=$tc, identified=$id,
 lucky_slots=$lk, trap_slots=$tp, pending_offer=$po, offer_expire=$ox, elims_since_offer=$eo, is_daily=$dd, daily_day=$dy, is_tutorial=$it",
-                ("$u", c.Uid), ("$cfg", c.ConfigId), ("$o", c.OwnerId), ("$s", (int)c.State),
-                ("$a", JsonSerializer.Serialize(c.Amounts, JsonOpts)),
-                ("$e", JsonSerializer.Serialize(c.Eliminated, JsonOpts)),
-                ("$sk", c.SkillUsesRemaining),
-                ("$sub", JsonSerializer.Serialize(c.SkillUsedBy, JsonOpts)),
-                ("$fb", c.FreeEliminateBuff), ("$pb", c.PriceBuffNext ? 1 : 0), ("$pp", c.PaidPrice),
-                ("$pk", JsonSerializer.Serialize(c.PeekedSlots, JsonOpts)),
-                ("$dt", JsonSerializer.Serialize(c.DetectedSlots, JsonOpts)),
-                ("$ins", c.InsuranceActive ? 1 : 0),
-                ("$pf", c.PriceFloor.HasValue ? (object)c.PriceFloor.Value : DBNull.Value),
-                ("$tc", c.TaxReductionCount), ("$id", c.Identified ? 1 : 0),
-                ("$lk", JsonSerializer.Serialize(c.LuckySlots, JsonOpts)),
-                ("$tp", JsonSerializer.Serialize(c.TrapSlots, JsonOpts)),
-                ("$po", c.PendingOffer.HasValue ? (object)c.PendingOffer.Value : DBNull.Value),
-                ("$ox", c.PendingOfferExpireUtc.HasValue ? (object)c.PendingOfferExpireUtc.Value.ToString("o") : DBNull.Value),
-                ("$eo", c.ElimsSinceOffer),
-                ("$dd", c.IsDaily ? 1 : 0), ("$dy", c.DailyDay as object ?? DBNull.Value),
-                ("$it", c.IsTutorial ? 1 : 0));
-        }, "SaveChest");
+                ("$u", uid), ("$cfg", cfg), ("$o", o), ("$s", s),
+                ("$a", a), ("$e", e), ("$sk", sk), ("$sub", sub),
+                ("$fb", fb), ("$pb", pb ? 1 : 0), ("$pp", pp),
+                ("$pk", pk), ("$dt", dt), ("$ins", ins ? 1 : 0),
+                ("$pf", pf.HasValue ? (object)pf.Value : DBNull.Value),
+                ("$tc", tc), ("$id", idf ? 1 : 0),
+                ("$lk", lk), ("$tp", tp),
+                ("$po", po.HasValue ? (object)po.Value : DBNull.Value),
+                ("$ox", ox.HasValue ? (object)ox.Value.ToString("o") : DBNull.Value),
+                ("$eo", eo),
+                ("$dd", dd ? 1 : 0), ("$dy", dy as object ?? DBNull.Value),
+                ("$it", it ? 1 : 0)));
+        }
 
         // ---------------- AuctionLot ----------------
 
-        public static void SaveLot(AuctionLot l) => Try(conn =>
+        public static void SaveLot(AuctionLot l)
         {
-            Exec(conn, @"INSERT INTO auction_lot(lot_id,chest_uid,seller_id,seller_name,start_price,buyout_price,current_bid,current_bidder_id,current_bidder_name,end_time_utc,settled)
+            long lotId = l.LotId, cu = l.ChestUid, sid = l.SellerId, sp = l.StartPrice, bp = l.BuyoutPrice, cb = l.CurrentBid, cbi = l.CurrentBidderId;
+            string sn = l.SellerName, cbn = l.CurrentBidderName;
+            DateTime et = l.EndTimeUtc;
+            bool st = l.Settled;
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO auction_lot(lot_id,chest_uid,seller_id,seller_name,start_price,buyout_price,current_bid,current_bidder_id,current_bidder_name,end_time_utc,settled)
 VALUES($l,$c,$s,$sn,$sp,$bp,$cb,$cbi,$cbn,$et,$st)
 ON CONFLICT(lot_id) DO UPDATE SET current_bid=$cb, current_bidder_id=$cbi,
 current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
-                ("$l", l.LotId), ("$c", l.ChestUid), ("$s", l.SellerId), ("$sn", l.SellerName),
-                ("$sp", l.StartPrice), ("$bp", l.BuyoutPrice), ("$cb", l.CurrentBid),
-                ("$cbi", l.CurrentBidderId), ("$cbn", l.CurrentBidderName as object ?? DBNull.Value),
-                ("$et", l.EndTimeUtc.ToString("o")), ("$st", l.Settled ? 1 : 0));
-        }, "SaveLot");
+                ("$l", lotId), ("$c", cu), ("$s", sid), ("$sn", sn),
+                ("$sp", sp), ("$bp", bp), ("$cb", cb),
+                ("$cbi", cbi), ("$cbn", cbn as object ?? DBNull.Value),
+                ("$et", et.ToString("o")), ("$st", st ? 1 : 0)));
+        }
 
         // ---------------- 流水 ----------------
 
-        public static void AddGoldTx(long playerId, long delta, string reason, long refId) => Try(conn =>
+        public static void AddGoldTx(long playerId, long delta, string reason, long refId)
         {
-            Exec(conn, "INSERT INTO gold_tx(player_id,delta,reason,ref_id,created_at) VALUES($p,$d,$r,$ref,$t)",
-                ("$p", playerId), ("$d", delta), ("$r", reason), ("$ref", refId),
-                ("$t", DateTime.UtcNow.ToString("o")));
-        }, "AddGoldTx");
+            string t = DateTime.UtcNow.ToString("o");
+            EnqueueWrite(conn => Exec(conn, "INSERT INTO gold_tx(player_id,delta,reason,ref_id,created_at) VALUES($p,$d,$r,$ref,$t)",
+                ("$p", playerId), ("$d", delta), ("$r", reason), ("$ref", refId), ("$t", t)));
+        }
 
         /// <summary>玩家已开箱结算次数（教学引导用：0 = 新玩家）</summary>
         public static int OpensCount(long playerId)
@@ -205,14 +270,20 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
         // ---------------- 在场质押（重启退款） ----------------
 
         /// <summary>进房记录质押（抢宝门票/对决入场金）；服务端异常重启后据此退款</summary>
-        public static void RecordStake(long playerId, string kind, long refId, int amount) => Try(conn => Exec(conn, @"
+        public static void RecordStake(long playerId, string kind, long refId, int amount)
+        {
+            string t = DateTime.UtcNow.ToString("o");
+            EnqueueWrite(conn => Exec(conn, @"
 INSERT OR REPLACE INTO active_stake(player_id,kind,ref_id,amount,created_at) VALUES($p,$k,$r,$a,$t)",
-            ("$p", playerId), ("$k", kind), ("$r", refId), ("$a", amount), ("$t", DateTime.UtcNow.ToString("o"))), "RecordStake");
+                ("$p", playerId), ("$k", kind), ("$r", refId), ("$a", amount), ("$t", t)));
+        }
 
         /// <summary>正常结算后清除质押记录</summary>
-        public static void ClearStake(long playerId, string kind, long refId) => Try(conn => Exec(conn,
-            "DELETE FROM active_stake WHERE player_id=$p AND kind=$k AND ref_id=$r",
-            ("$p", playerId), ("$k", kind), ("$r", refId)), "ClearStake");
+        public static void ClearStake(long playerId, string kind, long refId)
+        {
+            EnqueueWrite(conn => Exec(conn, "DELETE FROM active_stake WHERE player_id=$p AND kind=$k AND ref_id=$r",
+                ("$p", playerId), ("$k", kind), ("$r", refId)));
+        }
 
         /// <summary>启动恢复：房间随进程消失，孤立质押退款（按玩家合并）</summary>
         public static void RefundOrphanStakes(GameStore store)
@@ -306,13 +377,19 @@ FROM gold_tx WHERE player_id>0 AND created_at >= $ws GROUP BY day ORDER BY day";
             return v is long l ? (int)l : (v is int i ? i : 0);
         }
 
-        public static void RecordDailyAttempt(string day, long playerId) => Try(conn => Exec(conn, @"
+        public static void RecordDailyAttempt(string day, long playerId)
+        {
+            EnqueueWrite(conn => Exec(conn, @"
 INSERT INTO daily_attempt(day,player_id,count) VALUES($d,$p,1)
-ON CONFLICT(day,player_id) DO UPDATE SET count=count+1", ("$d", day), ("$p", playerId)), "RecordDailyAttempt");
+ON CONFLICT(day,player_id) DO UPDATE SET count=count+1", ("$d", day), ("$p", playerId)));
+        }
 
-        public static void RecordDailyResult(string day, long playerId, string name, long score) => Try(conn => Exec(conn, @"
+        public static void RecordDailyResult(string day, long playerId, string name, long score)
+        {
+            EnqueueWrite(conn => Exec(conn, @"
 INSERT INTO daily_result(day,player_id,name,best_score) VALUES($d,$p,$n,$s)
-ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", day), ("$p", playerId), ("$n", name), ("$s", score)), "RecordDailyResult");
+ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", day), ("$p", playerId), ("$n", name), ("$s", score)));
+        }
 
         public static List<(long playerId, string name, long score)> DailyRank(string day)
         {
@@ -390,15 +467,18 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             return list;
         }
 
-        public static void RecordSeasonRewards(string week, List<(long pid, string name, int rank, long amount)> winners) =>
-            Try(conn =>
+        public static void RecordSeasonRewards(string week, List<(long pid, string name, int rank, long amount)> winners)
+        {
+            var snapshot = winners.ToList();
+            EnqueueWrite(conn =>
             {
-                foreach (var w in winners)
+                foreach (var w in snapshot)
                 {
                     Exec(conn, "INSERT OR IGNORE INTO season_reward(week,player_id,rank,amount,created_at) VALUES($w,$p,$r,$a,$t)",
                         ("$w", week), ("$p", w.pid), ("$r", w.rank), ("$a", w.amount), ("$t", DateTime.UtcNow.ToString("o")));
                 }
-            }, "RecordSeasonRewards");
+            });
+        }
 
         /// <summary>我最近一次赛季奖励（无则 null）</summary>
         public static object MySeasonReward(long playerId)
@@ -495,11 +575,56 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
 
         // ---------------- 分享 ----------------
 
-        public static void RecordShare(long playerId, string channel, string contentId) => Try(conn => Exec(conn,
-            "INSERT INTO share_log(player_id, channel, content_id, created_at) VALUES($p,$c,$cid,$t)",
-            ("$p", playerId), ("$c", channel ?? "unknown"), ("$cid", contentId ?? ""), ("$t", DateTime.UtcNow.ToString("o"))), "RecordShare");
+        public static void RecordShare(long playerId, string channel, string contentId)
+        {
+            string t = DateTime.UtcNow.ToString("o");
+            string c = channel ?? "unknown", cid = contentId ?? "";
+            EnqueueWrite(conn => Exec(conn,
+                "INSERT INTO share_log(player_id, channel, content_id, created_at) VALUES($p,$c,$cid,$t)",
+                ("$p", playerId), ("$c", c), ("$cid", cid), ("$t", t)));
+        }
 
         // ---------------- 启动恢复 ----------------
+
+        /// <summary>启动时加载开箱次数（内存权威，替代热路径 SQL COUNT）</summary>
+        public static void LoadOpenCounts(GameStore store)
+        {
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT player_id, COUNT(*) FROM gold_tx WHERE reason='chest_settled' GROUP BY player_id";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    if (store.Players.TryGetValue(r.GetInt64(0), out var p)) p.Opens = (int)r.GetInt64(1);
+                }
+            }
+            catch (Exception e) { _log.LogError(e, "LoadOpenCounts"); }
+        }
+
+        /// <summary>启动时加载各玩家最近一次赛季奖励缓存</summary>
+        public static void LoadSeasonRewards(GameStore store)
+        {
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT player_id, week, rank, amount FROM season_reward ORDER BY player_id, week DESC";
+                using var r = cmd.ExecuteReader();
+                var seen = new HashSet<long>();
+                while (r.Read())
+                {
+                    long pid = r.GetInt64(0);
+                    if (!seen.Add(pid)) continue; // 每人只取最近一周
+                    if (store.Players.TryGetValue(pid, out var p))
+                    {
+                        p.LastSeasonReward = new { week = r.GetString(1), rank = r.GetInt32(2), amount = r.GetInt64(3) };
+                    }
+                }
+            }
+            catch (Exception e) { _log.LogError(e, "LoadSeasonRewards"); }
+        }
 
         public static void LoadAll(GameStore store)
         {
@@ -575,7 +700,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             {
                 while (r.Read())
                 {
-                    store.Lots.Add(new AuctionLot
+                    store.Lots[r.GetInt64(0)] = new AuctionLot
                     {
                         LotId = r.GetInt64(0),
                         ChestUid = r.GetInt64(1),
@@ -588,7 +713,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                         CurrentBidderName = r.IsDBNull(8) ? null : r.GetString(8),
                         EndTimeUtc = DateTime.Parse(r.GetString(9)).ToUniversalTime(),
                         Settled = r.GetInt32(10) == 1,
-                    });
+                    };
                 }
             }
 

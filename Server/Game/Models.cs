@@ -23,6 +23,12 @@ namespace SimpleGameServer.Game
         public Dictionary<long, long> Escrow { get; } = new();
         /// <summary>技能冷却（skillType → 解冻时刻 Unix 秒）。跨宝箱生效，防止反复刷同一强力技能</summary>
         public Dictionary<int, long> SkillCooldowns { get; } = new();
+        /// <summary>开箱结算次数（内存权威，避免热路径 SQL COUNT）</summary>
+        public int Opens { get; set; }
+        /// <summary>最近赛季奖励缓存（state 下发用）</summary>
+        public object LastSeasonReward { get; set; }
+        /// <summary>细粒度并发锁。全局加锁顺序约定：Room/Lot → Chest → Player（Player 内多锁按 Id 排序）</summary>
+        public readonly object Sync = new();
     }
 
     /// <summary>
@@ -75,6 +81,8 @@ namespace SimpleGameServer.Game
         public string DailyDay { get; set; }
         /// <summary>教学箱（新玩家免费固定种子，客户端显示引导步骤）</summary>
         public bool IsTutorial { get; set; }
+        /// <summary>细粒度并发锁（加锁顺序约定见 Player.Sync）</summary>
+        public readonly object Sync = new();
 
         /// <summary>每日挑战种子（构造后由 GameService 设置）</summary>
         public int DailySeed { get; set; }
@@ -410,5 +418,7 @@ namespace SimpleGameServer.Game
         public long CurrentBidderId { get; set; }    // 0 = 无
         public string CurrentBidderName { get; set; }
         public bool Settled { get; set; }
+        /// <summary>细粒度并发锁（加锁顺序约定见 Player.Sync）</summary>
+        public readonly object Sync = new();
     }
 }

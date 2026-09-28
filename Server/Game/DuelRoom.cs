@@ -66,9 +66,11 @@ namespace SimpleGameServer.Game
                 if (_players.ContainsKey(player.Id)) return (true, null); // 幂等
                 if (_players.Count >= 2) return (false, "ROOM_FULL");
                 long stake = Stake;
-                if (player.Gold < stake) return (false, "NOT_ENOUGH_GOLD");
-
-                player.Gold -= stake;
+                lock (player.Sync)
+                {
+                    if (player.Gold < stake) return (false, "NOT_ENOUGH_GOLD");
+                    player.Gold -= stake;
+                }
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -stake, "duel_stake", DuelId);
                 Db.RecordStake(player.Id, "duel", DuelId, (int)stake); // 重启退款凭据
@@ -240,16 +242,22 @@ namespace SimpleGameServer.Game
                     return (false, "LEVEL_LOCKED");
                 }
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                if (player.SkillCooldowns.TryGetValue(skillType, out var until) && now < until)
+                lock (player.Sync)
                 {
-                    SendTo(pid, new { type = "err", code = "ERR_COOLDOWN", remainSec = (int)(until - now) });
-                    return (false, "ERR_COOLDOWN");
+                    if (player.SkillCooldowns.TryGetValue(skillType, out var until) && now < until)
+                    {
+                        SendTo(pid, new { type = "err", code = "ERR_COOLDOWN", remainSec = (int)(until - now) });
+                        return (false, "ERR_COOLDOWN");
+                    }
                 }
                 string result = chest.UseSkill(player, skillType, character.SkillName, slotIndex);
                 if (result == null || result.StartsWith("ERR")) { SendErr(pid, result ?? "SKILL_FAILED"); return (false, result ?? "SKILL_FAILED"); }
                 if (character.SkillCooldownSec > 0)
                 {
-                    player.SkillCooldowns[skillType] = now + character.SkillCooldownSec;
+                    lock (player.Sync)
+                    {
+                        player.SkillCooldowns[skillType] = now + character.SkillCooldownSec;
+                    }
                     Db.SavePlayer(player);
                 }
                 BroadcastExcept(pid, new { type = "oppAction", kind = "skill", skillName = character.SkillName });
@@ -392,15 +400,16 @@ namespace SimpleGameServer.Game
                     : (pid == winner ? (long)Math.Round((s0 + s1) * (1 - g.AuctionFeeRate)) : 0))
                 : (winner == 0 ? stake : (pid == winner ? (long)Math.Round(stake * 2 * (1 - g.AuctionFeeRate)) : 0));
 
-            // 真人入账
-            foreach (var pid in ids.Where(id => id > 0))
+            // 真人入账（按 Id 排序加锁，遵守全局锁序）
+            foreach (var pid in ids.Where(id => id > 0).OrderBy(id => id))
             {
                 long payout = potPayout(pid);
+                lock (_players[pid].Sync)
+                {
+                    if (payout > 0) _players[pid].Gold += payout;
+                }
                 if (payout > 0)
                 {
-                    var p = _players[pid];
-                    p.Gold += payout;
-                    Db.SavePlayer(p);
                     Db.AddGoldTx(pid, payout, PotMode ? "potduel_win" : "duel_win", DuelId);
                 }
             }
@@ -414,25 +423,38 @@ namespace SimpleGameServer.Game
             }).OrderByDescending(b => b.score).ToList();
 
             // 天梯 Elo + 经验（真人）：双真人标准 Elo；对机器人小分值防刷
-            var humans = ids.Where(id => id > 0).ToList();
+            var humans = ids.Where(id => id > 0).OrderBy(id => id).ToList();
             if (humans.Count == 2)
             {
                 var pa = _players[humans[0]];
                 var pb = _players[humans[1]];
                 double sa = winner == 0 ? 0.5 : (winner == pa.Id ? 1 : 0);
-                int ra = pa.DuelRating, rb = pb.DuelRating;
-                pa.DuelRating = Math.Max(100, Elo.NewRating(ra, rb, sa));
-                pb.DuelRating = Math.Max(100, Elo.NewRating(rb, ra, 1 - sa));
+                lock (pa.Sync)
+                {
+                    lock (pb.Sync)
+                    {
+                        int ra = pa.DuelRating, rb = pb.DuelRating;
+                        pa.DuelRating = Math.Max(100, Elo.NewRating(ra, rb, sa));
+                        pb.DuelRating = Math.Max(100, Elo.NewRating(rb, ra, 1 - sa));
+                    }
+                }
             }
             else if (humans.Count == 1)
             {
                 var h = _players[humans[0]];
-                h.DuelRating = Math.Max(100, h.DuelRating + (winner == humans[0] ? 4 : (winner == 0 ? 0 : -2)));
+                lock (h.Sync)
+                {
+                    h.DuelRating = Math.Max(100, h.DuelRating + (winner == humans[0] ? 4 : (winner == 0 ? 0 : -2)));
+                }
             }
             foreach (var pid in humans)
             {
-                Levels.AddXp(_players[pid], winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
-                Db.SavePlayer(_players[pid]);
+                var p = _players[pid];
+                lock (p.Sync)
+                {
+                    Levels.AddXp(p, winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
+                    Db.SavePlayer(p);
+                }
             }
 
             foreach (var pid in ids)
@@ -480,6 +502,9 @@ namespace SimpleGameServer.Game
         /// <summary>我的宝箱视图（金额揭示按本箱进度；绝不泄露对手箱）</summary>
         private object ChestView(Chest c, long pid)
         {
+            Dictionary<int, int> cds;
+            var pl = _players[pid];
+            lock (pl.Sync) cds = GameService.SkillCooldownView(pl);
             return new
             {
                 eliminated = c.Eliminated,
@@ -490,7 +515,7 @@ namespace SimpleGameServer.Game
                 bankerOffer = (long)Math.Round(c.BankerOffer),
                 skillUsesRemaining = c.SkillUsesRemaining,
                 skillUsedByMe = c.SkillUsedBy.Contains(pid),
-                skillCooldowns = GameService.SkillCooldownView(_players[pid]),
+                skillCooldowns = cds,
                 freeEliminateBuff = c.FreeEliminateBuff,
                 peekedSlots = c.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
                 detectedSlots = c.DetectedSlots.ToList(),

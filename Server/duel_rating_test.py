@@ -1,4 +1,4 @@
-import asyncio, json, urllib.request, websockets
+import asyncio, json, random, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
 
@@ -50,10 +50,11 @@ async def run_player(name, actions):
     return None
 
 async def main():
-    a = asyncio.create_task(run_player('elo_a',
+    S = str(random.randint(10000, 99999))
+    a = asyncio.create_task(run_player('elo_a' + S,
         [{'type': 'eliminate', 'slot': s} for s in (0, 1, 2, 3, 4, 5)] + [{'type': 'sell'}]))
     await asyncio.sleep(0.5)
-    b = asyncio.create_task(run_player('elo_b',
+    b = asyncio.create_task(run_player('elo_b' + S,
         [{'type': 'eliminate', 'slot': s} for s in (5, 9)] + [{'type': 'sell'}]))
     ra, rb = await asyncio.wait_for(asyncio.gather(a, b), 90)
     assert ra and rb

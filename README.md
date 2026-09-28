@@ -67,6 +67,11 @@
 > 大厅入口；改表 → 双击 gen.bat → 重启服务端即生效；缺行默认开启（删行即恢复）。
 
 > 防作弊：洗牌随机、未揭示格金额、钱包、技能裁决全部在服务端；客户端只拿聚合数值。
+> **并发架构**：按实体细粒度锁（Player/Chest/Lot 各自 Sync，全局锁序 Room/Lot → Chest → Player，多玩家按 Id 排序），
+> 鉴权走令牌索引 O(1)，仓储为并发字典，Id 分配 Interlocked，共享随机源线程安全；
+> 写路径不再阻塞游戏逻辑（入队微秒级，后台单写者事务合批落库，停机自动排空）；
+> 压测（本机，aiohttp keep-alive）：旧架构（全局锁+同步写）100 并发 3622 RPS / p95 45.7ms / max 243ms，
+> 新架构 **4844 RPS / p95 23.6ms / max 44ms**（吞吐 +34%，尾延迟减半，最大延迟 5.6 倍改善）；300 并发 4400+ RPS 零错误。
 > **运维保障**：抢宝门票/对决入场金入房即记 `active_stake`，服务端异常重启后自动退款（`stake_refund` 流水）；
 > 经济报表 `GET /api/admin/economy`（`X-Admin-Token` 头，token 配置 `AdminToken`，默认 `dev-admin`）：
 > 按流水 reason 聚合真人/机器人收支 + 近 7 日真人净流入 + 存量，用于监控机器人注水与通胀。
@@ -175,6 +180,7 @@ Packages/                # manifest + 三个内嵌包
 Server/                        # ASP.NET Core 8（与客户端共用 Luban 配置与 json 数据）
 ├── Program.cs                 # 路由：登录/选角/买箱/排除/技能/出售/拍卖 + SignalR 推送
 ├── Config/GameTables.cs       # 加载 Assets/AssetRaw/Config/*.json（与客户端同一份数据）
+├── Game/Db.cs                 # 持久层：后台单写者合批落库（Channel+事务），读走短连接（WAL 单写多读）
 ├── Game/Models.cs             # 服务端权威实体（Chest 技能额度/SkillUsedBy 集合等）
 ├── Game/GameStore.cs          # 内存仓储（lock 保护；接 MySQL 时以仓储接口替换）
 ├── Game/GameService.cs        # 玩法逻辑 + 拍卖结算 + 机器人竞价

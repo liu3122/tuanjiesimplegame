@@ -28,18 +28,18 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) BuyChest(Player player, int configId)
         {
-            lock (_store.Gate)
+            var config = GameTables.Tables.TbChest.DataList.FirstOrDefault(c => c.Id == configId);
+            if (config == null)
             {
-                var config = GameTables.Tables.TbChest.DataList.FirstOrDefault(c => c.Id == configId);
-                if (config == null)
-                {
-                    return (false, "CONFIG_NOT_FOUND", null);
-                }
-                int minLv = Levels.MinLevelForChest(configId);
-                if (player.Level < minLv)
-                {
-                    return (false, "LEVEL_LOCKED", new { needLevel = minLv });
-                }
+                return (false, "CONFIG_NOT_FOUND", null);
+            }
+            int minLv = Levels.MinLevelForChest(configId);
+            if (player.Level < minLv)
+            {
+                return (false, "LEVEL_LOCKED", new { needLevel = minLv });
+            }
+            lock (player.Sync)
+            {
                 if (player.Gold < config.Price)
                 {
                     return (false, "NOT_ENOUGH_GOLD", null);
@@ -56,41 +56,47 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) Eliminate(Player player, long chestUid, int slotIndex)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                {
-                    return (false, "CHEST_NOT_FOUND", null);
-                }
-                if (chest.State != ChestState.Owned || chest.RemainingCount <= 1 || slotIndex < 0 || slotIndex >= 20 || chest.Eliminated[slotIndex])
+                return (false, "CHEST_NOT_FOUND", null);
+            }
+            lock (chest.Sync)
+            {
+                if (chest.State != ChestState.Owned || chest.RemainingCount <= 1 || slotIndex < 0 || slotIndex >= chest.Amounts.Length || chest.Eliminated[slotIndex])
                 {
                     return (false, "BAD_SLOT", null);
                 }
                 chest.ExpireOfferIfNeeded();
                 int cost = chest.ChargeEliminateCost();
-                if (player.Gold < cost)
+                lock (player.Sync)
                 {
-                    return (false, "NOT_ENOUGH_GOLD", null);
+                    if (player.Gold < cost)
+                    {
+                        return (false, "NOT_ENOUGH_GOLD", null);
+                    }
                 }
-                player.Gold -= cost;
                 var (revealed, special, err) = chest.EliminateEx(slotIndex, player);
                 if (err != null)
                 {
                     return (false, err, null);
                 }
                 string specialMsg = null;
-                if (special > 0)
+                lock (player.Sync)
                 {
-                    player.Gold += special;
-                    Db.AddGoldTx(player.Id, special, "lucky_slot", chest.Uid);
-                    specialMsg = "幸运格 +" + special;
+                    player.Gold -= cost; // 成功后才扣费（失败不扣，修复旧版先扣后退的窗口）
+                    if (special > 0)
+                    {
+                        player.Gold += special;
+                        specialMsg = "幸运格 +" + special;
+                    }
+                    else if (special < 0)
+                    {
+                        player.Gold = Math.Max(0, player.Gold + special);
+                        specialMsg = "陷阱格 " + special;
+                    }
                 }
-                else if (special < 0)
-                {
-                    player.Gold = Math.Max(0, player.Gold + special);
-                    Db.AddGoldTx(player.Id, special, "trap_slot", chest.Uid);
-                    specialMsg = "陷阱格 " + special;
-                }
+                if (special > 0) Db.AddGoldTx(player.Id, special, "lucky_slot", chest.Uid);
+                else if (special < 0) Db.AddGoldTx(player.Id, special, "trap_slot", chest.Uid);
                 bool offerMade = chest.TryMakeOffer(_store.Rng);
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
@@ -112,36 +118,41 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) UseSkill(Player player, long chestUid, int skillType, int? slotIndex = null)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                {
-                    return (false, "CHEST_NOT_FOUND", null);
-                }
-                var character = GameTables.Tables.TbCharacter.DataList.FirstOrDefault(c => c.SkillType == skillType);
-                if (character == null)
-                {
-                    return (false, "BAD_SKILL", null);
-                }
-                int skillMinLv = Levels.MinLevelForSkill(skillType);
-                if (player.Level < skillMinLv)
-                {
-                    return (false, "LEVEL_LOCKED", new { needLevel = skillMinLv });
-                }
-                // 技能冷却（服务端权威，跨宝箱）：同一技能用过后需等待
+                return (false, "CHEST_NOT_FOUND", null);
+            }
+            var character = GameTables.Tables.TbCharacter.DataList.FirstOrDefault(c => c.SkillType == skillType);
+            if (character == null)
+            {
+                return (false, "BAD_SKILL", null);
+            }
+            int skillMinLv = Levels.MinLevelForSkill(skillType);
+            if (player.Level < skillMinLv)
+            {
+                return (false, "LEVEL_LOCKED", new { needLevel = skillMinLv });
+            }
+            lock (chest.Sync)
+            {
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                if (player.SkillCooldowns.TryGetValue(character.SkillType, out var until) && now < until)
+                lock (player.Sync)
                 {
-                    return (false, "ERR_COOLDOWN", new { remainSec = (int)(until - now) });
+                    if (player.SkillCooldowns.TryGetValue(character.SkillType, out var until) && now < until)
+                    {
+                        return (false, "ERR_COOLDOWN", new { remainSec = (int)(until - now) });
+                    }
                 }
                 string result = chest.UseSkill(player, character.SkillType, character.SkillName, slotIndex);
                 if (result == null || result.StartsWith("ERR"))
                 {
                     return (false, result ?? "SKILL_FAILED", null);
                 }
-                if (character.SkillCooldownSec > 0)
+                lock (player.Sync)
                 {
-                    player.SkillCooldowns[character.SkillType] = now + character.SkillCooldownSec;
+                    if (character.SkillCooldownSec > 0)
+                    {
+                        player.SkillCooldowns[character.SkillType] = now + character.SkillCooldownSec;
+                    }
                 }
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
@@ -172,12 +183,12 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) SellToBanker(Player player, long chestUid)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                {
-                    return (false, "CHEST_NOT_FOUND", null);
-                }
+                return (false, "CHEST_NOT_FOUND", null);
+            }
+            lock (chest.Sync)
+            {
                 if (chest.State != ChestState.Owned)
                 {
                     return (false, "NOT_OWNED", null);
@@ -192,15 +203,19 @@ namespace SimpleGameServer.Game
                     income = chest.SettleIncome(Math.Max(1, (long)Math.Round(chest.BankerOffer)));
                     chest.State = ChestState.Finished;
                 }
-                player.Gold += income;
                 chest.OwnerId = 0; // 系统回收
-                Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                lock (player.Sync)
+                {
+                    player.Gold += income;
+                    Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                    player.Opens++;
+                }
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, income, "sell_banker", chest.Uid);
                 Db.AddGoldTx(player.Id, 0, "chest_settled", chest.Uid); // 开箱完成计数（出售/终局开箱）
                 RecordDailyIfNeed(player, chest, income);
-                return (true, null, new { income, gold = player.Gold, final = chest.EliminatedCount >= 20 });
+                return (true, null, new { income, gold = player.Gold, final = chest.EliminatedCount >= chest.Amounts.Length });
             }
         }
 
@@ -208,19 +223,23 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) AcceptOffer(Player player, long chestUid)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
+                return (false, "CHEST_NOT_FOUND", null);
+            lock (chest.Sync)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                    return (false, "CHEST_NOT_FOUND", null);
                 chest.ExpireOfferIfNeeded();
                 if (chest.PendingOffer == null) return (false, "NO_OFFER", null);
                 long income = chest.SettleIncome(chest.PendingOffer.Value);
                 chest.PendingOffer = null;
                 chest.PendingOfferExpireUtc = null;
                 chest.State = ChestState.Finished;
-                player.Gold += income;
                 chest.OwnerId = 0;
-                Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                lock (player.Sync)
+                {
+                    player.Gold += income;
+                    Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                    player.Opens++;
+                }
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, income, "accept_offer", chest.Uid);
@@ -232,10 +251,10 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) DeclineOffer(Player player, long chestUid)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
+                return (false, "CHEST_NOT_FOUND", null);
+            lock (chest.Sync)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                    return (false, "CHEST_NOT_FOUND", null);
                 chest.ExpireOfferIfNeeded();
                 if (chest.PendingOffer == null) return (false, "NO_OFFER", null);
                 chest.PendingOffer = null;
@@ -251,9 +270,9 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) BuyDailyChest(Player player)
         {
-            lock (_store.Gate)
+            var g = GameTables.Tables.TbGlobal;
+            lock (player.Sync)
             {
-                var g = GameTables.Tables.TbGlobal;
                 if (player.Gold < g.DailyTicketCost) return (false, "NOT_ENOUGH_GOLD", null);
                 string day = TodayDay();
                 int used = Db.DailyAttemptsUsed(day, player.Id);
@@ -264,7 +283,7 @@ namespace SimpleGameServer.Game
 
                 var config = GameTables.Tables.TbChest[g.DailyChestId];
                 int seed = day.GetHashCode(); // 全服同构种子
-                var chest = new Chest(_store.AllocChestUid(), config, _store.Rng, true, seed)
+                var chest = new Chest(_store.AllocChestUid(), config, new Random(seed), true, seed)
                 {
                     OwnerId = player.Id,
                     PaidPrice = g.DailyTicketCost,
@@ -288,9 +307,9 @@ namespace SimpleGameServer.Game
         /// <summary>新玩家教学箱：固定种子免费木箱（一次），客户端按 isTutorial 显示引导步骤</summary>
         public (bool ok, string err, object data) TutorialChest(Player player)
         {
-            lock (_store.Gate)
+            lock (player.Sync)
             {
-                if (Db.OpensCount(player.Id) > 0) return (false, "NOT_ROOKIE", null);
+                if (player.Opens > 0) return (false, "NOT_ROOKIE", null);
                 if (_store.Chests.Values.Any(c => c.OwnerId == player.Id && c.IsTutorial)) return (false, "ALREADY_GRANTED", null);
                 var config = GameTables.Tables.TbChest[1];
                 var chest = new Chest(_store.AllocChestUid(), config, new Random(20260928)) { OwnerId = player.Id, PaidPrice = 0 };
@@ -303,7 +322,6 @@ namespace SimpleGameServer.Game
 
         public object DailyRank(Player viewer)
         {
-            lock (_store.Gate)
             {
                 string day = TodayDay();
                 var rows = Db.DailyRank(day);
@@ -323,12 +341,12 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) ListChest(Player player, long chestUid, long startPrice, long buyoutPrice)
         {
-            lock (_store.Gate)
+            if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
             {
-                if (!_store.Chests.TryGetValue(chestUid, out var chest) || chest.OwnerId != player.Id)
-                {
-                    return (false, "CHEST_NOT_FOUND", null);
-                }
+                return (false, "CHEST_NOT_FOUND", null);
+            }
+            lock (chest.Sync)
+            {
                 if (chest.State != ChestState.Owned || chest.RemainingCount <= 1)
                 {
                     return (false, "NOT_OWNED", null);
@@ -347,7 +365,7 @@ namespace SimpleGameServer.Game
                     BuyoutPrice = buyoutPrice,
                     EndTimeUtc = DateTime.UtcNow.AddSeconds(GameTables.Tables.TbGlobal.AuctionDurationSec),
                 };
-                _store.Lots.Add(lot);
+                _store.Lots[lot.LotId] = lot;
                 Db.SaveChest(chest);
                 Db.SaveLot(lot);
                 _ = _events.LotChanged(lot);
@@ -361,13 +379,12 @@ namespace SimpleGameServer.Game
             return Math.Max(1, (long)(baseBid * GameTables.Tables.TbGlobal.AuctionBidStepPct));
         }
 
-        /// <summary>出价（服务端计算最低加价，预扣/退回由服务端管理）</summary>
+        /// <summary>出价（服务端计算最低加价，预扣/退回由服务端管理）。锁序：Lot → Player（按 Id 排序）</summary>
         public (bool ok, string err, object data) Bid(Player player, long lotId)
         {
-            lock (_store.Gate)
+            if (!_store.Lots.TryGetValue(lotId, out var lot) || lot.Settled) return (false, "LOT_NOT_FOUND", null);
+            lock (lot.Sync)
             {
-                var lot = _store.Lots.FirstOrDefault(l => l.LotId == lotId && !l.Settled);
-                if (lot == null) return (false, "LOT_NOT_FOUND", null);
                 if (lot.SellerId == player.Id) return (false, "OWN_LOT", null);
                 if (DateTime.UtcNow > lot.EndTimeUtc) return (false, "AUCTION_ENDED", null);
                 if (lot.CurrentBidderId == player.Id) return (false, "ALREADY_TOP", null);
@@ -376,22 +393,31 @@ namespace SimpleGameServer.Game
                 bool asBuyout = lot.BuyoutPrice > 0 && next >= lot.BuyoutPrice;
                 if (asBuyout) next = lot.BuyoutPrice;
 
-                if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < next)
+                // 退被超价者的预扣（与出价者排序加锁，避免死锁）
+                Player loser = lot.CurrentBidderId > 0 && _store.Players.TryGetValue(lot.CurrentBidderId, out var l) ? l : null;
+                var parties = new[] { player, loser }.Where(p => p != null).OrderBy(p => p.Id).ToList();
+                foreach (var p in parties)
                 {
-                    return (false, "NOT_ENOUGH_GOLD", null);
-                }
-                // 退自己旧预扣、预扣新价
-                player.Gold += player.Escrow.GetValueOrDefault(lot.LotId);
-                player.Escrow.Remove(lot.LotId);
-                player.Gold -= next;
-                player.Escrow[lot.LotId] = next;
-
-                // 退被超价者的预扣
-                if (lot.CurrentBidderId > 0 && _store.Players.TryGetValue(lot.CurrentBidderId, out var loser))
-                {
-                    loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
-                    loser.Escrow.Remove(lot.LotId);
-                    Db.SavePlayer(loser);
+                    lock (p.Sync)
+                    {
+                        if (p == player)
+                        {
+                            if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < next)
+                            {
+                                return (false, "NOT_ENOUGH_GOLD", null);
+                            }
+                            player.Gold += player.Escrow.GetValueOrDefault(lot.LotId);
+                            player.Escrow.Remove(lot.LotId);
+                            player.Gold -= next;
+                            player.Escrow[lot.LotId] = next;
+                        }
+                        else
+                        {
+                            loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
+                            loser.Escrow.Remove(lot.LotId);
+                            Db.SavePlayer(loser);
+                        }
+                    }
                 }
 
                 lot.CurrentBid = next;
@@ -412,23 +438,25 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) Buyout(Player player, long lotId)
         {
-            lock (_store.Gate)
+            if (!_store.Lots.TryGetValue(lotId, out var lot) || lot.Settled) return (false, "LOT_NOT_FOUND", null);
+            lock (lot.Sync)
             {
-                var lot = _store.Lots.FirstOrDefault(l => l.LotId == lotId && !l.Settled);
-                if (lot == null) return (false, "LOT_NOT_FOUND", null);
                 if (lot.SellerId == player.Id) return (false, "OWN_LOT", null);
                 if (lot.BuyoutPrice <= 0) return (false, "NO_BUYOUT", null);
                 if (DateTime.UtcNow > lot.EndTimeUtc) return (false, "AUCTION_ENDED", null);
 
                 long price = lot.BuyoutPrice;
-                if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < price)
+                lock (player.Sync)
                 {
-                    return (false, "NOT_ENOUGH_GOLD", null);
+                    if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < price)
+                    {
+                        return (false, "NOT_ENOUGH_GOLD", null);
+                    }
+                    player.Gold += player.Escrow.GetValueOrDefault(lot.LotId);
+                    player.Escrow.Remove(lot.LotId);
+                    player.Gold -= price;
+                    player.Escrow[lot.LotId] = price;
                 }
-                player.Gold += player.Escrow.GetValueOrDefault(lot.LotId);
-                player.Escrow.Remove(lot.LotId);
-                player.Gold -= price;
-                player.Escrow[lot.LotId] = price;
 
                 lot.CurrentBid = price;
                 lot.CurrentBidderId = player.Id;
@@ -440,7 +468,7 @@ namespace SimpleGameServer.Game
             }
         }
 
-        /// <summary>到期/一口价结算（需在 lock 内调用）</summary>
+        /// <summary>到期/一口价结算（需在 lot.Sync 内调用）。锁序：Lot → Player(排序) → Chest</summary>
         public void Settle(AuctionLot lot)
         {
             if (lot.Settled) return;
@@ -450,26 +478,35 @@ namespace SimpleGameServer.Game
             if (lot.CurrentBid > 0 && lot.CurrentBidderId != 0)
             {
                 long sellerIncome = (long)Math.Round(lot.CurrentBid * (1f - g.AuctionFeeRate));
-                // 买家：价款已预扣（补记支出流水，经济报表对账用）
-                if (_store.Players.TryGetValue(lot.CurrentBidderId, out var buyer))
+                // 玩家阶段：买家解预扣 + 卖家入账（按 Id 排序加锁）
+                var buyer = _store.Players.TryGetValue(lot.CurrentBidderId, out var b) ? b : null;
+                var seller = _store.Players.TryGetValue(lot.SellerId, out var s) ? s : null;
+                foreach (var p in new[] { buyer, seller }.Where(p => p != null).OrderBy(p => p.Id))
                 {
-                    buyer.Escrow.Remove(lot.LotId);
-                    Db.SavePlayer(buyer);
-                    Db.AddGoldTx(lot.CurrentBidderId, -lot.CurrentBid, "auction_buy", lot.LotId);
+                    lock (p.Sync)
+                    {
+                        if (p == buyer)
+                        {
+                            buyer.Escrow.Remove(lot.LotId);
+                        }
+                        else
+                        {
+                            seller.Gold += sellerIncome;
+                        }
+                        Db.SavePlayer(p);
+                    }
                 }
-                // 卖家入账（扣抽成）
-                if (_store.Players.TryGetValue(lot.SellerId, out var seller))
-                {
-                    seller.Gold += sellerIncome;
-                    Db.SavePlayer(seller);
-                    Db.AddGoldTx(seller.Id, sellerIncome, "auction_sell", lot.LotId);
-                }
-                // 宝箱易主：新玩家技能可用（额度不重置，SkillUsedBy 含买家则其不可再用）
+                if (buyer != null) Db.AddGoldTx(buyer.Id, -lot.CurrentBid, "auction_buy", lot.LotId);
+                if (seller != null) Db.AddGoldTx(seller.Id, sellerIncome, "auction_sell", lot.LotId);
+                // 宝箱阶段：易主（不持 Player 锁进 Chest，遵守全局锁序）
                 if (_store.Chests.TryGetValue(lot.ChestUid, out var chest))
                 {
-                    chest.OwnerId = lot.CurrentBidderId;
-                    chest.State = ChestState.Owned;
-                    Db.SaveChest(chest);
+                    lock (chest.Sync)
+                    {
+                        chest.OwnerId = lot.CurrentBidderId;
+                        chest.State = ChestState.Owned;
+                        Db.SaveChest(chest);
+                    }
                 }
             }
             else
@@ -477,8 +514,11 @@ namespace SimpleGameServer.Game
                 // 流拍退回
                 if (_store.Chests.TryGetValue(lot.ChestUid, out var chest))
                 {
-                    chest.State = ChestState.Owned;
-                    Db.SaveChest(chest);
+                    lock (chest.Sync)
+                    {
+                        chest.State = ChestState.Owned;
+                        Db.SaveChest(chest);
+                    }
                 }
             }
             Db.SaveLot(lot);
@@ -488,13 +528,14 @@ namespace SimpleGameServer.Game
         /// <summary>机器人竞价 + 到期结算（由后台服务周期调用）</summary>
         public void BotTick()
         {
-            lock (_store.Gate)
-            {
-                var bots = _store.Players.Values.Where(p => p.Id < 0 && p.Token == null).ToList();
-                if (bots.Count == 0) return;
+            var bots = _store.Players.Values.Where(p => p.Id < 0 && p.Token == null).ToList();
+            if (bots.Count == 0) return;
 
-                foreach (var lot in _store.Lots.Where(l => !l.Settled).ToList())
+            foreach (var lot in _store.Lots.Values.Where(l => !l.Settled).ToList())
+            {
+                lock (lot.Sync)
                 {
+                    if (lot.Settled) continue;
                     if (DateTime.UtcNow > lot.EndTimeUtc)
                     {
                         Settle(lot);
@@ -507,18 +548,23 @@ namespace SimpleGameServer.Game
                     if (lot.BuyoutPrice > 0 && next >= lot.BuyoutPrice) continue;
 
                     if (!_store.Chests.TryGetValue(lot.ChestUid, out var chest)) continue;
+                    double ev;
+                    lock (chest.Sync) ev = chest.ExpectedValue;
                     double tolerance = 1.0 + _store.Rng.NextDouble() * 0.18;
                     double skillPremium = 1.0 + chest.SkillUsesRemaining * 0.05;
                     if (chest.Identified) skillPremium += 0.04; // 鉴定拍品信息透明，买家愿意多付
-                    if (next > chest.ExpectedValue * tolerance * skillPremium) continue;
+                    if (next > ev * tolerance * skillPremium) continue;
 
                     var bot = bots[_store.Rng.Next(bots.Count)];
                     // 退被超价玩家
                     if (lot.CurrentBidderId > 0 && _store.Players.TryGetValue(lot.CurrentBidderId, out var loser))
                     {
-                        loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
-                        loser.Escrow.Remove(lot.LotId);
-                        Db.SavePlayer(loser);
+                        lock (loser.Sync)
+                        {
+                            loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
+                            loser.Escrow.Remove(lot.LotId);
+                            Db.SavePlayer(loser);
+                        }
                     }
                     lot.CurrentBid = next;
                     lot.CurrentBidderId = bot.Id;
@@ -531,62 +577,79 @@ namespace SimpleGameServer.Game
 
         // ---------------- 查询 ----------------
 
-        /// <summary>客户端状态视图：未揭示格金额绝不下发</summary>
+        /// <summary>客户端状态视图：未揭示格金额绝不下发（玩家标量快照后逐箱加锁，无嵌套锁序风险）</summary>
         public object ClientState(Player player)
         {
-            lock (_store.Gate)
+            long gold; long escrowSum; int characterId, level, xp, xpNext, duelRating, opens;
+            Dictionary<int, int> cooldowns; object lastSeasonReward;
+            lock (player.Sync)
             {
-                var chests = _store.Chests.Values
-                    .Where(c => c.OwnerId == player.Id)
-                    .OrderBy(c => c.Uid)
-                    .Select(c => new
-                    {
-                        uid = c.Uid,
-                        configId = c.ConfigId,
-                        state = (int)c.State,
-                        eliminated = c.Eliminated,
-                        revealedAmounts = c.Eliminated.Select((e, i) => e ? (int?)c.Amounts[i] : (int?)null).ToArray(),
-                        remainingCount = c.RemainingCount,
-                        remainingSum = c.RemainingSum,
-                        expectedValue = Math.Round(c.ExpectedValue, 1),
-                        bankerOffer = (long)Math.Round(c.BankerOffer),
-                        nextEliminateCost = c.NextEliminateCost,
-                        skillUsesRemaining = c.SkillUsesRemaining,
-                        skillUsedByMe = c.SkillUsedBy.Contains(player.Id),
-                        freeEliminateBuff = c.FreeEliminateBuff,
-                        priceBuffNext = c.PriceBuffNext,
-                        peekedSlots = c.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
-                        detectedSlots = c.DetectedSlots.ToList(),
-                        insuranceActive = c.InsuranceActive,
-                        taxReductionCount = c.TaxReductionCount,
-                        identified = c.Identified,
-                        luckySlots = c.LuckySlots.ToList(),
-                        trapSlots = c.TrapSlots.ToList(),
-                        kind = Config.GameTables.Tables.TbChest[c.ConfigId].Kind,
-                        isDaily = c.IsDaily,
-                        isTutorial = c.IsTutorial,
-                        pendingOffer = c.PendingOffer,
-                        offerExpireInSec = c.PendingOfferExpireUtc != null
-                            ? Math.Max(0, (int)(c.PendingOfferExpireUtc.Value - DateTime.UtcNow).TotalSeconds) : 0,
-                    }).ToList();
-
-                return new
-                {
-                    gold = player.Gold,
-                    escrow = player.Escrow.Values.Sum(),
-                    characterId = player.CharacterId,
-                    opensTotal = Db.OpensCount(player.Id),
-                    level = player.Level,
-                    xp = player.Xp,
-                    xpNext = Levels.XpNext(player.Level, player.Xp),
-                    duelRating = player.DuelRating,
-                    seasonWeek = Db.WeekStartUtcIso(),
-                    lastSeasonReward = Db.MySeasonReward(player.Id),
-                    skillCooldowns = SkillCooldownView(player),
-                    featureFlags = Features.View(),
-                    chests,
-                };
+                gold = player.Gold;
+                escrowSum = player.Escrow.Values.Sum();
+                characterId = player.CharacterId;
+                level = player.Level; xp = player.Xp; xpNext = Levels.XpNext(player.Level, player.Xp);
+                duelRating = player.DuelRating; opens = player.Opens;
+                cooldowns = SkillCooldownView(player);
+                lastSeasonReward = player.LastSeasonReward;
             }
+
+            var chests = _store.Chests.Values
+                .Where(c => c.OwnerId == player.Id)
+                .OrderBy(c => c.Uid)
+                .Select(c =>
+                {
+                    lock (c.Sync)
+                    {
+                        return new
+                        {
+                            uid = c.Uid,
+                            configId = c.ConfigId,
+                            state = (int)c.State,
+                            eliminated = c.Eliminated,
+                            revealedAmounts = c.Eliminated.Select((e, i) => e ? (int?)c.Amounts[i] : (int?)null).ToArray(),
+                            remainingCount = c.RemainingCount,
+                            remainingSum = c.RemainingSum,
+                            expectedValue = Math.Round(c.ExpectedValue, 1),
+                            bankerOffer = (long)Math.Round(c.BankerOffer),
+                            nextEliminateCost = c.NextEliminateCost,
+                            skillUsesRemaining = c.SkillUsesRemaining,
+                            skillUsedByMe = c.SkillUsedBy.Contains(player.Id),
+                            freeEliminateBuff = c.FreeEliminateBuff,
+                            priceBuffNext = c.PriceBuffNext,
+                            peekedSlots = c.PeekedSlots.ToDictionary(kv => kv.Key, kv => kv.Value),
+                            detectedSlots = c.DetectedSlots.ToList(),
+                            insuranceActive = c.InsuranceActive,
+                            taxReductionCount = c.TaxReductionCount,
+                            identified = c.Identified,
+                            luckySlots = c.LuckySlots.ToList(),
+                            trapSlots = c.TrapSlots.ToList(),
+                            kind = Config.GameTables.Tables.TbChest[c.ConfigId].Kind,
+                            isDaily = c.IsDaily,
+                            isTutorial = c.IsTutorial,
+                            pendingOffer = c.PendingOffer,
+                            offerExpireInSec = c.PendingOfferExpireUtc != null
+                                ? Math.Max(0, (int)(c.PendingOfferExpireUtc.Value - DateTime.UtcNow).TotalSeconds) : 0,
+                        };
+                    }
+                })
+                .ToList();
+
+            return new
+            {
+                gold,
+                escrow = escrowSum,
+                characterId,
+                opensTotal = opens,
+                level,
+                xp,
+                xpNext,
+                duelRating,
+                seasonWeek = Db.WeekStartUtcIso(),
+                lastSeasonReward,
+                skillCooldowns = cooldowns,
+                featureFlags = Features.View(),
+                chests,
+            };
         }
 
         /// <summary>四榜查询：gold_total/gold_week/opens_total/opens_week × 全球(global)/本地区(region)</summary>
@@ -673,27 +736,44 @@ namespace SimpleGameServer.Game
 
         public object AuctionList(Player viewer)
         {
-            lock (_store.Gate)
+            var g = GameTables.Tables.TbGlobal;
+            return _store.Lots.Values.Where(l => !l.Settled).Select(l =>
             {
-                var g = GameTables.Tables.TbGlobal;
-                return _store.Lots.Where(l => !l.Settled).Select(l =>
+                lock (l.Sync)
                 {
-                    _store.Chests.TryGetValue(l.ChestUid, out var c);
+                    Chest c = _store.Chests.TryGetValue(l.ChestUid, out var chest) ? chest : null;
+                    int skillUses; bool identified; long ev; int remaining;
+                    List<int> remainingAmounts;
+                    if (c != null)
+                    {
+                        lock (c.Sync)
+                        {
+                            skillUses = c.SkillUsesRemaining;
+                            identified = c.Identified;
+                            ev = (long)Math.Round(c.ExpectedValue);
+                            remaining = c.RemainingCount;
+                            remainingAmounts = identified
+                                ? Enumerable.Range(0, c.Amounts.Length).Where(i => !c.Eliminated[i]).Select(i => c.Amounts[i]).OrderByDescending(a => a).ToList()
+                                : null;
+                        }
+                    }
+                    else
+                    {
+                        skillUses = 0; identified = false; ev = 0; remaining = 0; remainingAmounts = null;
+                    }
                     return new
                     {
                         lotId = l.LotId,
                         chestUid = l.ChestUid,
                         configId = c?.ConfigId ?? 0,
-                        remainingCount = c?.RemainingCount ?? 0,
-                        expectedValue = c != null ? (long)Math.Round(c.ExpectedValue) : 0,
-                        skillUses = c?.SkillUsesRemaining ?? 0,
+                        remainingCount = remaining,
+                        expectedValue = ev,
+                        skillUses = skillUses,
                         skillUsesMax = g.ChestMaxSkillUses,
                         seller = l.SellerName,
                         isMine = l.SellerId == viewer?.Id,
-                        identified = c?.Identified ?? false,
-                        remainingAmounts = (c != null && c.Identified)
-                            ? Enumerable.Range(0, c.Amounts.Length).Where(i => !c.Eliminated[i]).Select(i => c.Amounts[i]).OrderByDescending(a => a).ToList()
-                            : null,
+                        identified,
+                        remainingAmounts,
                         startPrice = l.StartPrice,
                         buyoutPrice = l.BuyoutPrice,
                         currentBid = l.CurrentBid,
@@ -701,8 +781,8 @@ namespace SimpleGameServer.Game
                         iAmTop = l.CurrentBidderId == viewer?.Id,
                         endInSec = Math.Max(0, (int)(l.EndTimeUtc - DateTime.UtcNow).TotalSeconds),
                     };
-                }).ToList();
-            }
+                }
+            }).ToList();
         }
     }
 

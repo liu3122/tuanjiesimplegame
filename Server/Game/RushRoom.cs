@@ -51,9 +51,11 @@ namespace SimpleGameServer.Game
                 if (_phase != Phase.Matching) return (false, "ROOM_RUNNING");
                 if (_players.ContainsKey(player.Id)) return (true, null); // 重复加入幂等
                 if (_players.Count >= _config.PlayerCount) return (false, "ROOM_FULL");
-                if (player.Gold < _config.Ticket) return (false, "NOT_ENOUGH_GOLD");
-
-                player.Gold -= _config.Ticket;
+                lock (player.Sync)
+                {
+                    if (player.Gold < _config.Ticket) return (false, "NOT_ENOUGH_GOLD");
+                    player.Gold -= _config.Ticket;
+                }
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -_config.Ticket, "rush_ticket", _config.Id);
                 Db.RecordStake(player.Id, "rush", _config.Id, _config.Ticket); // 重启退款凭据
@@ -225,13 +227,15 @@ namespace SimpleGameServer.Game
             foreach (var p in _players.Values.Where(p => p.Id > 0))
             {
                 Db.ClearStake(p.Id, "rush", _config.Id);
-                Levels.AddXp(p, Levels.XpRushJoin);
-                Db.SavePlayer(p);
                 long earn = _earnings.GetValueOrDefault(p.Id);
+                lock (p.Sync)
+                {
+                    Levels.AddXp(p, Levels.XpRushJoin);
+                    if (earn > 0) p.Gold += earn;
+                    Db.SavePlayer(p);
+                }
                 if (earn > 0)
                 {
-                    p.Gold += earn;
-                    Db.SavePlayer(p);
                     Db.AddGoldTx(p.Id, earn, "rush_win", _config.Id);
                 }
             }
