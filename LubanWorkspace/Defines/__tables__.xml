@@ -11,6 +11,8 @@
     <table name="TbCharacter" value="character.Character" index="Id" input="tb_character.xlsx"/>
     <!-- 抢宝房配置 -->
     <table name="TbRushRoom" value="rush.RushRoom" index="Id" input="tb_rushroom.xlsx"/>
+    <!-- 玩家等级表 -->
+    <table name="TbLevel" value="level.Level" index="Id" input="tb_level.xlsx"/>
     <!-- 多语言文本表（Key = 中文原文） -->
     <table name="TbText" value="l10n.TextItem" index="Key" input="tb_text.xlsx"/>
     <!-- 玩法开关表 -->

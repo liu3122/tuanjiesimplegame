@@ -60,6 +60,12 @@ namespace Game.HotUpdate.ChestGame
                 TDUIHelper.SetSize(desc.rectTransform, 410, 160);
 
                 var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 200), new Vector2(280, 76), "购买 " + c.Price.ToString("N0"), "green", 28);
+                int minLv = MinLevelForChest(config.Id);
+                if (OnlineState.Level < minLv)
+                {
+                    buy.interactable = false;
+                    buy.GetComponentInChildren<Text>().text = "<color=#A8B4C2>Lv." + minLv + L10n.Get(" 解锁") + "</color>";
+                }
                 buy.onClick.AddListener(async () =>
                 {
                     buy.interactable = false;

@@ -7,7 +7,8 @@
     "DurationSec": 30,
     "CountdownSec": 3,
     "PoolScale": 1.1,
-    "ColorHex": "4DD0A5"
+    "ColorHex": "4DD0A5",
+    "Blind": false
   },
   {
     "Id": 2,
@@ -17,6 +18,29 @@
     "DurationSec": 30,
     "CountdownSec": 3,
     "PoolScale": 1.15,
-    "ColorHex": "E8C35A"
+    "ColorHex": "E8C35A",
+    "Blind": false
+  },
+  {
+    "Id": 3,
+    "Name": "盲抢新手房",
+    "Ticket": 100,
+    "PlayerCount": 6,
+    "DurationSec": 30,
+    "CountdownSec": 3,
+    "PoolScale": 1.1,
+    "ColorHex": "6EC6FF",
+    "Blind": true
+  },
+  {
+    "Id": 4,
+    "Name": "盲抢豪华房",
+    "Ticket": 500,
+    "PlayerCount": 6,
+    "DurationSec": 30,
+    "CountdownSec": 3,
+    "PoolScale": 1.15,
+    "ColorHex": "9B8EC4",
+    "Blind": true
   }
 ]

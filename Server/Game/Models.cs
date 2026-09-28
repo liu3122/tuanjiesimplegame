@@ -11,6 +11,12 @@ namespace SimpleGameServer.Game
         public string Token { get; set; }
         public long Gold { get; set; }
         public int CharacterId { get; set; } = 1;
+        /// <summary>累计经验（等级门槛见 tb_level）</summary>
+        public int Xp { get; set; }
+        /// <summary>玩家等级（1 起）</summary>
+        public int Level { get; set; } = 1;
+        /// <summary>对决天梯分（Elo，初始 1000）</summary>
+        public int DuelRating { get; set; } = 1000;
         /// <summary>地区码（CDN 头/客户端上报/GeoIP，见 RegionResolver）</summary>
         public string Region { get; set; } = "CN";
         /// <summary>拍卖出价预扣（lotId → 冻结金额）</summary>

@@ -79,6 +79,8 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> GetRankAsync(string board = "gold_total", string scope = "global") =>
             GetAsync($"/api/rank?board={board}&scope={scope}");
 
+        public static Task<JSONNode> GetDuelRankAsync() => GetAsync("/api/duel/rank");
+
         public static Task<JSONNode> GetRushRoomsAsync() => GetAsync("/api/rush/rooms");
 
         public static Task<JSONNode> JoinRushAsync(int roomId) =>

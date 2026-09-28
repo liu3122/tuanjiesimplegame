@@ -12,6 +12,7 @@ builder.Services.AddSingleton<GameStore>();
 builder.Services.AddSingleton<AuctionEvents>();
 builder.Services.AddSingleton<GameService>();
 builder.Services.AddHostedService<AuctionBotService>();
+builder.Services.AddHostedService<SeasonService>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(_ => true).AllowCredentials()));
 
 var app = builder.Build();
@@ -117,6 +118,14 @@ app.MapGet("/api/rank", (HttpRequest http, GameService svc, string board = "gold
     if (!valid.Contains(board)) return Results.Json(new { ok = false, error = "BAD_BOARD" });
     if (scope != "global" && scope != "region") scope = "global";
     return Results.Json(new { ok = true, data = svc.RankList(p, board, scope) });
+});
+
+// 对决天梯榜（Elo）
+app.MapGet("/api/duel/rank", (HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    return Results.Json(new { ok = true, data = svc.DuelRankList(p) });
 });
 
 // ---------- 抢宝房 ----------

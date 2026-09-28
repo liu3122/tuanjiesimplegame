@@ -20,6 +20,7 @@ public partial class Tables
     public TbBankerFactor TbBankerFactor {get; }
     public TbCharacter TbCharacter {get; }
     public TbRushRoom TbRushRoom {get; }
+    public TbLevel TbLevel {get; }
     public TbText TbText {get; }
     public TbFeature TbFeature {get; }
     public TbGlobal TbGlobal {get; }
@@ -32,6 +33,7 @@ public partial class Tables
         TbBankerFactor = new TbBankerFactor(loader("tbbankerfactor"));
         TbCharacter = new TbCharacter(loader("tbcharacter"));
         TbRushRoom = new TbRushRoom(loader("tbrushroom"));
+        TbLevel = new TbLevel(loader("tblevel"));
         TbText = new TbText(loader("tbtext"));
         TbFeature = new TbFeature(loader("tbfeature"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
@@ -46,6 +48,7 @@ public partial class Tables
         TbBankerFactor.ResolveRef(this);
         TbCharacter.ResolveRef(this);
         TbRushRoom.ResolveRef(this);
+        TbLevel.ResolveRef(this);
         TbText.ResolveRef(this);
         TbFeature.ResolveRef(this);
         TbGlobal.ResolveRef(this);

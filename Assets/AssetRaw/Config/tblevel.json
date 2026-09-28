@@ -1,0 +1,52 @@
+[
+  {
+    "Id": 1,
+    "XpNeed": 0,
+    "UnlockText": ""
+  },
+  {
+    "Id": 2,
+    "XpNeed": 60,
+    "UnlockText": "解锁技能：窥视"
+  },
+  {
+    "Id": 3,
+    "XpNeed": 180,
+    "UnlockText": "解锁银宝箱 + 对赌房"
+  },
+  {
+    "Id": 4,
+    "XpNeed": 360,
+    "UnlockText": "解锁技能：探测"
+  },
+  {
+    "Id": 5,
+    "XpNeed": 600,
+    "UnlockText": "解锁金宝箱"
+  },
+  {
+    "Id": 6,
+    "XpNeed": 900,
+    "UnlockText": "解锁技能：保底"
+  },
+  {
+    "Id": 7,
+    "XpNeed": 1300,
+    "UnlockText": "尊贵商人称号"
+  },
+  {
+    "Id": 8,
+    "XpNeed": 1800,
+    "UnlockText": "金牌商人称号"
+  },
+  {
+    "Id": 9,
+    "XpNeed": 2400,
+    "UnlockText": "商业巨擘称号"
+  },
+  {
+    "Id": 10,
+    "XpNeed": 3100,
+    "UnlockText": "宝箱传奇称号（满级）"
+  }
+]

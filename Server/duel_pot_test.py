@@ -16,8 +16,24 @@ def get_state(token):
 def login(name):
     return post('/api/login', '', json.dumps({'name': name}))['token']
 
+def level_to(token, target=3, max_cycles=25):
+    """练级：买木箱→立即卖（开箱结算 +10xp/次），验证升级解锁链路"""
+    for _ in range(max_cycles):
+        s = get_state(token)
+        if s['level'] >= target:
+            return s['level']
+        r = post('/api/chest/buy', token, '{"configId":1}')
+        if not r['ok']:
+            raise AssertionError('buy failed: ' + json.dumps(r))
+        post(f"/api/chest/{r['data']['chestUid']}/sell", token)
+    lv = get_state(token)['level']
+    assert lv >= target, f'练级失败: {lv}'
+    return lv
+
 async def run_player(name, actions, ctx):
     token = login(name)
+    lv = level_to(token, 3)
+    print(f'  {name} 练到 Lv.{lv}')
     ctx[name]['gold0'] = get_state(token)['gold']
     r = post('/api/duel/join', token, '{"mode":"pot"}')
     assert r['ok'], (name, r)

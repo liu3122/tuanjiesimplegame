@@ -30,12 +30,33 @@ namespace Game.HotUpdate.ChestGame
             return v.IsNull || v.AsBool;
         }
 
+        public static int Level => State != null && State["data"] != null ? Mathf.Max(1, State["data"]["level"].AsInt) : 1;
+        public static int Xp => State != null && State["data"] != null ? State["data"]["xp"].AsInt : 0;
+        public static int XpNext => State != null && State["data"] != null ? State["data"]["xpNext"].AsInt : 0;
+        public static int DuelRating => State != null && State["data"] != null ? State["data"]["duelRating"].AsInt : 1000;
+
+        /// <summary>上次快照等级（升级检测；0 = 首次不提示）</summary>
+        private static int _lastLevel;
+
+        private static void DetectLevelUp()
+        {
+            int lv = Level;
+            if (_lastLevel > 0 && lv > _lastLevel)
+            {
+                var row = GameConfig.Tables.TbLevel.GetOrDefault(lv);
+                string unlock = row != null && !string.IsNullOrEmpty(row.UnlockText) ? " · " + row.UnlockText : "";
+                UIRoot.ToastStatic("<color=#F5D061>升级！Lv." + lv + unlock + "</color>");
+            }
+            _lastLevel = lv;
+        }
+
         public static async Task<bool> Refresh()
         {
             var r = await ApiClient.GetStateAsync();
             if (r != null && r["ok"].AsBool)
             {
                 State = r;
+                DetectLevelUp();
                 return true;
             }
             return false;

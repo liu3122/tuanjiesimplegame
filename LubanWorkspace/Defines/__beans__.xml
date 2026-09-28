@@ -76,6 +76,17 @@
             <!-- 奖池 = 门票 × 人数 × 倍率 -->
             <var name="PoolScale" type="float"/>
             <var name="ColorHex" type="string"/>
+            <!-- 盲抢：开抢时金额不可见，抢到才揭示（机器人同样不可见，公平博弈） -->
+            <var name="Blind" type="bool"/>
+        </bean>
+    </module>
+
+    <module name="level">
+        <!-- 玩家等级：经验门槛与解锁说明（累计经验达到 XpNeed 升到该级） -->
+        <bean name="Level">
+            <var name="Id" type="int"/>
+            <var name="XpNeed" type="int"/>
+            <var name="UnlockText" type="string"/>
         </bean>
     </module>
 

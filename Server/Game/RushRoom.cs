@@ -145,7 +145,9 @@ namespace SimpleGameServer.Game
             _amounts = BuildPool(_players.Count);
             _phase = Phase.Rush;
             _phaseEndUtc = DateTime.UtcNow.AddSeconds(_config.DurationSec);
-            Broadcast(new { type = "phase", phase = "rush", durationSec = _config.DurationSec, amounts = PublicAmounts() });
+            // 盲抢房不下发金额（抢到才揭示），机器人同样不可见 → 纯概率/推理博弈
+            Broadcast(new { type = "phase", phase = "rush", durationSec = _config.DurationSec,
+                amounts = _config.Blind ? null : PublicAmounts(), blind = _config.Blind });
         }
 
         /// <summary>生成奖池：门票 × 人数 × 倍率，金字塔分布</summary>
@@ -207,9 +209,9 @@ namespace SimpleGameServer.Game
         {
             var free = Enumerable.Range(0, 20).Where(i => _slotOwner[i] == 0).ToList();
             if (free.Count == 0) return -1;
-            if (_rng.NextDouble() < 0.35)
+            // 盲抢房机器人不许"看得见"金额（公平）；明抢房 35% 挑当前已知最大，制造压力
+            if (!_config.Blind && _rng.NextDouble() < 0.35)
             {
-                // 35% 挑当前已知最大（机器人"看得见"金额，制造压力）
                 return free.OrderByDescending(i => _amounts[i]).First();
             }
             return free[_rng.Next(free.Count)];
@@ -219,10 +221,12 @@ namespace SimpleGameServer.Game
         {
             if (_phase == Phase.Settled) return; // 幂等守卫（Claim 填满与 Tick 超时可能并发触发）
             _phase = Phase.Settled;
-            // 真人入账 + 清除质押（正常结算，不再需要重启退款）
+            // 真人入账 + 参与经验 + 清除质押（正常结算，不再需要重启退款）
             foreach (var p in _players.Values.Where(p => p.Id > 0))
             {
                 Db.ClearStake(p.Id, "rush", _config.Id);
+                Levels.AddXp(p, Levels.XpRushJoin);
+                Db.SavePlayer(p);
                 long earn = _earnings.GetValueOrDefault(p.Id);
                 if (earn > 0)
                 {
@@ -251,7 +255,8 @@ namespace SimpleGameServer.Game
                 players = _players.Values.Select(p => new { name = p.Name, isBot = p.Id < 0 }).ToList(),
                 countdownSec = _phase == Phase.Countdown ? (int)Math.Ceiling((_phaseEndUtc - DateTime.UtcNow).TotalSeconds) : 0,
                 remainSec = _phase == Phase.Rush ? (int)Math.Ceiling((_phaseEndUtc - DateTime.UtcNow).TotalSeconds) : 0,
-                amounts = _phase == Phase.Rush ? PublicAmounts() : null,
+                blind = _config.Blind,
+                amounts = _phase == Phase.Rush && !_config.Blind ? PublicAmounts() : null,
                 slots = _slotOwner.Select((o, i) => o != 0 ? new { slot = i, playerId = o, amount = _slotAmount[i] } : null).Where(x => x != null).ToList(),
             };
         }

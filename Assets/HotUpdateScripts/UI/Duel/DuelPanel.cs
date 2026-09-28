@@ -69,6 +69,12 @@ namespace Game.HotUpdate.ChestGame
             {
                 var b = UITheme.ThemedButton(panel.transform, new Vector2(0, -240), new Vector2(700, 120),
                     "<color=#E05D5D>对赌房</color> · 入场金 = 宝箱售价\n<color=#9AA3B2>同箱对开，赢家独得两个宝箱的全部价值（扣 5%）</color>", "gold", 24);
+                if (OnlineState.Level < Screens.PotDuelMinLevel)
+                {
+                    b.interactable = false;
+                    b.GetComponentInChildren<Text>().text =
+                        "<color=#A8B4C2>对赌房 · Lv." + Screens.PotDuelMinLevel + L10n.Get(" 解锁") + "</color>\n<color=#77808C>赢家独得两个宝箱的全部价值（扣 5%）</color>";
+                }
                 b.onClick.AddListener(() => { Object.Destroy(panel); Show(true); });
             }
             var close = UITheme.ThemedButton(panel.transform, new Vector2(0, -440), new Vector2(200, 52), L10n.Get("取 消"), "red", 22);
@@ -452,8 +458,14 @@ namespace Game.HotUpdate.ChestGame
                 label.alignment = TextAnchor.MiddleLeft;
                 label.fontSize = 19;
                 var cds = _me["skillCooldowns"];
-                int remain = cds != null ? cds[skill.SkillType.ToString()].AsInt : 0;
-                if (remain > 0)
+                int remain = cds != null ? Mathf.Max(0, cds[skill.SkillType.ToString()].AsInt) : 0;
+                int minLv = Screens.MinLevelForSkill(skill.SkillType);
+                if (OnlineState.Level < minLv)
+                {
+                    row.interactable = false;
+                    label.text = baseText + " · <color=#A8B4C2>Lv." + minLv + "</color>";
+                }
+                else if (remain > 0)
                 {
                     row.interactable = false;
                     _cooldownRows.Add(new CdRow { Btn = row, Label = label, BaseText = baseText, EndAt = Time.time + remain });

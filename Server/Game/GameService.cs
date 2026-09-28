@@ -35,6 +35,11 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "CONFIG_NOT_FOUND", null);
                 }
+                int minLv = Levels.MinLevelForChest(configId);
+                if (player.Level < minLv)
+                {
+                    return (false, "LEVEL_LOCKED", new { needLevel = minLv });
+                }
                 if (player.Gold < config.Price)
                 {
                     return (false, "NOT_ENOUGH_GOLD", null);
@@ -118,6 +123,11 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "BAD_SKILL", null);
                 }
+                int skillMinLv = Levels.MinLevelForSkill(skillType);
+                if (player.Level < skillMinLv)
+                {
+                    return (false, "LEVEL_LOCKED", new { needLevel = skillMinLv });
+                }
                 // 技能冷却（服务端权威，跨宝箱）：同一技能用过后需等待
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 if (player.SkillCooldowns.TryGetValue(character.SkillType, out var until) && now < until)
@@ -184,6 +194,7 @@ namespace SimpleGameServer.Game
                 }
                 player.Gold += income;
                 chest.OwnerId = 0; // 系统回收
+                Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, income, "sell_banker", chest.Uid);
@@ -209,6 +220,7 @@ namespace SimpleGameServer.Game
                 chest.State = ChestState.Finished;
                 player.Gold += income;
                 chest.OwnerId = 0;
+                Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, income, "accept_offer", chest.Uid);
@@ -564,6 +576,12 @@ namespace SimpleGameServer.Game
                     escrow = player.Escrow.Values.Sum(),
                     characterId = player.CharacterId,
                     opensTotal = Db.OpensCount(player.Id),
+                    level = player.Level,
+                    xp = player.Xp,
+                    xpNext = Levels.XpNext(player.Level, player.Xp),
+                    duelRating = player.DuelRating,
+                    seasonWeek = Db.WeekStartUtcIso(),
+                    lastSeasonReward = Db.MySeasonReward(player.Id),
                     skillCooldowns = SkillCooldownView(player),
                     featureFlags = Features.View(),
                     chests,
@@ -591,6 +609,23 @@ namespace SimpleGameServer.Game
                     name = r.name,
                     value = r.value,
                     isMe = viewer != null && r.playerId == viewer.Id,
+                }).ToList(),
+            };
+        }
+
+        /// <summary>对决天梯榜（Elo）</summary>
+        public object DuelRankList(Player viewer)
+        {
+            var rows = Db.DuelRatingBoard(20);
+            return new
+            {
+                myRating = viewer.DuelRating,
+                list = rows.Select((r, i) => new
+                {
+                    rank = i + 1,
+                    name = r.name,
+                    value = r.value,
+                    isMe = r.playerId == viewer.Id,
                 }).ToList(),
             };
         }

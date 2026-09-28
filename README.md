@@ -38,9 +38,14 @@
    一口价/到期成交（卖家抽成 5%），流拍退回；机器人参与竞价
 7. **排行榜（四榜 × 地区）**：现金总榜/现金周榜/开箱总榜/开箱周榜 × 全球榜/地区榜；
    地区来源：CDN 国家码头（CF-IPCountry/X-Country-Code，部署到 CDN 后自动生效）> 客户端上报（接 SDK 后换定位/自选）> GeoIP 扩展点（代码留 TODO）
-8. **抢宝房（即时玩法）**：多档房间配置于 `TbRushRoom`（新手房门票 100 / 豪华房 500），
+8. **抢宝房（即时玩法）**：多档房间配置于 `TbRushRoom`（新手/豪华 + **盲抢**两种各一档），
    门票入池 → 机器人补满 6 人 → 3 秒倒计时 → 30 秒实时抢 20 格（点格即得，全房广播）→ 结算入账；
+   **盲抢房金额隐藏、抢到才揭示，机器人同样不可见**（公平推理博弈，`Blind` 列配置）；
    原生 WebSocket（`/ws/rush`）双向推送；奖池 = 门票×人数×倍率（金字塔分布）
+8b. **成长与赛季**：等级 1~10（`tb_level.xlsx` 配置经验门槛），经验来源 = 开箱结算 +10 / 对决胜利 +15（平 +5）/ 抢宝参与 +3；
+   升级解锁：Lv2 窥视、Lv3 银宝箱+对赌房、Lv4 探测、Lv5 金宝箱、Lv6 保底（服务端权威裁决，客户端置灰提示）；
+   **周赛季**：后台服务每周一按上周现金周榜自动发奖（前 10 名 400/250/150/50…，直接入账 + `season_reward` 流水，state 可查）；
+   **对决天梯**：Elo 计分（K=32，初始 1000，双真人标准对局；对机器人 ±4/2 防刷），排行榜新增「对决天梯」页签
 9. **镜像对决（即时 1v1 对抗）**：入场金 100 → 3 秒倒计时 → 双方各开一个「同金额池、不同格位」的镜像宝箱，
    并行排除（对决内免费）+ 技能（沿用技能冷却，跨玩法共享；保底兜底 60% 入场金）+ 银行家报价；随时「卖给银行」锁定分数给对手施压，
    双方锁定或 120 秒超时后比分数：高分赢奖池（入场金×2 扣 5% 抽成），平局退入场金；
@@ -92,7 +97,8 @@
 | `tb_banker.xlsx` | 系统收购系数曲线（0.80→1.00） |
 | `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排…9减免 + 每技能冷却秒数 `SkillCooldownSec`） |
 | `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 5 次、镜像对决（入场金 `DuelStake`/档位 `DuelChestId`/时限 `DuelMatchSec`） |
-| `tb_feature.xlsx` | **玩法开关**：rush/auction/daily/duel 每行一个 Enabled 布尔 |
+| `tb_feature.xlsx` | **玩法开关**：rush/auction/daily/duel/potduel 每行一个 Enabled 布尔 |
+| `tb_level.xlsx` | 玩家等级：经验门槛（XpNeed）与解锁说明（UnlockText），1~10 级 |
 | `tb_item.xlsx` | 道具表（预留） |
 
 xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
@@ -188,6 +194,9 @@ python duel_courage_test.py    # 勇气加成（最后一格开箱 ×1.2）
 python duel_grace_test.py      # 断线重连宽限 + 宽限到期锁定
 python duel_pot_test.py        # 对赌房赢家通吃（两箱总价值扣 5%）
 python admin_tutorial_test.py  # 经济报表鉴权 + 教学箱一次性发放
+python levels_test.py         # 等级/经验/解锁门槛（宝箱/技能/对赌房）
+python rush_blind_test.py     # 盲抢房金额隐藏 + 抢到揭示
+python duel_rating_test.py    # 双真人 Elo 天梯 + 胜利经验
 # 经济报表（运维）
 curl -H "X-Admin-Token: dev-admin" http://127.0.0.1:5188/api/admin/economy
 ```

@@ -61,6 +61,13 @@ namespace Game.HotUpdate.ChestGame
                 tabRegionGo.GetComponent<Button>().onClick.AddListener(() => { _scope = "region"; _ = RefreshRank(root); });
             }
 
+            // 对决天梯（代码追加的第五个页签）
+            var ladderBtn = UITheme.ThemedButton(root.transform, new Vector2(560, 420), new Vector2(180, 52),
+                L10n.Get("对决天梯"), "gold", 20);
+            UITheme.SkinButton(ladderBtn, "blue");
+            ladderBtn.name = "tab_duel_ladder";
+            ladderBtn.onClick.AddListener(() => { _board = "duel_ladder"; _ = RefreshRank(root); });
+
             await RefreshRank(root);
         }
 
@@ -76,6 +83,31 @@ namespace Game.HotUpdate.ChestGame
                 img.color = active ? new Color(0.5f, 0.45f, 0.2f, 0.95f) : new Color(0.2f, 0.3f, 0.45f, 0.9f);
             }
 
+            if (_board == "duel_ladder")
+            {
+                var rl = await ApiClient.GetDuelRankAsync();
+                if (rl == null || !rl["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("获取排行失败")); return; }
+                var subtitleGo0 = root.transform.Find("subtitle");
+                if (subtitleGo0 != null) subtitleGo0.GetComponent<Text>().text = L10n.Get("对决天梯") + " · Elo · " + L10n.Get("我") + " " + rl["data"]["myRating"].AsInt;
+                var list0 = root.transform.Find("list");
+                foreach (Transform child in list0) Object.Destroy(child.gameObject);
+                float y0 = 0;
+                int rank0 = 1;
+                foreach (JSONNode rowNode in rl["data"]["list"])
+                {
+                    var line = TDUIHelper.MakeText(list0, new Vector2(0, y0), TextAnchor.MiddleLeft, 26);
+                    bool isMe = rowNode["isMe"].AsBool;
+                    line.text = "  第 " + rank0 + " 名    " + rowNode["name"].Value + "    " + rowNode["value"].AsLong;
+                    line.color = isMe ? UITheme.GoldLight : (rank0 <= 3 ? UITheme.Gold : Color.white);
+                    var rt0 = line.rectTransform;
+                    rt0.anchorMin = rt0.anchorMax = rt0.pivot = new Vector2(0.5f, 1f);
+                    TDUIHelper.SetSize(rt0, 860, 46);
+                    y0 -= 56;
+                    rank0++;
+                }
+                return;
+            }
+
             var r = await ApiClient.GetRankAsync(_board, _scope);
             if (r == null || !r["ok"].AsBool)
             {
@@ -85,7 +117,7 @@ namespace Game.HotUpdate.ChestGame
             string boardName = _board.Contains("opens") ? L10n.Get("开箱次数") : L10n.Get("金币");
             string scopeName = _scope == "region" ? L10n.Get("地区榜（") + r["data"]["myRegion"].Value + "）" : L10n.Get("全球榜");
             var subtitleGo = root.transform.Find("subtitle");
-            if (subtitleGo != null) subtitleGo.GetComponent<Text>().text = boardName + " · " + scopeName;
+            if (subtitleGo != null) subtitleGo.GetComponent<Text>().text = boardName + " · " + scopeName + SeasonSuffix();
 
             var list = root.transform.Find("list");
             foreach (Transform child in list) Object.Destroy(child.gameObject);
@@ -113,5 +145,20 @@ namespace Game.HotUpdate.ChestGame
         }
 
         // ---------------- 错误码转文案 ----------------
+
+        /// <summary>赛季信息行（当前周 + 我最近一次奖励）</summary>
+        private static string SeasonSuffix()
+        {
+            var d = OnlineState.State != null ? OnlineState.State["data"] : null;
+            if (d == null || d["seasonWeek"].IsNull) return "";
+            string week = d["seasonWeek"].Value;
+            string s = "\n<color=#9AA3B2>" + L10n.Get("赛季周") + " " + (week.Length >= 10 ? week.Substring(0, 10) : week) + "</color>";
+            var last = d["lastSeasonReward"];
+            if (last != null && !last.IsNull)
+            {
+                s += "<color=#F5D061> · " + L10n.Get("上赛季第") + " " + last["rank"].AsInt + L10n.Get("名 奖励") + " +" + last["amount"].AsLong.ToString("N0") + "</color>";
+            }
+            return s;
+        }
     }
 }

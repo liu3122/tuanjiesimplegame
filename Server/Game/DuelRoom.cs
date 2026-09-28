@@ -233,6 +233,12 @@ namespace SimpleGameServer.Game
                 var character = GameTables.Tables.TbCharacter.DataList.FirstOrDefault(c => c.SkillType == skillType);
                 if (character == null) { SendErr(pid, "BAD_SKILL"); return (false, "BAD_SKILL"); }
                 var player = _players[pid];
+                int skillMinLv = Levels.MinLevelForSkill(skillType);
+                if (player.Level < skillMinLv)
+                {
+                    SendTo(pid, new { type = "err", code = "LEVEL_LOCKED", needLevel = skillMinLv });
+                    return (false, "LEVEL_LOCKED");
+                }
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 if (player.SkillCooldowns.TryGetValue(skillType, out var until) && now < until)
                 {
@@ -407,6 +413,28 @@ namespace SimpleGameServer.Game
                 win = winner == id,
             }).OrderByDescending(b => b.score).ToList();
 
+            // 天梯 Elo + 经验（真人）：双真人标准 Elo；对机器人小分值防刷
+            var humans = ids.Where(id => id > 0).ToList();
+            if (humans.Count == 2)
+            {
+                var pa = _players[humans[0]];
+                var pb = _players[humans[1]];
+                double sa = winner == 0 ? 0.5 : (winner == pa.Id ? 1 : 0);
+                int ra = pa.DuelRating, rb = pb.DuelRating;
+                pa.DuelRating = Math.Max(100, Elo.NewRating(ra, rb, sa));
+                pb.DuelRating = Math.Max(100, Elo.NewRating(rb, ra, 1 - sa));
+            }
+            else if (humans.Count == 1)
+            {
+                var h = _players[humans[0]];
+                h.DuelRating = Math.Max(100, h.DuelRating + (winner == humans[0] ? 4 : (winner == 0 ? 0 : -2)));
+            }
+            foreach (var pid in humans)
+            {
+                Levels.AddXp(_players[pid], winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
+                Db.SavePlayer(_players[pid]);
+            }
+
             foreach (var pid in ids)
             {
                 long myDelta = potPayout(pid) - stake;
@@ -534,6 +562,10 @@ namespace SimpleGameServer.Game
         {
             lock (_gate)
             {
+                if (potMode && player.Level < Levels.PotDuelMinLevel)
+                {
+                    return (false, "LEVEL_LOCKED", null);
+                }
                 var current = potMode ? _currentPot : _current;
                 if (current != null && current.Joinable)
                 {

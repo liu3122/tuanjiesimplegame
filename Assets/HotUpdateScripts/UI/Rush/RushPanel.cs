@@ -68,11 +68,12 @@ namespace Game.HotUpdate.ChestGame
                 var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(0, y), new Vector2(1200, 320));
 
                 var name = TDUIHelper.MakeText(card.transform, new Vector2(-380, 80), TextAnchor.MiddleCenter, 40);
-                name.text = "<color=#" + c.ColorHex + ">" + c.Name + "</color>";
+                name.text = "<color=#" + c.ColorHex + ">" + c.Name + (c.Blind ? L10n.Get("（盲抢）") : "") + "</color>";
                 TDUIHelper.SetSize(name.rectTransform, 420, 70);
                 var info = TDUIHelper.MakeText(card.transform, new Vector2(-360, -30), TextAnchor.UpperLeft, 26);
                 info.color = UITheme.TextSub;
-                info.text = "门票 " + c.Ticket + " 金币\n" + c.PlayerCount + " 人同抢 · " + c.DurationSec + " 秒\n奖池约 " + poolPreview.ToString("N0");
+                info.text = "门票 " + c.Ticket + " 金币\n" + c.PlayerCount + " 人同抢 · " + c.DurationSec + " 秒\n奖池约 " + poolPreview.ToString("N0")
+                    + (c.Blind ? "\n<color=#6EC6FF>" + L10n.Get("金额隐藏，抢到才揭示") + "</color>" : "");
                 var infoRt = info.rectTransform;
                 infoRt.anchorMin = infoRt.pivot = new Vector2(0, 0.5f);
                 infoRt.anchoredPosition = new Vector2(-560, -20);

@@ -465,7 +465,13 @@ namespace Game.HotUpdate.ChestGame
                 label.alignment = TextAnchor.MiddleLeft;
                 label.fontSize = 19;
                 int remain = OnlineState.SkillCooldownRemain(skill.SkillType);
-                if (remain > 0)
+                int minLv = Screens.MinLevelForSkill(skill.SkillType);
+                if (OnlineState.Level < minLv)
+                {
+                    row.interactable = false;
+                    label.text = baseText + " · <color=#A8B4C2>Lv." + minLv + "</color>";
+                }
+                else if (remain > 0)
                 {
                     row.interactable = false;
                     _cooldownRows.Add(new CdRow { Btn = row, Label = label, BaseText = baseText, EndAt = Time.time + remain });

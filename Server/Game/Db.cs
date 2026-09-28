@@ -63,9 +63,17 @@ CREATE TABLE IF NOT EXISTS active_stake(
   player_id INTEGER NOT NULL, kind TEXT NOT NULL, ref_id INTEGER NOT NULL,
   amount INTEGER NOT NULL, created_at TEXT NOT NULL,
   PRIMARY KEY(player_id, kind, ref_id)
+);
+CREATE TABLE IF NOT EXISTS season_reward(
+  week TEXT NOT NULL, player_id INTEGER NOT NULL, rank INTEGER NOT NULL, amount INTEGER NOT NULL,
+  created_at TEXT NOT NULL, PRIMARY KEY(week, player_id)
 );");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
+            foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000" })
+            {
+                try { Exec(conn, "ALTER TABLE player ADD COLUMN " + col); } catch (Exception) { }
+            }
             try { Exec(conn, "CREATE INDEX IF NOT EXISTS idx_goldtx_reason ON gold_tx(reason, player_id, created_at)"); } catch (Exception) { }
             foreach (var col in new[] { "lucky_slots TEXT NOT NULL DEFAULT '[]'", "trap_slots TEXT NOT NULL DEFAULT '[]'",
                                         "pending_offer INTEGER", "offer_expire TEXT", "elims_since_offer INTEGER NOT NULL DEFAULT 0",
@@ -123,11 +131,12 @@ CREATE TABLE IF NOT EXISTS active_stake(
 
         public static void SavePlayer(Player p) => Try(conn =>
         {
-            Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns) VALUES($id,$n,$t,$g,$c,$e,$cd)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd",
+            Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr",
                 ("$id", p.Id), ("$n", p.Name), ("$t", p.Token as object ?? DBNull.Value),
                 ("$g", p.Gold), ("$c", p.CharacterId), ("$e", JsonSerializer.Serialize(p.Escrow, JsonOpts)),
                 ("$cd", JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts)),
+                ("$xp", p.Xp), ("$lv", p.Level), ("$dr", p.DuelRating),
                 ("$r", p.Region ?? "CN"));
         }, "SavePlayer");
 
@@ -350,6 +359,81 @@ ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", 
             return now.Date.AddDays(-diff).ToString("o");
         }
 
+        // ---------------- 赛季（周） ----------------
+
+        /// <summary>某周奖励是否已发放</summary>
+        public static bool SeasonPaid(string week)
+        {
+            var v = QueryScalar("SELECT COUNT(*) FROM season_reward WHERE week=$w", ("$w", week));
+            return v is long l && l > 0;
+        }
+
+        /// <summary>时间区间内的真人金币净流入榜（赛季奖励依据）</summary>
+        public static List<(long playerId, string name, long value)> WeekGoldBoard(string fromIso, string toIso, int limit = 10)
+        {
+            var list = new List<(long, string, long)>();
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT p.id, p.name, COALESCE(SUM(t.delta),0)
+FROM gold_tx t JOIN player p ON p.id = t.player_id
+WHERE t.created_at >= $f AND t.created_at < $to AND t.player_id > 0
+GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
+                cmd.Parameters.AddWithValue("$f", fromIso);
+                cmd.Parameters.AddWithValue("$to", toIso);
+                cmd.Parameters.AddWithValue("$lim", limit);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1), r.GetInt64(2)));
+            }
+            catch (Exception e) { _log.LogError(e, "WeekGoldBoard"); }
+            return list;
+        }
+
+        public static void RecordSeasonRewards(string week, List<(long pid, string name, int rank, long amount)> winners) =>
+            Try(conn =>
+            {
+                foreach (var w in winners)
+                {
+                    Exec(conn, "INSERT OR IGNORE INTO season_reward(week,player_id,rank,amount,created_at) VALUES($w,$p,$r,$a,$t)",
+                        ("$w", week), ("$p", w.pid), ("$r", w.rank), ("$a", w.amount), ("$t", DateTime.UtcNow.ToString("o")));
+                }
+            }, "RecordSeasonRewards");
+
+        /// <summary>我最近一次赛季奖励（无则 null）</summary>
+        public static object MySeasonReward(long playerId)
+        {
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT week,rank,amount FROM season_reward WHERE player_id=$p ORDER BY week DESC LIMIT 1";
+                cmd.Parameters.AddWithValue("$p", playerId);
+                using var r = cmd.ExecuteReader();
+                if (r.Read()) return new { week = r.GetString(0), rank = r.GetInt32(1), amount = r.GetInt64(2) };
+                return null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>对决天梯榜（Elo 降序）</summary>
+        public static List<(long playerId, string name, long value)> DuelRatingBoard(int limit = 20)
+        {
+            var list = new List<(long, string, long)>();
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id,name,duel_rating FROM player WHERE id>0 AND duel_rating > $min ORDER BY duel_rating DESC, id LIMIT $lim";
+                cmd.Parameters.AddWithValue("$min", Elo.StartRating); // 只显示打过天梯的（>1000 初始）
+                cmd.Parameters.AddWithValue("$lim", limit);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1), r.GetInt64(2)));
+            }
+            catch (Exception e) { _log.LogError(e, "DuelRatingBoard"); }
+            return list;
+        }
+
         public static List<(long playerId, string name, long value)> QueryBoard(string board, string region, int limit = 20)
         {
             string weekStart = WeekStartUtcIso();
@@ -422,7 +506,7 @@ ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", 
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -435,6 +519,9 @@ ON CONFLICT(day,player_id) DO UPDATE SET best_score=MAX(best_score,$s)", ("$d", 
                         Gold = r.GetInt64(3),
                         CharacterId = r.GetInt32(4),
                         Region = r.IsDBNull(6) ? "CN" : r.GetString(6),
+                        Xp = r.IsDBNull(8) ? 0 : r.GetInt32(8),
+                        Level = r.IsDBNull(9) ? 1 : r.GetInt32(9),
+                        DuelRating = r.IsDBNull(10) ? Elo.StartRating : r.GetInt32(10),
                     };
                     foreach (var (lotId, amount) in JsonSerializer.Deserialize<Dictionary<long, long>>(r.GetString(5), JsonOpts) ?? new Dictionary<long, long>())
                     {
