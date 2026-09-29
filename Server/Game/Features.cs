@@ -15,6 +15,7 @@ namespace SimpleGameServer.Game
         public const string Daily = "daily";
         public const string Duel = "duel";
         public const string PotDuel = "potduel";
+        public const string Ad = "ad";
 
         public static bool IsOn(string id)
         {

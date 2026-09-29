@@ -1,0 +1,29 @@
+[
+  {
+    "Id": "ad_gold",
+    "Name": "看广告领金币",
+    "Desc": "观看视频广告获得金币",
+    "DailyLimit": 5,
+    "CooldownSec": 180,
+    "RewardGold": 50,
+    "RewardChestId": 0
+  },
+  {
+    "Id": "ad_chest",
+    "Name": "看广告领宝箱",
+    "Desc": "观看视频广告免费领一个木宝箱",
+    "DailyLimit": 2,
+    "CooldownSec": 600,
+    "RewardGold": 0,
+    "RewardChestId": 1
+  },
+  {
+    "Id": "ad_cooldown",
+    "Name": "看广告清冷却",
+    "Desc": "观看视频广告清除全部技能冷却",
+    "DailyLimit": 1,
+    "CooldownSec": 600,
+    "RewardGold": 0,
+    "RewardChestId": 0
+  }
+]

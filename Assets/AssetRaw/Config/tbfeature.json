@@ -23,5 +23,10 @@
     "Id": "potduel",
     "Enabled": true,
     "Desc": "对赌房：同箱对开，赢家独得两个宝箱价值"
+  },
+  {
+    "Id": "ad",
+    "Enabled": true,
+    "Desc": "广告变现（激励视频，前期唯一变现）"
   }
 ]

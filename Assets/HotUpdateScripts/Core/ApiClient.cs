@@ -67,6 +67,9 @@ namespace Game.HotUpdate.ChestGame
 
         public static Task<JSONNode> TutorialChestAsync() => PostAsync("/api/tutorial/chest", "{}");
 
+        public static Task<JSONNode> AdRewardAsync(string placement) =>
+            PostAsync("/api/ad/reward", $"{{\"placement\":\"{placement}\"}}");
+
         public static Task<JSONNode> EliminateAsync(long chestUid, int slotIndex) =>
             PostAsync($"/api/chest/{chestUid}/eliminate", $"{{\"slotIndex\":{slotIndex}}}");
 

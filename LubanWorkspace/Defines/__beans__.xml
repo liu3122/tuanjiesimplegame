@@ -130,6 +130,23 @@
         </bean>
     </module>
 
+    <module name="ad">
+        <!-- 广告位（激励视频）：服务端权威发奖（日限/冷却/防刷）；RewardGold 与 RewardChestId 均为 0 = 清除全部技能冷却 -->
+        <bean name="Ad">
+            <var name="Id" type="string"/>
+            <var name="Name" type="string"/>
+            <var name="Desc" type="string"/>
+            <!-- 每日次数上限 -->
+            <var name="DailyLimit" type="int"/>
+            <!-- 两次使用最小间隔（秒） -->
+            <var name="CooldownSec" type="int"/>
+            <!-- 奖励金币（0=无） -->
+            <var name="RewardGold" type="int"/>
+            <!-- 奖励宝箱档位（0=无） -->
+            <var name="RewardChestId" type="int"/>
+        </bean>
+    </module>
+
     <module name="feature">
         <!-- 玩法开关：服务端拦截对应路由/WS，客户端隐藏入口；缺行 = 默认开启 -->
         <bean name="Feature">

@@ -32,10 +32,15 @@ namespace Game.HotUpdate.ChestGame
                 L10n.Get("对 决"), "gold", 24);
             duelBtn.name = "btn_duel_entry";
             duelBtn.onClick.AddListener(() => DuelPanel.ShowChooser());
+            // 福利中心（激励视频；开关关闭时隐藏）
+            var adBtn = UITheme.ThemedButton(root.transform, new Vector2(460, -50), new Vector2(170, 56),
+                L10n.Get("福 利"), "green", 24);
+            adBtn.name = "btn_ad_entry";
+            adBtn.onClick.AddListener(() => ShowAdCenter());
             UIRoot.Instance.RefreshTop();
 
-            ApplyFeatureGates(root, duelBtn.gameObject);
-            _ = RefreshFeatureGates(root, duelBtn.gameObject);
+            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject);
+            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject);
             _ = MaybeShowTutorial();
         }
 
@@ -74,8 +79,8 @@ namespace Game.HotUpdate.ChestGame
             });
         }
 
-        /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决按钮）</summary>
-        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn)
+        /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决/福利按钮）</summary>
+        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null)
         {
             if (root == null) return;
             if (OnlineState.State == null) return; // 无快照时默认显示
@@ -83,11 +88,70 @@ namespace Game.HotUpdate.ChestGame
             SetCardActive(root, "card_daily", OnlineState.FeatureOn("daily"));
             SetCardActive(root, "card_auction", OnlineState.FeatureOn("auction"));
             if (duelBtn != null) duelBtn.SetActive(OnlineState.FeatureOn("duel") || OnlineState.FeatureOn("potduel"));
+            if (adBtn != null) adBtn.SetActive(OnlineState.FeatureOn("ad"));
         }
 
-        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn)
+        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null)
         {
-            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn);
+            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn);
+        }
+
+        /// <summary>福利中心：激励视频广告位列表（配置 + 服务端频控状态）</summary>
+        private static async void ShowAdCenter()
+        {
+            if (!OnlineState.FeatureOn("ad"))
+            {
+                UIRoot.ToastStatic(L10n.Get("该玩法已关闭"));
+                return;
+            }
+            await OnlineState.Refresh();
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(820, 640));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
+            title.text = "<color=#F5D061>" + L10n.Get("福利中心") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 780, 50);
+
+            float y = -110;
+            foreach (var ad in GameConfig.Tables.TbAd.DataList)
+            {
+                var cfg = ad;
+                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(740, 88),
+                    "<color=#4DD0A5>" + cfg.Name + "</color> · " + cfg.Desc, "gold", 22);
+                UITheme.SkinButton(row, "green");
+                var label = row.GetComponentInChildren<Text>();
+                label.alignment = TextAnchor.MiddleLeft;
+                label.fontSize = 20;
+                var state = OnlineState.State != null ? OnlineState.State["data"]["ads"][cfg.Id] : null;
+                int remain = state != null ? state["remainToday"].AsInt : 0;
+                int cd = state != null ? state["cooldownSec"].AsInt : 0;
+                if (remain <= 0 || cd > 0)
+                {
+                    row.interactable = false;
+                    label.text = cfg.Name + " · " + (remain <= 0 ? L10n.Get("今日已达上限") : L10n.Get("冷却中") + " " + cd + "s");
+                }
+                row.onClick.AddListener(() =>
+                {
+                    Object.Destroy(panel);
+                    AdBridge.Show(cfg.Id, cfg.Name, async () =>
+                    {
+                        var r = await ApiClient.AdRewardAsync(cfg.Id);
+                        if (r == null || !r["ok"].AsBool)
+                        {
+                            UIRoot.ToastStatic(L10n.Get("奖励失败：") + Screens.ErrText(r));
+                            return;
+                        }
+                        UIRoot.ToastStatic(L10n.Get("广告奖励：") + r["data"]["message"].Value);
+                        UIRoot.Instance.RefreshTop();
+                        await OnlineState.Refresh();
+                    });
+                });
+                y -= 100;
+            }
+
+            var close = UITheme.ThemedButton(panel.transform, new Vector2(0, y + 20), new Vector2(220, 54), L10n.Get("关 闭"), "red", 24);
+            close.onClick.AddListener(() => Object.Destroy(panel));
         }
 
         private static void SetCardActive(GameObject root, string node, bool on)

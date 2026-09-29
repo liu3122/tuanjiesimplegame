@@ -17,6 +17,8 @@
     <table name="TbText" value="l10n.TextItem" index="Key" input="tb_text.xlsx"/>
     <!-- 玩法开关表 -->
     <table name="TbFeature" value="feature.Feature" index="Id" input="tb_feature.xlsx"/>
-    <!-- 全局配置（单例表） -->
+    <!-- 广告位配置 -->
+    <table name="TbAd" value="ad.Ad" index="Id" input="tb_ad.xlsx"/>
+        <!-- 全局配置（单例表） -->
     <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
 </module>

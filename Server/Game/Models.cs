@@ -27,6 +27,13 @@ namespace SimpleGameServer.Game
         public int Opens { get; set; }
         /// <summary>最近赛季奖励缓存（state 下发用）</summary>
         public object LastSeasonReward { get; set; }
+        // ---- 广告变现（激励视频）：服务端权威频控 ----
+        /// <summary>广告位 → 上次使用 Unix 秒</summary>
+        public Dictionary<string, long> AdLastUse { get; } = new();
+        /// <summary>广告位 → 当日已用次数</summary>
+        public Dictionary<string, int> AdDailyCount { get; } = new();
+        /// <summary>广告计数日（yyyy-MM-dd，跨日清零）</summary>
+        public string AdDailyDay { get; set; } = "";
         /// <summary>细粒度并发锁。全局加锁顺序约定：Room/Lot → Chest → Player（Player 内多锁按 Id 排序）</summary>
         public readonly object Sync = new();
     }

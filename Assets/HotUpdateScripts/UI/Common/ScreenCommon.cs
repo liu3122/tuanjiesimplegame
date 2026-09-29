@@ -23,6 +23,9 @@ namespace Game.HotUpdate.ChestGame
             if (err == "ERR_COOLDOWN") return L10n.Get("技能冷却中，还剩") + " " + r["data"]["remainSec"].AsInt + "s";
             if (err == "FEATURE_DISABLED") return L10n.Get("该玩法已关闭");
             if (err == "LEVEL_LOCKED") return L10n.Get("等级不足，需要 Lv.") + r["data"]["needLevel"].AsInt;
+            if (err == "AD_LIMIT") return L10n.Get("今日广告次数已用完");
+            if (err == "AD_COOLDOWN") return L10n.Get("广告冷却中，还剩") + " " + r["data"]["remainSec"].AsInt + "s";
+            if (err == "AD_NO_COOLDOWN") return L10n.Get("当前没有技能冷却");
             if (err == "ALREADY_TOP") return L10n.Get("你已是最高出价");
             if (err == "OWN_LOT") return L10n.Get("不能竞拍自己的宝箱");
             if (err == "AUCTION_ENDED") return L10n.Get("拍卖已结束");

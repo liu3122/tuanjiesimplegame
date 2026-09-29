@@ -115,7 +115,8 @@ CREATE TABLE IF NOT EXISTS season_reward(
 );");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
-            foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000" })
+            foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
+                                        "ad_state TEXT" })
             {
                 try { Exec(conn, "ALTER TABLE player ADD COLUMN " + col); } catch (Exception) { }
             }
@@ -183,11 +184,18 @@ CREATE TABLE IF NOT EXISTS season_reward(
             string token = p.Token, region = p.Region ?? "CN";
             string escrow = JsonSerializer.Serialize(p.Escrow, JsonOpts);
             string cds = JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr",
+            string adState = JsonSerializer.Serialize(new AdStateDto
+            {
+                day = p.AdDailyDay,
+                last = p.AdLastUse.ToDictionary(kv => kv.Key, kv => kv.Value),
+                count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
+            }, JsonOpts);
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
                 ("$g", gold), ("$c", cid), ("$e", escrow),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
+                ("$ad", adState as object ?? DBNull.Value),
                 ("$r", region)));
         }
 
@@ -631,7 +639,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -651,6 +659,16 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                     foreach (var (lotId, amount) in JsonSerializer.Deserialize<Dictionary<long, long>>(r.GetString(5), JsonOpts) ?? new Dictionary<long, long>())
                     {
                         p.Escrow[lotId] = amount;
+                    }
+                    if (!r.IsDBNull(11))
+                    {
+                        var ad = JsonSerializer.Deserialize<AdStateDto>(r.GetString(11), JsonOpts);
+                        if (ad != null)
+                        {
+                            p.AdDailyDay = ad.day ?? "";
+                            foreach (var kv in ad.last ?? new Dictionary<string, long>()) p.AdLastUse[kv.Key] = kv.Value;
+                            foreach (var kv in ad.count ?? new Dictionary<string, int>()) p.AdDailyCount[kv.Key] = kv.Value;
+                        }
                     }
                     if (!r.IsDBNull(7))
                     {
@@ -719,6 +737,17 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
 
             _log.LogInformation("恢复完成：玩家 {P}，宝箱 {C}，进行中拍品 {L}", store.Players.Count, store.Chests.Count, store.Lots.Count);
         }
+    }
+}
+
+namespace SimpleGameServer.Game
+{
+    /// <summary>广告状态持久化 DTO（player.ad_state JSON 列）</summary>
+    public class AdStateDto
+    {
+        public string day { get; set; }
+        public Dictionary<string, long> last { get; set; }
+        public Dictionary<string, int> count { get; set; }
     }
 }
 

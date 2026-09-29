@@ -23,6 +23,7 @@ public partial class Tables
     public TbLevel TbLevel {get; }
     public TbText TbText {get; }
     public TbFeature TbFeature {get; }
+    public TbAd TbAd {get; }
     public TbGlobal TbGlobal {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
@@ -36,6 +37,7 @@ public partial class Tables
         TbLevel = new TbLevel(loader("tblevel"));
         TbText = new TbText(loader("tbtext"));
         TbFeature = new TbFeature(loader("tbfeature"));
+        TbAd = new TbAd(loader("tbad"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
         ResolveRef();
     }
@@ -51,6 +53,7 @@ public partial class Tables
         TbLevel.ResolveRef(this);
         TbText.ResolveRef(this);
         TbFeature.ResolveRef(this);
+        TbAd.ResolveRef(this);
         TbGlobal.ResolveRef(this);
     }
 }

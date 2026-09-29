@@ -320,6 +320,85 @@ namespace SimpleGameServer.Game
             }
         }
 
+        // ---------------- 广告变现（激励视频，服务端权威频控） ----------------
+
+        /// <summary>跨日清零广告计数</summary>
+        private static void RollAdDay(Player p)
+        {
+            string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            if (p.AdDailyDay != today)
+            {
+                p.AdDailyDay = today;
+                p.AdDailyCount.Clear();
+            }
+        }
+
+        /// <summary>观看完成发奖：校验开关/日限/冷却 → 金币或宝箱或清技能冷却</summary>
+        public (bool ok, string err, object data) AdReward(Player player, string placementId)
+        {
+            lock (player.Sync)
+            {
+                if (!Features.IsOn(Features.Ad)) return (false, "FEATURE_DISABLED", null);
+                var cfg = GameTables.Tables.TbAd.GetOrDefault(placementId);
+                if (cfg == null) return (false, "BAD_PLACEMENT", null);
+                RollAdDay(player);
+                if (player.AdDailyCount.GetValueOrDefault(placementId) >= cfg.DailyLimit)
+                {
+                    return (false, "AD_LIMIT", new { remainToday = 0 });
+                }
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                if (player.AdLastUse.TryGetValue(placementId, out var last) && now - last < cfg.CooldownSec)
+                {
+                    return (false, "AD_COOLDOWN", new { remainSec = (int)(cfg.CooldownSec - (now - last)) });
+                }
+
+                string message;
+                if (cfg.RewardGold == 0 && cfg.RewardChestId == 0)
+                {
+                    // 清除全部技能冷却（ad_cooldown）
+                    if (player.SkillCooldowns.Count == 0) return (false, "AD_NO_COOLDOWN", null);
+                    player.SkillCooldowns.Clear();
+                    message = "技能冷却已全部清除";
+                }
+                else if (cfg.RewardChestId > 0)
+                {
+                    int minLv = Levels.MinLevelForChest(cfg.RewardChestId);
+                    if (player.Level < minLv) return (false, "LEVEL_LOCKED", new { needLevel = minLv });
+                    var config = GameTables.Tables.TbChest[cfg.RewardChestId];
+                    var chest = new Chest(_store.AllocChestUid(), config, _store.Rng) { OwnerId = player.Id, PaidPrice = 0 };
+                    _store.Chests[chest.Uid] = chest;
+                    Db.SaveChest(chest);
+                    Db.AddGoldTx(player.Id, 0, "ad_chest", chest.Uid);
+                    message = "获得 " + config.Name;
+                }
+                else
+                {
+                    player.Gold += cfg.RewardGold;
+                    Db.AddGoldTx(player.Id, cfg.RewardGold, "ad_reward", 0);
+                    message = "获得 " + cfg.RewardGold + " 金币";
+                }
+                player.AdLastUse[placementId] = now;
+                player.AdDailyCount[placementId] = player.AdDailyCount.GetValueOrDefault(placementId) + 1;
+                Db.SavePlayer(player);
+                return (true, null, new { message, gold = player.Gold, ads = AdStatusView(player) });
+            }
+        }
+
+        /// <summary>广告位状态视图：今日剩余次数 + 冷却秒（需持 player.Sync）</summary>
+        internal static object AdStatusView(Player p)
+        {
+            RollAdDay(p);
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            return GameTables.Tables.TbAd.DataList.ToDictionary(
+                c => c.Id,
+                c => new
+                {
+                    remainToday = Math.Max(0, c.DailyLimit - p.AdDailyCount.GetValueOrDefault(c.Id)),
+                    cooldownSec = p.AdLastUse.TryGetValue(c.Id, out var last)
+                        ? Math.Max(0, (int)(c.CooldownSec - (now - last))) : 0,
+                });
+        }
+
         public object DailyRank(Player viewer)
         {
             {
@@ -648,6 +727,7 @@ namespace SimpleGameServer.Game
                 lastSeasonReward,
                 skillCooldowns = cooldowns,
                 featureFlags = Features.View(),
+                ads = AdStatusView(player),
                 chests,
             };
         }
