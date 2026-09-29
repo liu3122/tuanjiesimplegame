@@ -1,0 +1,58 @@
+[
+  {
+    "Id": "q_chest2",
+    "Name": "今日开箱 2 次",
+    "Type": "chest",
+    "Target": 2,
+    "RewardGold": 60,
+    "RewardXp": 20
+  },
+  {
+    "Id": "q_elim15",
+    "Name": "排除 15 个格子",
+    "Type": "eliminate",
+    "Target": 15,
+    "RewardGold": 40,
+    "RewardXp": 15
+  },
+  {
+    "Id": "q_duel1",
+    "Name": "完成 1 场对决",
+    "Type": "duel",
+    "Target": 1,
+    "RewardGold": 80,
+    "RewardXp": 25
+  },
+  {
+    "Id": "q_rush1",
+    "Name": "参与 1 次抢宝",
+    "Type": "rush",
+    "Target": 1,
+    "RewardGold": 40,
+    "RewardXp": 15
+  },
+  {
+    "Id": "q_ad1",
+    "Name": "观看 1 次广告",
+    "Type": "ad",
+    "Target": 1,
+    "RewardGold": 30,
+    "RewardXp": 10
+  },
+  {
+    "Id": "q_auction1",
+    "Name": "拍卖行出价 1 次",
+    "Type": "auction",
+    "Target": 1,
+    "RewardGold": 50,
+    "RewardXp": 15
+  },
+  {
+    "Id": "q_duelwin",
+    "Name": "赢得 1 场对决",
+    "Type": "duelwin",
+    "Target": 1,
+    "RewardGold": 100,
+    "RewardXp": 30
+  }
+]

@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS season_reward(
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
             foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
-                                        "ad_state TEXT" })
+                                        "ad_state TEXT", "quest_state TEXT" })
             {
                 try { Exec(conn, "ALTER TABLE player ADD COLUMN " + col); } catch (Exception) { }
             }
@@ -184,18 +184,25 @@ CREATE TABLE IF NOT EXISTS season_reward(
             string token = p.Token, region = p.Region ?? "CN";
             string escrow = JsonSerializer.Serialize(p.Escrow, JsonOpts);
             string cds = JsonSerializer.Serialize(p.SkillCooldowns, JsonOpts);
+            string questState = JsonSerializer.Serialize(new QuestStateDto
+            {
+                day = p.QuestDay,
+                progress = p.QuestProgress.ToDictionary(kv => kv.Key, kv => kv.Value),
+                claimed = p.QuestClaimed.ToList(),
+            }, JsonOpts);
             string adState = JsonSerializer.Serialize(new AdStateDto
             {
                 day = p.AdDailyDay,
                 last = p.AdLastUse.ToDictionary(kv => kv.Key, kv => kv.Value),
                 count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad",
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
                 ("$g", gold), ("$c", cid), ("$e", escrow),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
                 ("$ad", adState as object ?? DBNull.Value),
+                ("$qs", questState as object ?? DBNull.Value),
                 ("$r", region)));
         }
 
@@ -639,7 +646,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -668,6 +675,16 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                             p.AdDailyDay = ad.day ?? "";
                             foreach (var kv in ad.last ?? new Dictionary<string, long>()) p.AdLastUse[kv.Key] = kv.Value;
                             foreach (var kv in ad.count ?? new Dictionary<string, int>()) p.AdDailyCount[kv.Key] = kv.Value;
+                        }
+                    }
+                    if (!r.IsDBNull(12))
+                    {
+                        var qs = JsonSerializer.Deserialize<QuestStateDto>(r.GetString(12), JsonOpts);
+                        if (qs != null)
+                        {
+                            p.QuestDay = qs.day ?? "";
+                            foreach (var kv in qs.progress ?? new Dictionary<string, int>()) p.QuestProgress[kv.Key] = kv.Value;
+                            foreach (var id in qs.claimed ?? new List<string>()) p.QuestClaimed.Add(id);
                         }
                     }
                     if (!r.IsDBNull(7))
@@ -748,6 +765,17 @@ namespace SimpleGameServer.Game
         public string day { get; set; }
         public Dictionary<string, long> last { get; set; }
         public Dictionary<string, int> count { get; set; }
+    }
+}
+
+namespace SimpleGameServer.Game
+{
+    /// <summary>每日任务状态持久化 DTO（player.quest_state JSON 列）</summary>
+    public class QuestStateDto
+    {
+        public string day { get; set; }
+        public Dictionary<string, int> progress { get; set; }
+        public List<string> claimed { get; set; }
     }
 }
 

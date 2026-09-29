@@ -19,6 +19,8 @@
     <table name="TbFeature" value="feature.Feature" index="Id" input="tb_feature.xlsx"/>
     <!-- 广告位配置 -->
     <table name="TbAd" value="ad.Ad" index="Id" input="tb_ad.xlsx"/>
+        <!-- 每日任务池 -->
+    <table name="TbQuest" value="quest.Quest" index="Id" input="tb_quest.xlsx"/>
         <!-- 全局配置（单例表） -->
     <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
 </module>

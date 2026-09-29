@@ -453,6 +453,8 @@ namespace SimpleGameServer.Game
                 lock (p.Sync)
                 {
                     Levels.AddXp(p, winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
+                    Quests.Progress(p, "duel");
+                    if (pid == winner) Quests.Progress(p, "duelwin");
                     Db.SavePlayer(p);
                 }
             }

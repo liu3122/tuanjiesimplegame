@@ -59,11 +59,15 @@
     入口：大厅「对决」→ 模式选择；独立开关 `potduel`；流水 reason `potduel_win`
 11. **新手教学箱**：0 次开箱的新玩家登录后自动弹「领取教学宝箱」（固定种子免费木箱，一次），
     开箱界面三步横幅教学（排除与期望 → 费用与落袋 → 报价抉择），结算即毕业（`POST /api/tutorial/chest`）
-12. **广告变现（前期唯一变现，无内购）**：激励视频三广告位配置于 `tb_ad.xlsx`
+12. **每日任务（D1 留存核心）**：任务池配置于 `tb_quest.xlsx`（开箱/排除/对决/对决胜利/抢宝/广告/拍卖出价 7 种），
+    **按天窗口轮换取 3 个**（全服同任务、确定性、重启不变），进度内存权威计数（事件埋点，无需 SQL）；
+    领奖 `POST /api/quest/claim`（流水 `quest_reward`）；**看广告双倍领取**（每日 3 次，复用广告频控记账，与广告层打通）；
+    状态随 `/api/state` 下发；入口：大厅「任务」按钮；开关 `quest`
+14. **广告变现（前期唯一变现，无内购）**：激励视频三广告位配置于 `tb_ad.xlsx`
     （领金币 50×5 次/日、免费木箱 ×2 次/日、清全部技能冷却 ×1 次/日），频控全部服务端权威（日限+冷却+防重放），
     流水 reason `ad_reward`/`ad_chest`（经济报表可单独监控广告水龙头）；客户端 `AdBridge` 接口层
     （开发模式即插即用，接穿山甲/优量汇/AdMob 时实现 `IAdProvider` 并 SetProvider）；入口：大厅「福利」按钮；开关 `ad`
-13. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
+15. **分享**：`ShareBridge`（接口层）+ 默认剪贴板实现；服务端 `/api/share/content` 生成文案、`/api/share/report` 上报；
    接微信/抖音 SDK：实现 `IShareProvider` 并启动时 `ShareBridge.SetProvider(...)` 即可
 
 > **玩法开关（tb_feature.xlsx）**：每个玩法一行（rush/auction/daily/duel/potduel），`Enabled=false` 时服务端拦截
@@ -106,8 +110,9 @@
 | `tb_banker.xlsx` | 系统收购系数曲线（0.80→1.00） |
 | `tb_character.xlsx` | 角色与技能（SkillType: 1洞察/2抬价/3免排…9减免 + 每技能冷却秒数 `SkillCooldownSec`） |
 | `tb_global.xlsx` | 初始金币 2000、免排 5 次、排除费、拍卖时长 60s、加价 5%、抽成 5%、宝箱技能额度 5 次、镜像对决（入场金 `DuelStake`/档位 `DuelChestId`/时限 `DuelMatchSec`） |
-| `tb_feature.xlsx` | **玩法开关**：rush/auction/daily/duel/potduel/ad 每行一个 Enabled 布尔 |
+| `tb_feature.xlsx` | **玩法开关**：rush/auction/daily/duel/potduel/ad/quest 每行一个 Enabled 布尔 |
 | `tb_ad.xlsx` | 广告位：日限/冷却/奖励（金币或宝箱档位；均为 0 = 清技能冷却） |
+| `tb_quest.xlsx` | 每日任务池：事件类型/目标/奖励（按天窗口轮换取 3 个） |
 | `tb_level.xlsx` | 玩家等级：经验门槛（XpNeed）与解锁说明（UnlockText），1~10 级 |
 | `tb_item.xlsx` | 道具表（预留） |
 
@@ -221,6 +226,7 @@ python duel_grace_test.py      # 断线重连宽限 + 宽限到期锁定
 python duel_pot_test.py        # 对赌房赢家通吃（两箱总价值扣 5%）
 python admin_tutorial_test.py  # 经济报表鉴权 + 教学箱一次性发放
 python ad_test.py            # 广告发奖/日限/冷却/清冷却/无效广告位
+python quest_test.py         # 每日任务轮换/进度/领取/双倍
 python levels_test.py         # 等级/经验/解锁门槛（宝箱/技能/对赌房）
 python rush_blind_test.py     # 盲抢房金额隐藏 + 抢到揭示
 python duel_rating_test.py    # 双真人 Elo 天梯 + 胜利经验

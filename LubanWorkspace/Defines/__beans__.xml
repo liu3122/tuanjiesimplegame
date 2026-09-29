@@ -147,6 +147,19 @@
         </bean>
     </module>
 
+    <module name="quest">
+        <!-- 每日任务池：按天轮换取 3 个（全服同任务）；Type 对应事件埋点，进度服务端内存权威 -->
+        <bean name="Quest">
+            <var name="Id" type="string"/>
+            <var name="Name" type="string"/>
+            <!-- 事件类型：chest 开箱结算 / eliminate 排除 / duel 对决 / duelwin 对决胜利 / rush 抢宝 / ad 广告 / auction 拍卖出价 -->
+            <var name="Type" type="string"/>
+            <var name="Target" type="int"/>
+            <var name="RewardGold" type="int"/>
+            <var name="RewardXp" type="int"/>
+        </bean>
+    </module>
+
     <module name="feature">
         <!-- 玩法开关：服务端拦截对应路由/WS，客户端隐藏入口；缺行 = 默认开启 -->
         <bean name="Feature">

@@ -24,6 +24,7 @@ public partial class Tables
     public TbText TbText {get; }
     public TbFeature TbFeature {get; }
     public TbAd TbAd {get; }
+    public TbQuest TbQuest {get; }
     public TbGlobal TbGlobal {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
@@ -38,6 +39,7 @@ public partial class Tables
         TbText = new TbText(loader("tbtext"));
         TbFeature = new TbFeature(loader("tbfeature"));
         TbAd = new TbAd(loader("tbad"));
+        TbQuest = new TbQuest(loader("tbquest"));
         TbGlobal = new TbGlobal(loader("tbglobal"));
         ResolveRef();
     }
@@ -54,6 +56,7 @@ public partial class Tables
         TbText.ResolveRef(this);
         TbFeature.ResolveRef(this);
         TbAd.ResolveRef(this);
+        TbQuest.ResolveRef(this);
         TbGlobal.ResolveRef(this);
     }
 }

@@ -28,5 +28,10 @@
     "Id": "ad",
     "Enabled": true,
     "Desc": "广告变现（激励视频，前期唯一变现）"
+  },
+  {
+    "Id": "quest",
+    "Enabled": true,
+    "Desc": "每日任务（轮换 3 个，含广告双倍领取）"
   }
 ]

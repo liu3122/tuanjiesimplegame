@@ -231,6 +231,7 @@ namespace SimpleGameServer.Game
                 lock (p.Sync)
                 {
                     Levels.AddXp(p, Levels.XpRushJoin);
+                    Quests.Progress(p, "rush");
                     if (earn > 0) p.Gold += earn;
                     Db.SavePlayer(p);
                 }

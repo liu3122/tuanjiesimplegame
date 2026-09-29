@@ -34,6 +34,13 @@ namespace SimpleGameServer.Game
         public Dictionary<string, int> AdDailyCount { get; } = new();
         /// <summary>广告计数日（yyyy-MM-dd，跨日清零）</summary>
         public string AdDailyDay { get; set; } = "";
+        // ---- 每日任务（内存权威进度，跨日清零） ----
+        /// <summary>任务类型 → 当日进度</summary>
+        public Dictionary<string, int> QuestProgress { get; } = new();
+        /// <summary>当日已领取的任务 Id</summary>
+        public HashSet<string> QuestClaimed { get; } = new();
+        /// <summary>任务计数日（yyyy-MM-dd）</summary>
+        public string QuestDay { get; set; } = "";
         /// <summary>细粒度并发锁。全局加锁顺序约定：Room/Lot → Chest → Player（Player 内多锁按 Id 排序）</summary>
         public readonly object Sync = new();
     }

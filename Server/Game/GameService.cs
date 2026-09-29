@@ -83,7 +83,8 @@ namespace SimpleGameServer.Game
                 string specialMsg = null;
                 lock (player.Sync)
                 {
-                    player.Gold -= cost; // 成功后才扣费（失败不扣，修复旧版先扣后退的窗口）
+                    player.Gold -= cost;
+                    Quests.Progress(player, "eliminate");
                     if (special > 0)
                     {
                         player.Gold += special;
@@ -207,7 +208,8 @@ namespace SimpleGameServer.Game
                 lock (player.Sync)
                 {
                     player.Gold += income;
-                    Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                    Levels.AddXp(player, Levels.XpChestSettle);
+                    Quests.Progress(player, "chest");
                     player.Opens++;
                 }
                 Db.SaveChest(chest);
@@ -237,7 +239,8 @@ namespace SimpleGameServer.Game
                 lock (player.Sync)
                 {
                     player.Gold += income;
-                    Levels.AddXp(player, Levels.XpChestSettle); // 开箱结算经验
+                    Levels.AddXp(player, Levels.XpChestSettle);
+                    Quests.Progress(player, "chest");
                     player.Opens++;
                 }
                 Db.SaveChest(chest);
@@ -379,9 +382,61 @@ namespace SimpleGameServer.Game
                 }
                 player.AdLastUse[placementId] = now;
                 player.AdDailyCount[placementId] = player.AdDailyCount.GetValueOrDefault(placementId) + 1;
+                Quests.Progress(player, "ad");
                 Db.SavePlayer(player);
                 return (true, null, new { message, gold = player.Gold, ads = AdStatusView(player) });
             }
+        }
+
+        /// <summary>领取任务奖励（double=true：先看完广告再调，双倍奖励受广告日限约束）</summary>
+        public (bool ok, string err, object data) ClaimQuest(Player player, string questId, bool doubleReward)
+        {
+            lock (player.Sync)
+            {
+                if (!Features.IsOn(Features.Quest)) return (false, "FEATURE_DISABLED", null);
+                Quests.RollDay(player);
+                var quest = Quests.DailyQuests().FirstOrDefault(q => q.Id == questId);
+                if (quest == null) return (false, "QUEST_INVALID", null);
+                if (player.QuestClaimed.Contains(questId)) return (false, "QUEST_CLAIMED", null);
+                if (player.QuestProgress.GetValueOrDefault(quest.Type) < quest.Target) return (false, "QUEST_NOT_READY", null);
+
+                bool doubled = false;
+                if (doubleReward)
+                {
+                    if (!Features.IsOn(Features.Ad)) return (false, "FEATURE_DISABLED", null);
+                    RollAdDay(player);
+                    int used = player.AdDailyCount.GetValueOrDefault(Quests.DoubleAdPlacement);
+                    if (used >= Quests.DoubleAdDailyLimit) return (false, "AD_LIMIT", null);
+                    player.AdDailyCount[Quests.DoubleAdPlacement] = used + 1;
+                    player.AdLastUse[Quests.DoubleAdPlacement] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    doubled = true;
+                }
+                int gold = quest.RewardGold * (doubled ? 2 : 1);
+                int xp = quest.RewardXp * (doubled ? 2 : 1);
+                player.Gold += gold;
+                Levels.AddXp(player, xp);
+                player.QuestClaimed.Add(questId);
+                Db.AddGoldTx(player.Id, gold, "quest_reward", 0);
+                Db.SavePlayer(player);
+                return (true, null, new { gold, xp, message = "任务完成：+" + gold + " 金币 +" + xp + " 经验" + (doubled ? "（广告双倍）" : ""), quests = QuestView(player) });
+            }
+        }
+
+        /// <summary>今日任务视图（需持 player.Sync）</summary>
+        internal static List<object> QuestView(Player p)
+        {
+            Quests.RollDay(p);
+            return Quests.DailyQuests().Select(q => new
+            {
+                id = q.Id,
+                name = q.Name,
+                type = q.Type,
+                progress = Math.Min(p.QuestProgress.GetValueOrDefault(q.Type), q.Target),
+                target = q.Target,
+                rewardGold = q.RewardGold,
+                rewardXp = q.RewardXp,
+                claimed = p.QuestClaimed.Contains(q.Id),
+            }).Cast<object>().ToList();
         }
 
         /// <summary>广告位状态视图：今日剩余次数 + 冷却秒（需持 player.Sync）</summary>
@@ -489,6 +544,7 @@ namespace SimpleGameServer.Game
                             player.Escrow.Remove(lot.LotId);
                             player.Gold -= next;
                             player.Escrow[lot.LotId] = next;
+                            Quests.Progress(player, "auction");
                         }
                         else
                         {
@@ -661,6 +717,7 @@ namespace SimpleGameServer.Game
         {
             long gold; long escrowSum; int characterId, level, xp, xpNext, duelRating, opens;
             Dictionary<int, int> cooldowns; object lastSeasonReward;
+            List<object> questView;
             lock (player.Sync)
             {
                 gold = player.Gold;
@@ -670,6 +727,7 @@ namespace SimpleGameServer.Game
                 duelRating = player.DuelRating; opens = player.Opens;
                 cooldowns = SkillCooldownView(player);
                 lastSeasonReward = player.LastSeasonReward;
+                questView = QuestView(player);
             }
 
             var chests = _store.Chests.Values
@@ -728,6 +786,7 @@ namespace SimpleGameServer.Game
                 skillCooldowns = cooldowns,
                 featureFlags = Features.View(),
                 ads = AdStatusView(player),
+                quests = questView,
                 chests,
             };
         }

@@ -89,6 +89,14 @@ app.MapPost("/api/tutorial/chest", (HttpRequest http, GameService svc) =>
 });
 
 // 广告发奖（激励视频：客户端 SDK 播放完成回调后调用；频控在服务端）
+app.MapPost("/api/quest/claim", (QuestReq req, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.ClaimQuest(p, req?.QuestId, req?.Double == true);
+    return Results.Json(new { ok, error = err, data });
+});
+
 app.MapPost("/api/ad/reward", (AdReq req, HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
@@ -368,6 +376,7 @@ public record ShareReq(string Channel, string ContentId = "");
 public record RushJoinReq(int RoomId);
 public record DuelJoinReq(string Mode = "stake");
 public record AdReq(string Placement);
+public record QuestReq(string QuestId, bool Double = false);
 public record CharacterReq(int CharacterId);
 public record BuyReq(int ConfigId);
 public record EliminateReq(int SlotIndex);
