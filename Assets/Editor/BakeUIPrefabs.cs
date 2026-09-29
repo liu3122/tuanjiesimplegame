@@ -139,6 +139,13 @@ public static class BakeUIPrefabs
     [MenuItem("Build/UI/Bake UI Prefabs", priority = 200)]
     public static void BakeAll()
     {
+        // 防误覆盖：手摆 prefab 之后此菜单会整体重置 UI，必须显式确认
+        if (!EditorUtility.DisplayDialog("重新烘焙全部 UI Prefab",
+                "将用代码默认布局覆盖 AssetRaw/Prefab/UI 下全部 prefab。\n\n如果已经手摆过 prefab，这会丢掉全部手工修改！\n（手摆流程请改用 Build/UI/Validate UI Prefabs 校验）",
+                "覆盖烘焙", "取消"))
+        {
+            return;
+        }
         Directory.CreateDirectory(OutDir);
         BakeLogin();
         BakeMain();

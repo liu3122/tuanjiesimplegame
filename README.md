@@ -130,6 +130,17 @@
 
 xlsx 约定：第 1 行字段名（A 列 `##` 勿动）、第 3 行起数据；列表用 `|` 分隔；枚举填名称；引用错误生成时即报错。
 
+## UI Prefab 工作流（烘焙 → 手摆的过渡护栏）
+
+- **代码契约**：prefab 与热更代码的唯一契约是**节点路径 + 组件类型**（`UIManager.Find` 的键）；
+  权威表在 `Assets/Editor/ValidateUIPrefabs.cs`
+- **校验**：菜单 `Build/UI/Validate UI Prefabs` —— 逐 prefab 校验契约节点/组件，缺失即 FAIL；
+  并反扫源码 Find 字面量，契约表未收录的新键会警告（防表过期）
+- **契约文档**：菜单 `Build/UI/Export UI Contract` —— 导出 `Docs/UIContract.md`（手摆对账单）
+- **防误覆盖**：`Build/UI/Bake UI Prefabs` 已加确认弹窗——手摆过的 prefab 会被烘焙整体重置，慎用
+- **手摆纪律**：保留节点名/父子结构（装饰节点随意加）；静态文本写中文原文（运行时 L10n 按中文 Key 自动翻译）；
+  改完跑校验 + 重打 YooAsset 包
+
 ## 上线换库（SQLite → MySQL，老数据完整平移）
 
 `Server/migrate_to_mysql.py`（迁移 + 对账一体，源库只读，绝不修改；simplegame.db 原文件即回滚保险）：
