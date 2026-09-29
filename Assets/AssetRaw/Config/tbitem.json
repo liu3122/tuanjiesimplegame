@@ -1,42 +1,38 @@
 [
   {
-    "Id": 1001,
-    "Name": "新手木剑",
-    "Desc": "村口铁匠铺的量产货",
-    "Quality": 0,
-    "Price": 10,
-    "MaxStack": 1
-  },
-  {
-    "Id": 1002,
-    "Name": "旅行者披风",
-    "Desc": "略带尘土的粗布披风",
-    "Quality": 1,
-    "Price": 120,
-    "MaxStack": 1
-  },
-  {
-    "Id": 1003,
-    "Name": "回复药水(小)",
-    "Desc": "恢复 50 点生命值",
+    "Id": 2001,
+    "Name": "冷却重置券",
+    "Desc": "立即清除全部技能冷却（广告的免费版之外，深口袋直购版）",
     "Quality": 2,
-    "Price": 25,
-    "MaxStack": 99
+    "Price": 200,
+    "MaxStack": 1,
+    "Kind": "cd_reset"
   },
   {
-    "Id": 1004,
-    "Name": "秘银护符",
-    "Desc": "刻有古老铭文的护符",
+    "Id": 2002,
+    "Name": "补签卡",
+    "Desc": "补回昨日断签：使用后连续签到档位继续（今日未签时用）",
     "Quality": 3,
-    "Price": 980,
-    "MaxStack": 1
+    "Price": 300,
+    "MaxStack": 1,
+    "Kind": "resign"
   },
   {
-    "Id": 1005,
-    "Name": "屠龙宝刀",
-    "Desc": "点击就送？不存在的",
-    "Quality": 4,
-    "Price": 9999,
-    "MaxStack": 1
+    "Id": 2003,
+    "Name": "挑战券",
+    "Desc": "每日挑战次数 +1（每日最多使用 3 张）",
+    "Quality": 1,
+    "Price": 150,
+    "MaxStack": 99,
+    "Kind": "daily"
+  },
+  {
+    "Id": 2004,
+    "Name": "改名卡",
+    "Desc": "修改你的玩家名（16 字以内）",
+    "Quality": 1,
+    "Price": 500,
+    "MaxStack": 1,
+    "Kind": "rename"
   }
 ]

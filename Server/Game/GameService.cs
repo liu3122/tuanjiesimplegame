@@ -278,8 +278,9 @@ namespace SimpleGameServer.Game
             {
                 if (player.Gold < g.DailyTicketCost) return (false, "NOT_ENOUGH_GOLD", null);
                 string day = TodayDay();
+                Quests.RollDay(player);
                 int used = Db.DailyAttemptsUsed(day, player.Id);
-                if (used >= g.DailyAttemptsPerDay) return (false, "DAILY_LIMIT", null);
+                if (used >= g.DailyAttemptsPerDay + player.DailyExtra) return (false, "DAILY_LIMIT", null);
 
                 player.Gold -= g.DailyTicketCost;
                 Db.AddGoldTx(player.Id, -g.DailyTicketCost, "daily_ticket", player.Id);
@@ -296,7 +297,7 @@ namespace SimpleGameServer.Game
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
                 Db.RecordDailyAttempt(day, player.Id);
-                return (true, null, new { chestUid = chest.Uid, attemptsLeft = g.DailyAttemptsPerDay - used - 1, gold = player.Gold });
+                return (true, null, new { chestUid = chest.Uid, attemptsLeft = g.DailyAttemptsPerDay + player.DailyExtra - used - 1, gold = player.Gold });
             }
         }
 
@@ -385,6 +386,63 @@ namespace SimpleGameServer.Game
                 Quests.Progress(player, "ad");
                 Db.SavePlayer(player);
                 return (true, null, new { message, gold = player.Gold, ads = AdStatusView(player) });
+            }
+        }
+
+        /// <summary>道具商店（买即用，无背包）：冷却重置/补签/挑战券/改名——金币的核心消耗出口</summary>
+        public (bool ok, string err, object data) BuyItem(Player player, int itemId, string arg)
+        {
+            lock (player.Sync)
+            {
+                if (!Features.IsOn(Features.ItemShop)) return (false, "FEATURE_DISABLED", null);
+                var item = GameTables.Tables.TbItem.GetOrDefault(itemId);
+                if (item == null || string.IsNullOrEmpty(item.Kind)) return (false, "BAD_ITEM", null);
+                if (player.Gold < item.Price) return (false, "NOT_ENOUGH_GOLD", null);
+
+                string message;
+                switch (item.Kind)
+                {
+                    case "cd_reset":
+                    {
+                        if (player.SkillCooldowns.Count == 0) return (false, "ITEM_NO_EFFECT", null);
+                        player.SkillCooldowns.Clear();
+                        message = "技能冷却已全部清除";
+                        break;
+                    }
+                    case "resign":
+                    {
+                        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                        string yesterday = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+                        if (player.LastSignDay == today) return (false, "ITEM_NO_EFFECT", null); // 今日已签，无需补
+                        if (player.LastSignDay == yesterday) return (false, "ITEM_NO_EFFECT", null); // 昨日签了，没断
+                        player.LastSignDay = yesterday; // 等效补上昨日：今天签到时档位连续
+                        message = "已补回昨日签到，今日签到档位继续";
+                        break;
+                    }
+                    case "daily":
+                    {
+                        Quests.RollDay(player);
+                        if (player.DailyExtra >= 3) return (false, "ITEM_LIMIT", null);
+                        player.DailyExtra++;
+                        message = "今日挑战次数 +1";
+                        break;
+                    }
+                    case "rename":
+                    {
+                        string name = (arg ?? "").Trim();
+                        if (name.Length < 1 || name.Length > 16) return (false, "BAD_NAME", null);
+                        if (_store.Players.Values.Any(p => p.Name == name && p.Id != player.Id)) return (false, "NAME_TAKEN", null);
+                        message = "改名成功：" + name;
+                        player.Name = name;
+                        break;
+                    }
+                    default:
+                        return (false, "BAD_ITEM", null);
+                }
+                player.Gold -= item.Price;
+                Db.AddGoldTx(player.Id, -item.Price, "item_buy", itemId);
+                Db.SavePlayer(player);
+                return (true, null, new { message, gold = player.Gold, name = player.Name });
             }
         }
 
@@ -533,8 +591,9 @@ namespace SimpleGameServer.Game
                     score = r.score,
                     isMe = r.playerId == viewer.Id,
                 }).ToList();
+                Quests.RollDay(viewer);
                 long? mine = Db.MyDailyBest(day, viewer.Id);
-                return new { day, attemptsLeft = Math.Max(0, GameTables.Tables.TbGlobal.DailyAttemptsPerDay - Db.DailyAttemptsUsed(day, viewer.Id)), mine, list };
+                return new { day, attemptsLeft = Math.Max(0, GameTables.Tables.TbGlobal.DailyAttemptsPerDay + viewer.DailyExtra - Db.DailyAttemptsUsed(day, viewer.Id)), mine, list };
             }
         }
 

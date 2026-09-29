@@ -23,6 +23,7 @@ public sealed partial class Item : Luban.BeanBase
         { if(!_buf["Quality"].IsNumber) { throw new SerializationException(); }  Quality = (EItemQuality)_buf["Quality"].AsInt; }
         { if(!_buf["Price"].IsNumber) { throw new SerializationException(); }  Price = _buf["Price"]; }
         { if(!_buf["MaxStack"].IsNumber) { throw new SerializationException(); }  MaxStack = _buf["MaxStack"]; }
+        { if(!_buf["Kind"].IsString) { throw new SerializationException(); }  Kind = _buf["Kind"]; }
     }
 
     public static Item DeserializeItem(JSONNode _buf)
@@ -36,6 +37,7 @@ public sealed partial class Item : Luban.BeanBase
     public readonly EItemQuality Quality;
     public readonly int Price;
     public readonly int MaxStack;
+    public readonly string Kind;
    
     public const int __ID__ = 2107285806;
     public override int GetTypeId() => __ID__;
@@ -53,6 +55,7 @@ public sealed partial class Item : Luban.BeanBase
         + "Quality:" + Quality + ","
         + "Price:" + Price + ","
         + "MaxStack:" + MaxStack + ","
+        + "Kind:" + Kind + ","
         + "}";
     }
 }

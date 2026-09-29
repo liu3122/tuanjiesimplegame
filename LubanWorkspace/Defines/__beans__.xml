@@ -8,6 +8,8 @@
             <var name="Quality" type="EItemQuality"/>
             <var name="Price" type="int"/>
             <var name="MaxStack" type="int"/>
+            <!-- 使用效果：cd_reset 清技能冷却 / resign 补签 / daily 挑战+1 / rename 改名（买即用，无背包） -->
+            <var name="Kind" type="string"/>
         </bean>
     </module>
 

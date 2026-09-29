@@ -36,6 +36,7 @@ namespace SimpleGameServer.Game
                 p.QuestDay = today;
                 p.QuestProgress.Clear();
                 p.QuestClaimed.Clear();
+                p.DailyExtra = 0;
             }
         }
 

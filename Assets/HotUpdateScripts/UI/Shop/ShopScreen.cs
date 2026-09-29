@@ -82,6 +82,83 @@ namespace Game.HotUpdate.ChestGame
                     }
                 });
             }
+
+            BuildItemCards(list);
+        }
+
+        /// <summary>道具区（金币消耗品：冷却重置/补签/挑战券/改名）</summary>
+        private static void BuildItemCards(Transform list)
+        {
+            if (!OnlineState.FeatureOn("itemshop")) return;
+            var items = GameConfig.Tables.TbItem.DataList;
+            if (items.Count == 0) return;
+            float spacing = 320f;
+            float startX = -(items.Count - 1) * spacing / 2f;
+            string[] qualityHex = { "C8CDD6", "7ED957", "6EC6FF", "9B8EC4", "F5D061" };
+            for (int i = 0; i < items.Count; i++)
+            {
+                var it = items[i];
+                var item = it;
+                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(startX + i * spacing, -660), new Vector2(300, 330));
+                var nameText = TDUIHelper.MakeText(card.transform, new Vector2(0, 26), TextAnchor.MiddleCenter, 26);
+                nameText.text = "<color=#" + qualityHex[Mathf.Clamp((int)item.Quality, 0, 4)] + ">" + item.Name + "</color>";
+                TDUIHelper.SetSize(nameText.rectTransform, 280, 40);
+                var desc = TDUIHelper.MakeText(card.transform, new Vector2(0, -50), TextAnchor.UpperCenter, 19);
+                desc.color = new Color(0.7f, 0.74f, 0.8f);
+                desc.text = item.Desc;
+                TDUIHelper.SetSize(desc.rectTransform, 270, 130);
+
+                var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 118), new Vector2(210, 60), item.Price.ToString("N0") + L10n.Get(" 金币"), "green", 24);
+                buy.onClick.AddListener(async () =>
+                {
+                    if (item.Kind == "rename")
+                    {
+                        PromptRename(item);
+                        return;
+                    }
+                    buy.interactable = false;
+                    var r = await ApiClient.BuyItemAsync(item.Id);
+                    buy.interactable = true;
+                    if (r != null && r["ok"].AsBool)
+                    {
+                        UIRoot.ToastStatic(r["data"]["message"].Value);
+                        UIRoot.Instance.RefreshTop();
+                    }
+                    else
+                    {
+                        UIRoot.ToastStatic(L10n.Get("购买失败：") + Screens.ErrText(r));
+                    }
+                });
+            }
+        }
+
+        /// <summary>改名卡输入弹窗</summary>
+        private static void PromptRename(cfg.item.Item item)
+        {
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(560, 380));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -130), TextAnchor.MiddleCenter, 28);
+            title.text = "<color=#F5D061>" + L10n.Get("输入新名字（16 字以内）") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 520, 44);
+            var input = TDUIHelper.MakeInputField(panel.transform, new Vector2(0, -30), new Vector2(420, 60), ApiClient.PlayerName);
+            var ok = UITheme.ThemedButton(panel.transform, new Vector2(0, -170), new Vector2(220, 60), item.Price.ToString("N0") + L10n.Get(" 金币改名"), "green", 24);
+            ok.onClick.AddListener(async () =>
+            {
+                var name = input.text.Trim();
+                if (name.Length < 1) { UIRoot.ToastStatic(L10n.Get("名字不能为空")); return; }
+                var r = await ApiClient.BuyItemAsync(item.Id, name);
+                if (r == null || !r["ok"].AsBool)
+                {
+                    UIRoot.ToastStatic(L10n.Get("购买失败：") + Screens.ErrText(r));
+                    return;
+                }
+                ApiClient.PlayerName = name;
+                UIRoot.ToastStatic(r["data"]["message"].Value);
+                Object.Destroy(panel);
+            });
+            var cancel = UITheme.ThemedButton(panel.transform, new Vector2(190, -300), new Vector2(140, 48), L10n.Get("取 消"), "red", 22);
+            cancel.onClick.AddListener(() => Object.Destroy(panel));
         }
 
         // ---------------- 每日挑战 ----------------

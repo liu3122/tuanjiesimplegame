@@ -41,6 +41,8 @@ namespace SimpleGameServer.Game
         public HashSet<string> QuestClaimed { get; } = new();
         /// <summary>任务计数日（yyyy-MM-dd）</summary>
         public string QuestDay { get; set; } = "";
+        /// <summary>每日挑战额外次数（挑战券，随任务日清零）</summary>
+        public int DailyExtra { get; set; }
         // ---- 每日签到（7 天循环递增） ----
         /// <summary>累计签到天数（终身，不清零）</summary>
         public int SignTotal { get; set; }

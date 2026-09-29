@@ -18,6 +18,7 @@ namespace SimpleGameServer.Game
         public const string Ad = "ad";
         public const string Quest = "quest";
         public const string Sign = "sign";
+        public const string ItemShop = "itemshop";
 
         public static bool IsOn(string id)
         {

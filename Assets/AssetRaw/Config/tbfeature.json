@@ -38,5 +38,10 @@
     "Id": "sign",
     "Enabled": true,
     "Desc": "每日签到（7 天循环递增，含广告双倍）"
+  },
+  {
+    "Id": "itemshop",
+    "Enabled": true,
+    "Desc": "道具商店（金币消耗品：冷却重置/补签/挑战券/改名）"
   }
 ]

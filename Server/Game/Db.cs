@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS season_reward(
                 day = p.QuestDay,
                 progress = p.QuestProgress.ToDictionary(kv => kv.Key, kv => kv.Value),
                 claimed = p.QuestClaimed.ToList(),
+                dailyExtra = p.DailyExtra,
             }, JsonOpts);
             string signState = JsonSerializer.Serialize(new SignStateDto
             {
@@ -690,6 +691,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                             p.QuestDay = qs.day ?? "";
                             foreach (var kv in qs.progress ?? new Dictionary<string, int>()) p.QuestProgress[kv.Key] = kv.Value;
                             foreach (var id in qs.claimed ?? new List<string>()) p.QuestClaimed.Add(id);
+                            p.DailyExtra = qs.dailyExtra;
                         }
                     }
                     if (!r.IsDBNull(13))
@@ -799,6 +801,7 @@ namespace SimpleGameServer.Game
         public string day { get; set; }
         public Dictionary<string, int> progress { get; set; }
         public List<string> claimed { get; set; }
+        public int dailyExtra { get; set; }
     }
 }
 
