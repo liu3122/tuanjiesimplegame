@@ -65,21 +65,21 @@ namespace Game.HotUpdate.ChestGame
             {
                 var c = room;
                 long poolPreview = (long)(c.Ticket * c.PlayerCount * c.PoolScale);
-                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(0, y), new Vector2(1200, 320));
+                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(0, y), new Vector2(940, 300));
 
-                var name = TDUIHelper.MakeText(card.transform, new Vector2(-380, 80), TextAnchor.MiddleCenter, 40);
+                var name = TDUIHelper.MakeText(card.transform, new Vector2(-290, 80), TextAnchor.MiddleCenter, 36);
                 name.text = "<color=#" + c.ColorHex + ">" + c.Name + (c.Blind ? L10n.Get("（盲抢）") : "") + "</color>";
                 TDUIHelper.SetSize(name.rectTransform, 420, 70);
-                var info = TDUIHelper.MakeText(card.transform, new Vector2(-360, -30), TextAnchor.UpperLeft, 26);
+                var info = TDUIHelper.MakeText(card.transform, new Vector2(-280, -30), TextAnchor.UpperLeft, 24);
                 info.color = UITheme.TextSub;
                 info.text = "门票 " + c.Ticket + " 金币\n" + c.PlayerCount + " 人同抢 · " + c.DurationSec + " 秒\n奖池约 " + poolPreview.ToString("N0")
                     + (c.Blind ? "\n<color=#6EC6FF>" + L10n.Get("金额隐藏，抢到才揭示") + "</color>" : "");
                 var infoRt = info.rectTransform;
                 infoRt.anchorMin = infoRt.pivot = new Vector2(0, 0.5f);
-                infoRt.anchoredPosition = new Vector2(-560, -20);
-                TDUIHelper.SetSize(infoRt, 600, 220);
+                infoRt.anchoredPosition = new Vector2(-450, -20);
+                TDUIHelper.SetSize(infoRt, 560, 220);
 
-                var join = UITheme.ThemedButton(card.transform, new Vector2(420, 0), new Vector2(280, 100), L10n.Get("加 入"), "green", 34);
+                var join = UITheme.ThemedButton(card.transform, new Vector2(330, 0), new Vector2(240, 90), L10n.Get("加 入"), "green", 30);
                 join.onClick.AddListener(async () =>
                 {
                     join.interactable = false;
@@ -92,7 +92,7 @@ namespace Game.HotUpdate.ChestGame
                     }
                     EnterGame(c);
                 });
-                y -= 360;
+                y -= 340;
             }
         }
 

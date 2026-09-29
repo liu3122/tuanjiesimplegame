@@ -62,7 +62,7 @@ namespace Game.HotUpdate.ChestGame
             }
 
             // 对决天梯（代码追加的第五个页签）
-            var ladderBtn = UITheme.ThemedButton(root.transform, new Vector2(560, 420), new Vector2(180, 52),
+            var ladderBtn = UITheme.ThemedButton(root.transform, new Vector2(180, -296), new Vector2(200, 56),
                 L10n.Get("对决天梯"), "gold", 20);
             UITheme.SkinButton(ladderBtn, "blue");
             ladderBtn.name = "tab_duel_ladder";
@@ -101,7 +101,7 @@ namespace Game.HotUpdate.ChestGame
                     line.color = isMe ? UITheme.GoldLight : (rank0 <= 3 ? UITheme.Gold : Color.white);
                     var rt0 = line.rectTransform;
                     rt0.anchorMin = rt0.anchorMax = rt0.pivot = new Vector2(0.5f, 1f);
-                    TDUIHelper.SetSize(rt0, 860, 46);
+                    TDUIHelper.SetSize(rt0, 960, 46);
                     y0 -= 56;
                     rank0++;
                 }
@@ -131,7 +131,7 @@ namespace Game.HotUpdate.ChestGame
                 line.color = isMe ? UITheme.GoldLight : (rank <= 3 ? UITheme.Gold : Color.white);
                 var rt = line.rectTransform;
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 1f);
-                TDUIHelper.SetSize(rt, 860, 46);
+                TDUIHelper.SetSize(rt, 960, 46);
                 y -= 56;
                 rank++;
             }
@@ -140,7 +140,7 @@ namespace Game.HotUpdate.ChestGame
                 var empty = TDUIHelper.MakeText(list, new Vector2(0, 0), TextAnchor.MiddleCenter, 24);
                 empty.color = new Color(0.6f, 0.65f, 0.7f);
                 empty.text = L10n.Get("暂无上榜数据");
-                TDUIHelper.SetSize(empty.rectTransform, 860, 46);
+                TDUIHelper.SetSize(empty.rectTransform, 960, 46);
             }
         }
 

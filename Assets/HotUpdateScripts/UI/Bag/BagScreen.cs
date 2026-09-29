@@ -34,14 +34,14 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
 
-            float y = 340;
+            float y = 760;
             foreach (JSONNode node in chests)
             {
                 var chest = node;
                 var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == chest["configId"].AsInt);
                 if (config == null) continue;
                 BuildBagRow(list, y, chest, config);
-                y -= 112;
+                y -= 160;
             }
         }
 
@@ -54,21 +54,21 @@ namespace Game.HotUpdate.ChestGame
                 + (listed ? "[拍卖中]  " : "") + "剩 " + chest["remainingCount"].AsInt + " 格 · EV " + ev.ToString("N0")
                 + " · 技能 " + chest["skillUsesRemaining"].AsInt + "/3" + skillNote;
 
-            var row = UITheme.CreatePanel(list, "panel_dark", new Vector2(0, y), new Vector2(1500, 96));
-            var infoText = TDUIHelper.MakeText(row.transform, new Vector2(20, 0), TextAnchor.MiddleLeft, 24);
+            var row = UITheme.CreatePanel(list, "panel_dark", new Vector2(0, y), new Vector2(960, 140));
+            var infoText = TDUIHelper.MakeText(row.transform, new Vector2(20, -34), TextAnchor.MiddleLeft, 22);
             infoText.text = info;
             var infoRt = infoText.rectTransform;
-            infoRt.anchorMin = infoRt.anchorMax = infoRt.pivot = new Vector2(0, 0.5f);
-            infoRt.anchoredPosition = new Vector2(20, 0);
-            TDUIHelper.SetSize(infoRt, 980, 90);
+            infoRt.anchorMin = infoRt.anchorMax = infoRt.pivot = new Vector2(0, 1f);
+            infoRt.anchoredPosition = new Vector2(24, -14);
+            TDUIHelper.SetSize(infoRt, 920, 64);
 
             if (!listed)
             {
                 long uid = chest["uid"].AsLong;
-                var openBtn = UITheme.ThemedButton(row.transform, new Vector2(640, 0), new Vector2(200, 64), L10n.Get("开 宝 箱"), "gold", 24);
+                var openBtn = UITheme.ThemedButton(row.transform, new Vector2(-110, -104), new Vector2(200, 56), L10n.Get("开 宝 箱"), "gold", 22);
                 openBtn.onClick.AddListener(() => ChestBoard.Show(uid));
 
-                var listBtn = UITheme.ThemedButton(row.transform, new Vector2(870, 0), new Vector2(180, 64), L10n.Get("挂 拍"), "blue", 24);
+                var listBtn = UITheme.ThemedButton(row.transform, new Vector2(120, -104), new Vector2(200, 56), L10n.Get("挂 拍"), "blue", 22);
                 listBtn.onClick.AddListener(() => AuctionPanel.OpenListDialog(chest));
             }
         }

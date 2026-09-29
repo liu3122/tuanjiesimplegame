@@ -96,7 +96,7 @@ namespace Game.HotUpdate.ChestGame
                 UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(r));
                 return;
             }
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_dark", Vector2.zero, new Vector2(1280, 780));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_dark", Vector2.zero, new Vector2(1040, 1560));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             var self = panel.AddComponent<DuelPanel>();
@@ -106,47 +106,47 @@ namespace Game.HotUpdate.ChestGame
 
         private void Bind(GameObject root)
         {
-            var title = TDUIHelper.MakeText(root.transform, new Vector2(0, -350), TextAnchor.MiddleCenter, 34);
+            var title = TDUIHelper.MakeText(root.transform, new Vector2(0, -40), TextAnchor.MiddleCenter, 34);
             title.text = _potMode
                 ? "<color=#E05D5D>" + L10n.Get("对赌房 · 赢家通吃") + "</color>"
                 : "<color=#F5D061>镜像对决 · 1v1</color>";
             TDUIHelper.SetSize(title.rectTransform, 1240, 50);
-            _timer = TDUIHelper.MakeText(root.transform, new Vector2(0, -302), TextAnchor.MiddleCenter, 26);
+            _timer = TDUIHelper.MakeText(root.transform, new Vector2(0, -92), TextAnchor.MiddleCenter, 26);
             _timer.color = UITheme.TextSub;
-            TDUIHelper.SetSize(_timer.rectTransform, 1240, 40);
-            _status = TDUIHelper.MakeText(root.transform, new Vector2(0, -266), TextAnchor.MiddleCenter, 28);
-            TDUIHelper.SetSize(_status.rectTransform, 1240, 44);
+            TDUIHelper.SetSize(_timer.rectTransform, 1000, 40);
+            _status = TDUIHelper.MakeText(root.transform, new Vector2(0, -128), TextAnchor.MiddleCenter, 28);
+            TDUIHelper.SetSize(_status.rectTransform, 1000, 44);
 
             // 我的棋盘（5×4）
             for (int i = 0; i < 20; i++)
             {
                 int idx = i;
                 int col = i % 5, row = i / 5;
-                var slot = MakeSlot(root.transform, new Vector2(-300 + (col - 2) * 124, 195 - row * 106), new Vector2(112, 96));
+                var slot = MakeSlot(root.transform, new Vector2(-256 + col * 128, 300 - row * 118), new Vector2(112, 96));
                 _slots[i] = slot;
                 slot.GetComponent<Button>().onClick.AddListener(() => OnSlot(idx));
             }
 
-            _meInfo = TDUIHelper.MakeText(root.transform, new Vector2(-300, -215), TextAnchor.UpperLeft, 22);
+            _meInfo = TDUIHelper.MakeText(root.transform, new Vector2(0, -1040), TextAnchor.UpperLeft, 22);
             _meInfo.color = UITheme.TextSub;
-            TDUIHelper.SetSize(_meInfo.rectTransform, 620, 110);
+            TDUIHelper.SetSize(_meInfo.rectTransform, 960, 90);
 
             // 右列：对手面板 + 动态
-            var oppPanel = UITheme.CreatePanel(root.transform, "panel_card", new Vector2(330, 215), new Vector2(520, 190));
-            var oppTitle = TDUIHelper.MakeText(oppPanel.transform, new Vector2(0, -24), TextAnchor.MiddleCenter, 24);
+            var oppPanel = UITheme.CreatePanel(root.transform, "panel_card", new Vector2(0, 500), new Vector2(940, 230));
+            var oppTitle = TDUIHelper.MakeText(oppPanel.transform, new Vector2(0, -20), TextAnchor.MiddleCenter, 24);
             oppTitle.text = "<color=#E05D5D>对手</color>";
-            _oppText = TDUIHelper.MakeText(oppPanel.transform, new Vector2(0, -80), TextAnchor.UpperLeft, 22);
-            TDUIHelper.SetSize(_oppText.rectTransform, 480, 100);
-            _feed = TDUIHelper.MakeText(root.transform, new Vector2(330, -45), TextAnchor.UpperLeft, 20);
+            _oppText = TDUIHelper.MakeText(oppPanel.transform, new Vector2(0, -66), TextAnchor.UpperLeft, 22);
+            TDUIHelper.SetSize(_oppText.rectTransform, 900, 140);
+            _feed = TDUIHelper.MakeText(root.transform, new Vector2(0, -1140), TextAnchor.UpperLeft, 20);
             _feed.color = UITheme.TextSub;
-            TDUIHelper.SetSize(_feed.rectTransform, 520, 400);
+            TDUIHelper.SetSize(_feed.rectTransform, 960, 480);
 
             // 底部操作
-            var skillBtn = UITheme.ThemedButton(root.transform, new Vector2(-430, -320), new Vector2(230, 64), L10n.Get("技 能"), "blue", 26);
+            var skillBtn = UITheme.ThemedButton(root.transform, new Vector2(-230, -690), new Vector2(280, 64), L10n.Get("技 能"), "blue", 26);
             skillBtn.onClick.AddListener(OpenSkillPanel);
-            var sellBtn = UITheme.ThemedButton(root.transform, new Vector2(-170, -320), new Vector2(300, 64), L10n.Get("卖给银行·锁定"), "green", 24);
+            var sellBtn = UITheme.ThemedButton(root.transform, new Vector2(230, -690), new Vector2(280, 64), L10n.Get("卖给银行·锁定"), "green", 24);
             sellBtn.onClick.AddListener(() => _ws?.Sell());
-            var back = UITheme.ThemedButton(root.transform, new Vector2(560, -350), new Vector2(150, 50), L10n.Get("离 开"), "red", 20);
+            var back = UITheme.ThemedButton(root.transform, new Vector2(410, -730), new Vector2(170, 56), L10n.Get("离 开"), "red", 20);
             back.onClick.AddListener(() => { _ws?.Close(); Screens.ShowMain(); });
 
             _status.text = L10n.Get("等待对手中…");
@@ -329,7 +329,7 @@ namespace Game.HotUpdate.ChestGame
                 if (row["name"].Value == ApiClient.PlayerName) myScore = row["score"].AsLong;
                 else { oppScore = row["score"].AsLong; oppName = row["name"].Value; }
             }
-            var shareRow = UITheme.ThemedButton(transform, new Vector2(0, -320), new Vector2(280, 56), "分享战报", "gold", 24);
+            var shareRow = UITheme.ThemedButton(transform, new Vector2(0, -620), new Vector2(280, 56), "分享战报", "gold", 24);
             shareRow.onClick.AddListener(() => BattleReport.ShowDuel(delta > 0, tie, delta, myScore, oppScore, oppName, _potMode));
         }
 
@@ -445,13 +445,13 @@ namespace Game.HotUpdate.ChestGame
             if (!CanAct) { UIRoot.ToastStatic(L10n.Get("当前不能使用技能")); return; }
             if (_me["skillUsedByMe"].AsBool) { UIRoot.ToastStatic(L10n.Get("你对本宝箱已用过技能")); return; }
 
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(900, 880));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
             var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
             title.text = L10n.Get("选择技能（限一次 · 用后进入冷却）");
-            TDUIHelper.SetSize(title.rectTransform, 860, 50);
+            TDUIHelper.SetSize(title.rectTransform, 640, 50);
 
             float y = -110;
             _cooldownRows.Clear();
@@ -460,11 +460,11 @@ namespace Game.HotUpdate.ChestGame
                 var skill = c;
                 string cdTag = skill.SkillCooldownSec > 0 ? " · CD " + skill.SkillCooldownSec + "s" : "";
                 string baseText = "<color=#" + c.ColorHex + ">" + c.SkillName + "</color> · " + c.SkillDesc + cdTag;
-                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(840, 62), baseText, "gold", 20);
+                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(620, 92), baseText, "gold", 20);
                 UITheme.SkinButton(row, "blue");
                 var label = row.GetComponentInChildren<Text>();
                 label.alignment = TextAnchor.MiddleLeft;
-                label.fontSize = 19;
+                label.fontSize = 17;
                 var cds = _me["skillCooldowns"];
                 int remain = cds != null ? Mathf.Max(0, cds[skill.SkillType.ToString()].AsInt) : 0;
                 int minLv = Screens.MinLevelForSkill(skill.SkillType);
@@ -492,7 +492,7 @@ namespace Game.HotUpdate.ChestGame
                         _ws.Skill(skill.SkillType);
                     }
                 });
-                y -= 72;
+                y -= 102;
             }
 
             var closeBtn = UITheme.ThemedButton(panel.transform, new Vector2(0, y + 10), new Vector2(240, 56), L10n.Get("取 消"), "red", 24);

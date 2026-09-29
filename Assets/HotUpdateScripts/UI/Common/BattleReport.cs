@@ -13,7 +13,7 @@ namespace Game.HotUpdate.ChestGame
     {
         public static void Show(string title, string[] lines, string shareText, System.Action onClose = null)
         {
-            var dim = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_dark", Vector2.zero, new Vector2(4000, 2400));
+            var dim = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_dark", Vector2.zero, new Vector2(2600, 4600));
             dim.name = "report_dim";
             var dimRt = dim.GetComponent<RectTransform>();
             dimRt.anchorMin = dimRt.anchorMax = dimRt.pivot = new Vector2(0.5f, 0.5f);

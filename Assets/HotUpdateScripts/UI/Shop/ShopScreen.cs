@@ -26,8 +26,6 @@ namespace Game.HotUpdate.ChestGame
             foreach (Transform child in list) Object.Destroy(child.gameObject);
 
             var chests = GameConfig.Tables.TbChest.DataList;
-            float spacing = 470f;
-            float startX = -(chests.Count - 1) * spacing / 2f;
             for (int i = 0; i < chests.Count; i++)
             {
                 var c = chests[i];
@@ -41,7 +39,9 @@ namespace Game.HotUpdate.ChestGame
                 else if (c.Kind == 2) kindNote = "\n<color=#7ED957>幸运格排除 +" + c.SpecialValue + "</color>";
                 else if (c.Kind == 3) kindNote = "\n<color=#E05D5D>陷阱格排除 -" + c.SpecialValue + "</color>";
 
-                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(startX + i * spacing, -20), new Vector2(440, 560));
+                // 竖版：2 列 × 3 行
+                int col = i % 2, row = i / 2;
+                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(col * 480 - 240, 560 - row * 480), new Vector2(440, 430));
                 var icoGo = new GameObject("chest_icon").AddComponent<Image>();
                 icoGo.transform.SetParent(card.transform, false);
                 var icon = UITheme.Load("chest_" + (c.Id == 1 ? "wood" : c.Id == 2 ? "silver" : "gold"));
@@ -51,15 +51,15 @@ namespace Game.HotUpdate.ChestGame
                 irt.anchoredPosition = new Vector2(0, -14);
                 irt.sizeDelta = new Vector2(140, 140);
 
-                var nameText = TDUIHelper.MakeText(card.transform, new Vector2(0, -160), TextAnchor.MiddleCenter, 30);
+                var nameText = TDUIHelper.MakeText(card.transform, new Vector2(0, -140), TextAnchor.MiddleCenter, 28);
                 nameText.text = "<color=#" + c.ColorHex + ">" + c.Name + "</color>";
                 TDUIHelper.SetSize(nameText.rectTransform, 420, 46);
-                var desc = TDUIHelper.MakeText(card.transform, new Vector2(0, -250), TextAnchor.UpperCenter, 22);
+                var desc = TDUIHelper.MakeText(card.transform, new Vector2(0, -200), TextAnchor.UpperCenter, 20);
                 desc.color = new Color(0.78f, 0.82f, 0.86f);
                 desc.text = "期望 " + ev + " · 最大 " + max.ToString("N0") + kindNote + "\n20 格金额池";
-                TDUIHelper.SetSize(desc.rectTransform, 410, 160);
+                TDUIHelper.SetSize(desc.rectTransform, 410, 130);
 
-                var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 200), new Vector2(280, 76), "购买 " + c.Price.ToString("N0"), "green", 28);
+                var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 165), new Vector2(280, 72), "购买 " + c.Price.ToString("N0"), "green", 26);
                 int minLv = MinLevelForChest(config.Id);
                 if (OnlineState.Level < minLv)
                 {
@@ -92,23 +92,23 @@ namespace Game.HotUpdate.ChestGame
             if (!OnlineState.FeatureOn("itemshop")) return;
             var items = GameConfig.Tables.TbItem.DataList;
             if (items.Count == 0) return;
-            float spacing = 320f;
+            float spacing = 250f;
             float startX = -(items.Count - 1) * spacing / 2f;
             string[] qualityHex = { "C8CDD6", "7ED957", "6EC6FF", "9B8EC4", "F5D061" };
             for (int i = 0; i < items.Count; i++)
             {
                 var it = items[i];
                 var item = it;
-                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(startX + i * spacing, -660), new Vector2(300, 330));
-                var nameText = TDUIHelper.MakeText(card.transform, new Vector2(0, 26), TextAnchor.MiddleCenter, 26);
+                var card = UITheme.CreatePanel(list, "panel_dark", new Vector2(startX + i * spacing, -920), new Vector2(230, 300));
+                var nameText = TDUIHelper.MakeText(card.transform, new Vector2(0, 22), TextAnchor.MiddleCenter, 22);
                 nameText.text = "<color=#" + qualityHex[Mathf.Clamp((int)item.Quality, 0, 4)] + ">" + item.Name + "</color>";
                 TDUIHelper.SetSize(nameText.rectTransform, 280, 40);
-                var desc = TDUIHelper.MakeText(card.transform, new Vector2(0, -50), TextAnchor.UpperCenter, 19);
+                var desc = TDUIHelper.MakeText(card.transform, new Vector2(0, -44), TextAnchor.UpperCenter, 17);
                 desc.color = new Color(0.7f, 0.74f, 0.8f);
                 desc.text = item.Desc;
-                TDUIHelper.SetSize(desc.rectTransform, 270, 130);
+                TDUIHelper.SetSize(desc.rectTransform, 210, 130);
 
-                var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 118), new Vector2(210, 60), item.Price.ToString("N0") + L10n.Get(" 金币"), "green", 24);
+                var buy = UITheme.ThemedButton(card.transform, new Vector2(0, 105), new Vector2(190, 56), item.Price.ToString("N0") + L10n.Get(" 金币"), "green", 20);
                 buy.onClick.AddListener(async () =>
                 {
                     if (item.Kind == "rename")

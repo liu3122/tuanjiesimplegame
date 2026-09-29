@@ -79,7 +79,7 @@ namespace Game.HotUpdate.ChestGame
 
             var panel = root.transform.Find("info_panel");
             _info = UIManager.Find<Text>(panel, "info");
-            _evText = TDUIHelper.MakeText(panel, new Vector2(0, -155), TextAnchor.UpperLeft, 24);
+            _evText = TDUIHelper.MakeText(panel, new Vector2(0, -290), TextAnchor.UpperLeft, 24);
             TDUIHelper.SetSize(_evText.rectTransform, 400, 32);
             _evShown = 0; _evTarget = 0;
             _sellButton = UIManager.Find<Button>(panel, "btn_sell");
@@ -271,9 +271,9 @@ namespace Game.HotUpdate.ChestGame
             if (_chest == null || !_chest["isTutorial"].AsBool) return;
             if (_tutBanner == null)
             {
-                _tutBanner = TDUIHelper.MakeText(transform, new Vector2(0, 390), TextAnchor.MiddleCenter, 26);
+                _tutBanner = TDUIHelper.MakeText(transform, new Vector2(0, 880), TextAnchor.MiddleCenter, 24);
                 _tutBanner.color = UITheme.GoldLight;
-                TDUIHelper.SetSize(_tutBanner.rectTransform, 1200, 60);
+                TDUIHelper.SetSize(_tutBanner.rectTransform, 1000, 60);
             }
             string[] steps =
             {
@@ -444,13 +444,13 @@ namespace Game.HotUpdate.ChestGame
             }
             int quotaMax = GameConfig.Tables.TbGlobal.ChestMaxSkillUses;
 
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(900, 880));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
             var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
             title.text = "选择技能（额度 " + _chest["skillUsesRemaining"].AsInt + "/" + quotaMax + " · 我限用一次 · 用后进入冷却）";
-            TDUIHelper.SetSize(title.rectTransform, 860, 50);
+            TDUIHelper.SetSize(title.rectTransform, 640, 50);
 
             float y = -110;
             _cooldownRows.Clear();
@@ -459,11 +459,11 @@ namespace Game.HotUpdate.ChestGame
                 var skill = c;
                 string cdTag = skill.SkillCooldownSec > 0 ? " · CD " + skill.SkillCooldownSec + "s" : "";
                 string baseText = "<color=#" + c.ColorHex + ">" + c.SkillName + "</color> · " + c.SkillDesc + cdTag;
-                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(840, 62), baseText, "gold", 20);
+                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(620, 92), baseText, "gold", 20);
                 UITheme.SkinButton(row, "blue");
                 var label = row.GetComponentInChildren<Text>();
                 label.alignment = TextAnchor.MiddleLeft;
-                label.fontSize = 19;
+                label.fontSize = 17;
                 int remain = OnlineState.SkillCooldownRemain(skill.SkillType);
                 int minLv = Screens.MinLevelForSkill(skill.SkillType);
                 if (OnlineState.Level < minLv)
@@ -490,7 +490,7 @@ namespace Game.HotUpdate.ChestGame
                         OnSkill(skill.SkillType);
                     }
                 });
-                y -= 72;
+                y -= 102;
             }
 
             var closeBtn = UITheme.ThemedButton(panel.transform, new Vector2(0, y + 10), new Vector2(240, 56), L10n.Get("取 消"), "red", 24);

@@ -33,7 +33,7 @@ namespace Game.HotUpdate.ChestGame
             canvas.sortingOrder = 100;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.referenceResolution = new Vector2(1080, 1920); // 竖版设计分辨率
             canvasGo.AddComponent<GraphicRaycaster>();
             return canvas;
         }

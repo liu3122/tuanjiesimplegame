@@ -24,31 +24,31 @@ namespace Game.HotUpdate.ChestGame
             Bind(root, "card_rank", () => ShowRank());
             Bind(root, "card_daily", () => ShowDaily());
             Bind(root, "card_rush", () => RushPanel.Show());
-            var langBtn = UITheme.ThemedButton(root.transform, new Vector2(860, -50), new Vector2(170, 56),
+            var langBtn = UITheme.ThemedButton(root.transform, new Vector2(410, -124), new Vector2(170, 56),
                 L10n.IsZh ? "EN" : L10n.Get("中文"), "blue", 24);
             langBtn.onClick.AddListener(L10n.ToggleLanguage);
             // 对决入口（模式选择器：镜像对决/对赌房；开关关闭时隐藏）
-            var duelBtn = UITheme.ThemedButton(root.transform, new Vector2(660, -50), new Vector2(170, 56),
+            var duelBtn = UITheme.ThemedButton(root.transform, new Vector2(190, -50), new Vector2(180, 56),
                 L10n.Get("对 决"), "gold", 24);
             duelBtn.name = "btn_duel_entry";
             duelBtn.onClick.AddListener(() => DuelPanel.ShowChooser());
             // 福利中心（激励视频；开关关闭时隐藏）
-            var adBtn = UITheme.ThemedButton(root.transform, new Vector2(460, -50), new Vector2(170, 56),
+            var adBtn = UITheme.ThemedButton(root.transform, new Vector2(0, -50), new Vector2(180, 56),
                 L10n.Get("福 利"), "green", 24);
             adBtn.name = "btn_ad_entry";
             adBtn.onClick.AddListener(() => ShowAdCenter());
             // 每日任务（开关关闭时隐藏）
-            var questBtn = UITheme.ThemedButton(root.transform, new Vector2(260, -50), new Vector2(170, 56),
+            var questBtn = UITheme.ThemedButton(root.transform, new Vector2(-190, -50), new Vector2(180, 56),
                 L10n.Get("任 务"), "blue", 24);
             questBtn.name = "btn_quest_entry";
             questBtn.onClick.AddListener(() => ShowQuests());
             // 每日签到（开关关闭时隐藏）
-            var signBtn = UITheme.ThemedButton(root.transform, new Vector2(60, -50), new Vector2(170, 56),
+            var signBtn = UITheme.ThemedButton(root.transform, new Vector2(-380, -50), new Vector2(180, 56),
                 L10n.Get("签 到"), "gold", 24);
             signBtn.name = "btn_sign_entry";
             signBtn.onClick.AddListener(() => ShowSign());
             // 邀请双奖（开关关闭时隐藏）
-            var inviteBtn = UITheme.ThemedButton(root.transform, new Vector2(-140, -50), new Vector2(170, 56),
+            var inviteBtn = UITheme.ThemedButton(root.transform, new Vector2(-380, -124), new Vector2(180, 56),
                 L10n.Get("邀 请"), "gold", 24);
             inviteBtn.name = "btn_invite_entry";
             inviteBtn.onClick.AddListener(() => ShowInvite());
@@ -123,7 +123,7 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
             await OnlineState.Refresh();
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(760, 640));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 640));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
@@ -136,11 +136,11 @@ namespace Game.HotUpdate.ChestGame
 
             var code = TDUIHelper.MakeText(panel.transform, new Vector2(0, -110), TextAnchor.MiddleCenter, 40);
             code.text = L10n.Get("我的邀请码") + " <color=#F5D061>" + rf["myCode"].AsLong + "</color>";
-            TDUIHelper.SetSize(code.rectTransform, 720, 60);
+            TDUIHelper.SetSize(code.rectTransform, 620, 60);
             var sub = TDUIHelper.MakeText(panel.transform, new Vector2(0, -180), TextAnchor.MiddleCenter, 22);
             sub.color = UITheme.TextSub;
             sub.text = L10n.Get("已邀请") + " " + rf["invited"].AsInt + " " + L10n.Get("人 · 新人开完第一个宝箱双方各得") + " " + rf["reward"].AsInt + " " + L10n.Get("金币（邀请人每日最多 5 人）");
-            TDUIHelper.SetSize(sub.rectTransform, 700, 60);
+            TDUIHelper.SetSize(sub.rectTransform, 620, 60);
 
             var copy = UITheme.ThemedButton(panel.transform, new Vector2(0, -280), new Vector2(360, 64), L10n.Get("复制邀请文案"), "green", 24);
             copy.onClick.AddListener(() =>
@@ -156,9 +156,9 @@ namespace Game.HotUpdate.ChestGame
                 var bindTitle = TDUIHelper.MakeText(panel.transform, new Vector2(0, -380), TextAnchor.MiddleCenter, 22);
                 bindTitle.color = UITheme.Blue;
                 bindTitle.text = L10n.Get("我是新人：输入邀请人的邀请码，首箱各得金币");
-                TDUIHelper.SetSize(bindTitle.rectTransform, 700, 40);
-                var input = TDUIHelper.MakeInputField(panel.transform, new Vector2(-70, -450), new Vector2(300, 56), L10n.Get("邀请码"));
-                var bind = UITheme.ThemedButton(panel.transform, new Vector2(190, -450), new Vector2(160, 56), L10n.Get("绑 定"), "gold", 24);
+                TDUIHelper.SetSize(bindTitle.rectTransform, 640, 40);
+                var input = TDUIHelper.MakeInputField(panel.transform, new Vector2(-90, -450), new Vector2(300, 56), L10n.Get("邀请码"));
+                var bind = UITheme.ThemedButton(panel.transform, new Vector2(210, -450), new Vector2(150, 56), L10n.Get("绑 定"), "gold", 24);
                 bind.onClick.AddListener(async () =>
                 {
                     var r = await ApiClient.BindReferralAsync(input.text.Trim());
@@ -177,7 +177,7 @@ namespace Game.HotUpdate.ChestGame
                 var bound = TDUIHelper.MakeText(panel.transform, new Vector2(0, -420), TextAnchor.MiddleCenter, 22);
                 bound.color = UITheme.TextSub;
                 bound.text = L10n.Get("我的邀请人：") + "<color=#F5D061>" + (rf["inviter"].IsNull ? "?" : rf["inviter"].Value) + "</color>";
-                TDUIHelper.SetSize(bound.rectTransform, 700, 40);
+                TDUIHelper.SetSize(bound.rectTransform, 640, 40);
             }
 
             var close = UITheme.ThemedButton(panel.transform, new Vector2(0, -560), new Vector2(200, 52), L10n.Get("关 闭"), "red", 24);
@@ -193,7 +193,7 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
             await OnlineState.Refresh();
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(900, 620));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(700, 720));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
@@ -208,17 +208,18 @@ namespace Game.HotUpdate.ChestGame
 
             // 7 天奖励格子
             var rewards = sign["cycleRewards"];
-            float startX = -360f;
+            float startX = -270f;
             for (int i = 0; i < rewards.Count; i++)
             {
                 int day = i + 1;
                 bool reached = signed ? (day <= ((sign["streak"].AsInt - 1) % 7) + 1) : (day < cycleDay);
                 bool today = !signed && day == cycleDay;
-                var cell = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(startX + i * 120, -140), new Vector2(110, 130));
+                var cell = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(startX + i * 90, -140), new Vector2(82, 120));
                 var dayText = TDUIHelper.MakeText(cell.transform, new Vector2(0, -42), TextAnchor.MiddleCenter, 20);
                 dayText.text = L10n.Get("第") + " " + day + " " + L10n.Get("天");
                 var goldText = TDUIHelper.MakeText(cell.transform, new Vector2(0, 4), TextAnchor.MiddleCenter, 24);
                 goldText.color = reached ? UITheme.GoldLight : (today ? UITheme.Green : Color.white);
+                goldText.fontSize = 18;
                 goldText.text = rewards[i].AsInt.ToString("N0");
                 if (today) dayText.text = "<color=#4DD0A5>▶ " + dayText.text + "</color>";
             }
@@ -227,9 +228,9 @@ namespace Game.HotUpdate.ChestGame
             info.text = signed
                 ? L10n.Get("今日已签 · 连续") + " " + sign["streak"].AsInt + " " + L10n.Get("天 · 累计") + " " + sign["total"].AsInt + " " + L10n.Get("天")
                 : L10n.Get("本轮第") + " " + cycleDay + " " + L10n.Get("天 · 今日可得") + " <color=#F5D061>" + sign["todayReward"].AsInt.ToString("N0") + "</color>";
-            TDUIHelper.SetSize(info.rectTransform, 860, 50);
+            TDUIHelper.SetSize(info.rectTransform, 660, 50);
 
-            var signBtn = UITheme.ThemedButton(panel.transform, new Vector2(signed ? 0 : -120, -360), new Vector2(220, 64),
+            var signBtn = UITheme.ThemedButton(panel.transform, new Vector2(signed ? 0 : -110, -380), new Vector2(200, 64),
                 signed ? L10n.Get("已签到") : L10n.Get("签 到"), signed ? "blue" : "green", 26);
             signBtn.interactable = !signed;
             signBtn.onClick.AddListener(async () =>
@@ -247,7 +248,7 @@ namespace Game.HotUpdate.ChestGame
             });
             if (!signed && OnlineState.FeatureOn("ad"))
             {
-                var dbl = UITheme.ThemedButton(panel.transform, new Vector2(140, -360), new Vector2(220, 64),
+                var dbl = UITheme.ThemedButton(panel.transform, new Vector2(120, -380), new Vector2(200, 64),
                     "<color=#F5D061>×2 " + L10n.Get("广告签到") + "</color>", "gold", 24);
                 dbl.onClick.AddListener(() =>
                 {
@@ -267,7 +268,7 @@ namespace Game.HotUpdate.ChestGame
                 });
             }
 
-            var close = UITheme.ThemedButton(panel.transform, new Vector2(360, -360), new Vector2(120, 52), L10n.Get("关 闭"), "red", 22);
+            var close = UITheme.ThemedButton(panel.transform, new Vector2(300, -380), new Vector2(110, 52), L10n.Get("关 闭"), "red", 22);
             close.onClick.AddListener(() => Object.Destroy(panel));
         }
 
@@ -280,7 +281,7 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
             await OnlineState.Refresh();
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(880, 700));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 900));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
@@ -297,21 +298,21 @@ namespace Game.HotUpdate.ChestGame
                     var quest = q;
                     bool done = quest["progress"].AsInt >= quest["target"].AsInt;
                     bool claimed = quest["claimed"].AsBool;
-                    var row = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(0, y), new Vector2(820, 130));
+                    var row = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(0, y), new Vector2(620, 150));
                     var info = TDUIHelper.MakeText(row.transform, new Vector2(-20, 0), TextAnchor.MiddleLeft, 24);
                     var irt = info.rectTransform;
                     irt.anchorMin = irt.pivot = new Vector2(0, 0.5f);
-                    irt.anchoredPosition = new Vector2(-380, 24);
-                    TDUIHelper.SetSize(irt, 560, 44);
-                    info.text = "<color=#F5D061>" + quest["name"].Value + "</color>   <color=#9AA3B2>+" + quest["rewardGold"].AsInt + " 金币 +" + quest["rewardXp"].AsInt + " 经验</color>";
-                    var prog = TDUIHelper.MakeText(row.transform, new Vector2(-380, -28), TextAnchor.MiddleLeft, 22);
+                    irt.anchoredPosition = new Vector2(-280, 40);
+                    TDUIHelper.SetSize(irt, 520, 44);
+                    info.text = "<color=#F5D061>" + quest["name"].Value + "</color>\n<color=#9AA3B2>+" + quest["rewardGold"].AsInt + " 金币 +" + quest["rewardXp"].AsInt + " 经验</color>";
+                    var prog = TDUIHelper.MakeText(row.transform, new Vector2(-280, -20), TextAnchor.MiddleLeft, 22);
                     var prt = prog.rectTransform;
                     prt.anchorMin = prt.pivot = new Vector2(0, 0.5f);
-                    TDUIHelper.SetSize(prt, 560, 40);
+                    TDUIHelper.SetSize(prt, 520, 40);
                     prog.color = done ? UITheme.Green : UITheme.TextSub;
                     prog.text = quest["progress"].AsInt + " / " + quest["target"].AsInt + (done ? " ✓" : "");
 
-                    var claim = UITheme.ThemedButton(row.transform, new Vector2(280, 0), new Vector2(220, 56),
+                    var claim = UITheme.ThemedButton(row.transform, new Vector2(220, -50), new Vector2(180, 52),
                         claimed ? L10n.Get("已领取") : L10n.Get("领 取"), claimed ? "blue" : "green", 24);
                     claim.interactable = done && !claimed;
                     claim.onClick.AddListener(async () =>
@@ -329,7 +330,7 @@ namespace Game.HotUpdate.ChestGame
                     });
                     if (done && !claimed && OnlineState.FeatureOn("ad"))
                     {
-                        var dbl = UITheme.ThemedButton(row.transform, new Vector2(140, -34), new Vector2(120, 44),
+                        var dbl = UITheme.ThemedButton(row.transform, new Vector2(220, 46), new Vector2(180, 52),
                             "<color=#F5D061>×2 " + L10n.Get("广告") + "</color>", "gold", 18);
                         dbl.onClick.AddListener(() =>
                         {
@@ -365,7 +366,7 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
             await OnlineState.Refresh();
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(820, 640));
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 760));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
@@ -377,8 +378,8 @@ namespace Game.HotUpdate.ChestGame
             foreach (var ad in GameConfig.Tables.TbAd.DataList)
             {
                 var cfg = ad;
-                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(740, 88),
-                    "<color=#4DD0A5>" + cfg.Name + "</color> · " + cfg.Desc, "gold", 22);
+                var row = UITheme.ThemedButton(panel.transform, new Vector2(0, y), new Vector2(600, 104),
+                    "<color=#4DD0A5>" + cfg.Name + "</color> · " + cfg.Desc, "gold", 20);
                 UITheme.SkinButton(row, "green");
                 var label = row.GetComponentInChildren<Text>();
                 label.alignment = TextAnchor.MiddleLeft;

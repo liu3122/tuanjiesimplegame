@@ -88,7 +88,7 @@ namespace Game.HotUpdate.ChestGame
             {
                 var lot = node;
                 var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == lot["configId"].AsInt);
-                var row = UITheme.ThemedButton(_listRoot, new Vector2(0, y), new Vector2(1120, 92), "", "blue", 21);
+                var row = UITheme.ThemedButton(_listRoot, new Vector2(0, y), new Vector2(940, 96), "", "blue", 20);
                 UITheme.SkinButton(row, "gold");
                 row.image.color = lot["lotId"].AsLong == _selectedLot
                     ? new Color(0.35f, 0.42f, 0.55f, 0.95f)

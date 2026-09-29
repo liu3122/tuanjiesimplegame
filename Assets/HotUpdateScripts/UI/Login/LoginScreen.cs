@@ -18,7 +18,7 @@ namespace Game.HotUpdate.ChestGame
             if (root == null) { UIRoot.ToastStatic(L10n.Get("LoginScreen 加载失败")); return; }
 
             var input = UIManager.Find<InputField>(root.transform, "input_name");
-            var langBtn = UITheme.ThemedButton(root.transform, new Vector2(860, -50), new Vector2(170, 56),
+            var langBtn = UITheme.ThemedButton(root.transform, new Vector2(410, -50), new Vector2(170, 56),
                 L10n.IsZh ? "EN" : L10n.Get("中文"), "blue", 24);
             langBtn.onClick.AddListener(L10n.ToggleLanguage);
 
