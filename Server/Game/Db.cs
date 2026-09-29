@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS season_reward(
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
             foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
-                                        "ad_state TEXT", "quest_state TEXT" })
+                                        "ad_state TEXT", "quest_state TEXT", "sign_state TEXT" })
             {
                 try { Exec(conn, "ALTER TABLE player ADD COLUMN " + col); } catch (Exception) { }
             }
@@ -190,19 +190,24 @@ CREATE TABLE IF NOT EXISTS season_reward(
                 progress = p.QuestProgress.ToDictionary(kv => kv.Key, kv => kv.Value),
                 claimed = p.QuestClaimed.ToList(),
             }, JsonOpts);
+            string signState = JsonSerializer.Serialize(new SignStateDto
+            {
+                total = p.SignTotal, streak = p.SignStreak, lastDay = p.LastSignDay ?? "",
+            }, JsonOpts);
             string adState = JsonSerializer.Serialize(new AdStateDto
             {
                 day = p.AdDailyDay,
                 last = p.AdLastUse.ToDictionary(kv => kv.Key, kv => kv.Value),
                 count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs",
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
                 ("$g", gold), ("$c", cid), ("$e", escrow),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
                 ("$ad", adState as object ?? DBNull.Value),
                 ("$qs", questState as object ?? DBNull.Value),
+                ("$sg", signState as object ?? DBNull.Value),
                 ("$r", region)));
         }
 
@@ -646,7 +651,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -685,6 +690,16 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                             p.QuestDay = qs.day ?? "";
                             foreach (var kv in qs.progress ?? new Dictionary<string, int>()) p.QuestProgress[kv.Key] = kv.Value;
                             foreach (var id in qs.claimed ?? new List<string>()) p.QuestClaimed.Add(id);
+                        }
+                    }
+                    if (!r.IsDBNull(13))
+                    {
+                        var sg = JsonSerializer.Deserialize<SignStateDto>(r.GetString(13), JsonOpts);
+                        if (sg != null)
+                        {
+                            p.SignTotal = sg.total;
+                            p.SignStreak = sg.streak;
+                            p.LastSignDay = sg.lastDay ?? "";
                         }
                     }
                     if (!r.IsDBNull(7))
@@ -770,6 +785,14 @@ namespace SimpleGameServer.Game
 
 namespace SimpleGameServer.Game
 {
+    /// <summary>签到状态持久化 DTO（player.sign_state JSON 列）</summary>
+    public class SignStateDto
+    {
+        public int total { get; set; }
+        public int streak { get; set; }
+        public string lastDay { get; set; }
+    }
+
     /// <summary>每日任务状态持久化 DTO（player.quest_state JSON 列）</summary>
     public class QuestStateDto
     {

@@ -388,6 +388,73 @@ namespace SimpleGameServer.Game
             }
         }
 
+        /// <summary>每日签到：7 天循环递增；连续签到档位递进，断签本轮回第 1 天（累计天数不清零）</summary>
+        public (bool ok, string err, object data) SignIn(Player player, bool doubleReward)
+        {
+            lock (player.Sync)
+            {
+                if (!Features.IsOn(Features.Sign)) return (false, "FEATURE_DISABLED", null);
+                string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                if (player.LastSignDay == today) return (false, "SIGN_DONE", null);
+
+                // 连续判定：昨天签过 → 档位 +1；否则本轮回第 1 天（累计总数始终递增）
+                string yesterday = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+                int streak = player.LastSignDay == yesterday ? player.SignStreak + 1 : 1;
+                int cycleDay = ((streak - 1) % 7) + 1;
+                var row = GameTables.Tables.TbSign[cycleDay];
+                int baseGold = row != null ? row.RewardGold : 30;
+
+                bool doubled = false;
+                if (doubleReward)
+                {
+                    if (!Features.IsOn(Features.Ad)) return (false, "FEATURE_DISABLED", null);
+                    RollAdDay(player);
+                    int used = player.AdDailyCount.GetValueOrDefault("sign_double");
+                    if (used >= 1) return (false, "AD_LIMIT", null);
+                    player.AdDailyCount["sign_double"] = used + 1;
+                    player.AdLastUse["sign_double"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    doubled = true;
+                }
+                int gold = baseGold * (doubled ? 2 : 1);
+                player.Gold += gold;
+                player.SignStreak = streak;
+                player.SignTotal += 1;
+                player.LastSignDay = today;
+                Levels.AddXp(player, 5);
+                Quests.Progress(player, "ad", doubled ? 1 : 0);
+                Db.AddGoldTx(player.Id, gold, "sign_reward", 0);
+                Db.SavePlayer(player);
+                return (true, null, new
+                {
+                    gold,
+                    streak,
+                    cycleDay,
+                    message = $"签到成功（本轮第 {cycleDay} 天）：+{gold} 金币{(doubled ? "（广告双倍）" : "")}",
+                    sign = SignView(player),
+                });
+            }
+        }
+
+        /// <summary>签到视图（需持 player.Sync）</summary>
+        internal static object SignView(Player p)
+        {
+            string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            string yesterday = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+            bool signed = p.LastSignDay == today;
+            int streakIfSign = p.LastSignDay == yesterday ? p.SignStreak + 1 : 1;
+            int nextCycleDay = signed ? ((p.SignStreak - 1) % 7) + 1 : ((streakIfSign - 1) % 7) + 1;
+            var row = GameTables.Tables.TbSign[nextCycleDay];
+            return new
+            {
+                todaySigned = signed,
+                streak = p.SignStreak,
+                total = p.SignTotal,
+                cycleDay = nextCycleDay,
+                todayReward = row != null ? row.RewardGold : 30,
+                cycleRewards = GameTables.Tables.TbSign.DataList.OrderBy(r => r.Day).Select(r => r.RewardGold).ToList(),
+            };
+        }
+
         /// <summary>领取任务奖励（double=true：先看完广告再调，双倍奖励受广告日限约束）</summary>
         public (bool ok, string err, object data) ClaimQuest(Player player, string questId, bool doubleReward)
         {
@@ -787,6 +854,7 @@ namespace SimpleGameServer.Game
                 featureFlags = Features.View(),
                 ads = AdStatusView(player),
                 quests = questView,
+                sign = SignView(player),
                 chests,
             };
         }

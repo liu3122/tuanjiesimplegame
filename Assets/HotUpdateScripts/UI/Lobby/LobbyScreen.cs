@@ -42,10 +42,15 @@ namespace Game.HotUpdate.ChestGame
                 L10n.Get("任 务"), "blue", 24);
             questBtn.name = "btn_quest_entry";
             questBtn.onClick.AddListener(() => ShowQuests());
+            // 每日签到（开关关闭时隐藏）
+            var signBtn = UITheme.ThemedButton(root.transform, new Vector2(60, -50), new Vector2(170, 56),
+                L10n.Get("签 到"), "gold", 24);
+            signBtn.name = "btn_sign_entry";
+            signBtn.onClick.AddListener(() => ShowSign());
             UIRoot.Instance.RefreshTop();
 
-            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject);
-            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject);
+            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject);
+            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject);
             _ = MaybeShowTutorial();
         }
 
@@ -85,7 +90,7 @@ namespace Game.HotUpdate.ChestGame
         }
 
         /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决/福利按钮）</summary>
-        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null)
+        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null)
         {
             if (root == null) return;
             if (OnlineState.State == null) return; // 无快照时默认显示
@@ -95,11 +100,99 @@ namespace Game.HotUpdate.ChestGame
             if (duelBtn != null) duelBtn.SetActive(OnlineState.FeatureOn("duel") || OnlineState.FeatureOn("potduel"));
             if (adBtn != null) adBtn.SetActive(OnlineState.FeatureOn("ad"));
             if (questBtn != null) questBtn.SetActive(OnlineState.FeatureOn("quest"));
+            if (signBtn != null) signBtn.SetActive(OnlineState.FeatureOn("sign"));
         }
 
-        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null)
+        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null)
         {
-            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn);
+            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn, signBtn);
+        }
+
+        /// <summary>签到面板：7 天循环进度 + 签到 / 看广告双倍</summary>
+        private static async void ShowSign()
+        {
+            if (!OnlineState.FeatureOn("sign"))
+            {
+                UIRoot.ToastStatic(L10n.Get("该玩法已关闭"));
+                return;
+            }
+            await OnlineState.Refresh();
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(900, 620));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
+            title.text = "<color=#F5D061>" + L10n.Get("每日签到") + "</color> <color=#9AA3B2>" + L10n.Get("（连续 7 天循环递增，断签本轮回第 1 天）") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 860, 50);
+
+            var sign = OnlineState.State != null ? OnlineState.State["data"]["sign"] : null;
+            if (sign == null || sign.IsNull) { Object.Destroy(panel); return; }
+            bool signed = sign["todaySigned"].AsBool;
+            int cycleDay = sign["cycleDay"].AsInt;
+
+            // 7 天奖励格子
+            var rewards = sign["cycleRewards"];
+            float startX = -360f;
+            for (int i = 0; i < rewards.Count; i++)
+            {
+                int day = i + 1;
+                bool reached = signed ? (day <= ((sign["streak"].AsInt - 1) % 7) + 1) : (day < cycleDay);
+                bool today = !signed && day == cycleDay;
+                var cell = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(startX + i * 120, -140), new Vector2(110, 130));
+                var dayText = TDUIHelper.MakeText(cell.transform, new Vector2(0, -42), TextAnchor.MiddleCenter, 20);
+                dayText.text = L10n.Get("第") + " " + day + " " + L10n.Get("天");
+                var goldText = TDUIHelper.MakeText(cell.transform, new Vector2(0, 4), TextAnchor.MiddleCenter, 24);
+                goldText.color = reached ? UITheme.GoldLight : (today ? UITheme.Green : Color.white);
+                goldText.text = rewards[i].AsInt.ToString("N0");
+                if (today) dayText.text = "<color=#4DD0A5>▶ " + dayText.text + "</color>";
+            }
+
+            var info = TDUIHelper.MakeText(panel.transform, new Vector2(0, -250), TextAnchor.MiddleCenter, 26);
+            info.text = signed
+                ? L10n.Get("今日已签 · 连续") + " " + sign["streak"].AsInt + " " + L10n.Get("天 · 累计") + " " + sign["total"].AsInt + " " + L10n.Get("天")
+                : L10n.Get("本轮第") + " " + cycleDay + " " + L10n.Get("天 · 今日可得") + " <color=#F5D061>" + sign["todayReward"].AsInt.ToString("N0") + "</color>";
+            TDUIHelper.SetSize(info.rectTransform, 860, 50);
+
+            var signBtn = UITheme.ThemedButton(panel.transform, new Vector2(signed ? 0 : -120, -360), new Vector2(220, 64),
+                signed ? L10n.Get("已签到") : L10n.Get("签 到"), signed ? "blue" : "green", 26);
+            signBtn.interactable = !signed;
+            signBtn.onClick.AddListener(async () =>
+            {
+                var r = await ApiClient.SignAsync();
+                if (r == null || !r["ok"].AsBool)
+                {
+                    UIRoot.ToastStatic(L10n.Get("签到失败：") + Screens.ErrText(r));
+                    return;
+                }
+                UIRoot.ToastStatic(r["data"]["message"].Value);
+                UIRoot.Instance.RefreshTop();
+                Object.Destroy(panel);
+                ShowSign();
+            });
+            if (!signed && OnlineState.FeatureOn("ad"))
+            {
+                var dbl = UITheme.ThemedButton(panel.transform, new Vector2(140, -360), new Vector2(220, 64),
+                    "<color=#F5D061>×2 " + L10n.Get("广告签到") + "</color>", "gold", 24);
+                dbl.onClick.AddListener(() =>
+                {
+                    AdBridge.Show("sign_double", L10n.Get("双倍签到奖励"), async () =>
+                    {
+                        var r = await ApiClient.SignAsync(true);
+                        if (r == null || !r["ok"].AsBool)
+                        {
+                            UIRoot.ToastStatic(L10n.Get("签到失败：") + Screens.ErrText(r));
+                            return;
+                        }
+                        UIRoot.ToastStatic(r["data"]["message"].Value);
+                        UIRoot.Instance.RefreshTop();
+                        Object.Destroy(panel);
+                        ShowSign();
+                    });
+                });
+            }
+
+            var close = UITheme.ThemedButton(panel.transform, new Vector2(360, -360), new Vector2(120, 52), L10n.Get("关 闭"), "red", 22);
+            close.onClick.AddListener(() => Object.Destroy(panel));
         }
 
         /// <summary>每日任务面板：进度 / 领取 / 看广告双倍领取</summary>

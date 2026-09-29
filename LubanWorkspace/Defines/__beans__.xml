@@ -160,6 +160,14 @@
         </bean>
     </module>
 
+    <module name="sign">
+        <!-- 每日签到奖励：7 天循环递增（Day=轮内第 N 天）；连续签到档位递进，断签本轮回第 1 天 -->
+        <bean name="Sign">
+            <var name="Day" type="int"/>
+            <var name="RewardGold" type="int"/>
+        </bean>
+    </module>
+
     <module name="feature">
         <!-- 玩法开关：服务端拦截对应路由/WS，客户端隐藏入口；缺行 = 默认开启 -->
         <bean name="Feature">

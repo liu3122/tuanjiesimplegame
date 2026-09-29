@@ -33,5 +33,10 @@
     "Id": "quest",
     "Enabled": true,
     "Desc": "每日任务（轮换 3 个，含广告双倍领取）"
+  },
+  {
+    "Id": "sign",
+    "Enabled": true,
+    "Desc": "每日签到（7 天循环递增，含广告双倍）"
   }
 ]

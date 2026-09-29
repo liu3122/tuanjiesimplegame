@@ -41,6 +41,13 @@ namespace SimpleGameServer.Game
         public HashSet<string> QuestClaimed { get; } = new();
         /// <summary>任务计数日（yyyy-MM-dd）</summary>
         public string QuestDay { get; set; } = "";
+        // ---- 每日签到（7 天循环递增） ----
+        /// <summary>累计签到天数（终身，不清零）</summary>
+        public int SignTotal { get; set; }
+        /// <summary>连续签到天数（断签本轮回 1）</summary>
+        public int SignStreak { get; set; }
+        /// <summary>上次签到日（yyyy-MM-dd）</summary>
+        public string LastSignDay { get; set; } = "";
         /// <summary>细粒度并发锁。全局加锁顺序约定：Room/Lot → Chest → Player（Player 内多锁按 Id 排序）</summary>
         public readonly object Sync = new();
     }

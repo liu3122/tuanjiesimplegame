@@ -70,6 +70,9 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> AdRewardAsync(string placement) =>
             PostAsync("/api/ad/reward", $"{{\"placement\":\"{placement}\"}}");
 
+        public static Task<JSONNode> SignAsync(bool doubleReward = false) =>
+            PostAsync("/api/sign", $"{{\"double\":{(doubleReward ? "true" : "false")}}}");
+
         public static Task<JSONNode> ClaimQuestAsync(string questId, bool doubleReward = false) =>
             PostAsync("/api/quest/claim", $"{{\"questId\":\"{questId}\",\"double\":{(doubleReward ? "true" : "false")}}}");
 

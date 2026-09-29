@@ -21,6 +21,8 @@
     <table name="TbAd" value="ad.Ad" index="Id" input="tb_ad.xlsx"/>
         <!-- 每日任务池 -->
     <table name="TbQuest" value="quest.Quest" index="Id" input="tb_quest.xlsx"/>
+        <!-- 签到奖励（7 天循环） -->
+    <table name="TbSign" value="sign.Sign" index="Day" input="tb_sign.xlsx"/>
         <!-- 全局配置（单例表） -->
     <table name="TbGlobal" value="global.Global" mode="one" input="tb_global.xlsx"/>
 </module>
