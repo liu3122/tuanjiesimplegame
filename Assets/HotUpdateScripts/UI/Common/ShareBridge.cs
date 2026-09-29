@@ -13,6 +13,9 @@ namespace Game.HotUpdate.ChestGame
         string Name { get; }
         /// <summary>发起分享。SDK 版：调平台 API；完成后回调 onDone(success)。</summary>
         void Share(string title, string text, string url, Action<bool> onDone);
+
+        /// <summary>分享图片战报（本地 PNG 路径）。SDK 版：微信/抖音图片消息分享。</summary>
+        void ShareImage(string imagePath, string title, string text, Action<bool> onDone);
     }
 
     /// <summary>默认实现：复制到系统剪贴板（编辑器/无 SDK 环境可用）</summary>
@@ -27,6 +30,17 @@ namespace Game.HotUpdate.ChestGame
             onDone?.Invoke(true);
 #else
             // 移动端剪贴板可接原生插件；无 SDK 时退化为提示
+            onDone?.Invoke(false);
+#endif
+        }
+
+        public void ShareImage(string imagePath, string title, string text, Action<bool> onDone)
+        {
+#if UNITY_EDITOR || UNITY_STANDALONE
+            GUIUtility.systemCopyBuffer = title + " " + text + " [图] " + imagePath;
+            Debug.Log("[ShareImage] 战报已生成: " + imagePath);
+            onDone?.Invoke(true);
+#else
             onDone?.Invoke(false);
 #endif
         }

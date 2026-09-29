@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS season_reward(
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
             foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
-                                        "ad_state TEXT", "quest_state TEXT", "sign_state TEXT" })
+                                        "ad_state TEXT", "quest_state TEXT", "sign_state TEXT", "inviter_id INTEGER NOT NULL DEFAULT 0", "referral_paid INTEGER NOT NULL DEFAULT 0" })
             {
                 try { Exec(conn, "ALTER TABLE player ADD COLUMN " + col); } catch (Exception) { }
             }
@@ -201,14 +201,15 @@ CREATE TABLE IF NOT EXISTS season_reward(
                 last = p.AdLastUse.ToDictionary(kv => kv.Key, kv => kv.Value),
                 count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg",
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg,$iv,$rp)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg, inviter_id=$iv, referral_paid=$rp",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
                 ("$g", gold), ("$c", cid), ("$e", escrow),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
                 ("$ad", adState as object ?? DBNull.Value),
                 ("$qs", questState as object ?? DBNull.Value),
                 ("$sg", signState as object ?? DBNull.Value),
+                ("$iv", p.InviterId), ("$rp", p.ReferralPaid ? 1 : 0),
                 ("$r", region)));
         }
 
@@ -652,7 +653,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -666,6 +667,8 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                         CharacterId = r.GetInt32(4),
                         Region = r.IsDBNull(6) ? "CN" : r.GetString(6),
                         Xp = r.IsDBNull(8) ? 0 : r.GetInt32(8),
+                        InviterId = r.IsDBNull(14) ? 0 : r.GetInt64(14),
+                        ReferralPaid = !r.IsDBNull(15) && r.GetInt32(15) == 1,
                         Level = r.IsDBNull(9) ? 1 : r.GetInt32(9),
                         DuelRating = r.IsDBNull(10) ? Elo.StartRating : r.GetInt32(10),
                     };

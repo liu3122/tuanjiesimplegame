@@ -509,11 +509,13 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
             long income = r["data"]["income"].AsLong;
-            UIRoot.ToastStatic(r["data"]["final"].AsBool
+            bool final = r["data"]["final"].AsBool;
+            UIRoot.ToastStatic(final
                 ? "开箱获得 " + income.ToString("N0") + " 金币！"
                 : "已出售给系统，获得 " + income.ToString("N0"));
             UIRoot.Instance.RefreshTop();
-            Screens.ShowBag();
+            var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == _chest["configId"].AsInt);
+            BattleReport.ShowChestSettle(income, final, config != null ? config.Name : "宝箱", () => Screens.ShowBag());
         }
     }
 }

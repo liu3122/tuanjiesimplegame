@@ -34,6 +34,10 @@ namespace Game.HotUpdate.ChestGame
             if (err == "ITEM_NO_EFFECT") return L10n.Get("当前无需使用该道具");
             if (err == "ITEM_LIMIT") return L10n.Get("今日道具使用已达上限");
             if (err == "NAME_TAKEN") return L10n.Get("这个名字已被使用");
+            if (err == "BAD_CODE") return L10n.Get("邀请码无效");
+            if (err == "SELF_INVITE") return L10n.Get("不能邀请自己");
+            if (err == "ALREADY_BOUND") return L10n.Get("已绑定过邀请人");
+            if (err == "NOT_ROOKIE") return L10n.Get("仅新玩家（未开过箱）可绑定");
             if (err == "ALREADY_TOP") return L10n.Get("你已是最高出价");
             if (err == "OWN_LOT") return L10n.Get("不能竞拍自己的宝箱");
             if (err == "AUCTION_ENDED") return L10n.Get("拍卖已结束");

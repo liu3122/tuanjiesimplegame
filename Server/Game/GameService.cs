@@ -210,7 +210,9 @@ namespace SimpleGameServer.Game
                     player.Gold += income;
                     Levels.AddXp(player, Levels.XpChestSettle);
                     Quests.Progress(player, "chest");
+                    bool firstSettle = player.Opens == 0;
                     player.Opens++;
+                    if (firstSettle) PayReferralIfNeeded(player);
                 }
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
@@ -241,7 +243,9 @@ namespace SimpleGameServer.Game
                     player.Gold += income;
                     Levels.AddXp(player, Levels.XpChestSettle);
                     Quests.Progress(player, "chest");
+                    bool firstSettle = player.Opens == 0;
                     player.Opens++;
+                    if (firstSettle) PayReferralIfNeeded(player);
                 }
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
@@ -389,6 +393,63 @@ namespace SimpleGameServer.Game
             }
         }
 
+        // ---------------- 邀请双奖 ----------------
+
+        public const int ReferralReward = 100;      // 双方各得
+        public const int ReferralDailyCap = 5;      // 邀请人每日发奖上限（防刷）
+
+        /// <summary>绑定邀请人（仅新人：未开过箱且未绑定）；首箱结算时双方各得 ReferralReward</summary>
+        public (bool ok, string err, object data) BindReferral(Player player, string code)
+        {
+            lock (player.Sync)
+            {
+                if (!Features.IsOn(Features.Referral)) return (false, "FEATURE_DISABLED", null);
+                if (!long.TryParse((code ?? "").Trim(), out var inviterId) || inviterId <= 0) return (false, "BAD_CODE", null);
+                if (inviterId == player.Id) return (false, "SELF_INVITE", null);
+                if (player.InviterId != 0) return (false, "ALREADY_BOUND", null);
+                if (player.Opens > 0) return (false, "NOT_ROOKIE", null);
+                if (!_store.Players.TryGetValue(inviterId, out var inviter)) return (false, "BAD_CODE", null);
+                player.InviterId = inviterId;
+                Db.SavePlayer(player);
+                return (true, null, new { inviter = inviter.Name, reward = ReferralReward });
+            }
+        }
+
+        /// <summary>新人首箱结算 → 双方发奖（调用方持新人 player.Sync；锁序：新人 → 邀请人按 Id）</summary>
+        private void PayReferralIfNeeded(Player newbie)
+        {
+            if (newbie.ReferralPaid || newbie.InviterId <= 0) return;
+            if (!_store.Players.TryGetValue(newbie.InviterId, out var inviter)) return;
+            RollAdDay(inviter);
+            if (inviter.AdDailyCount.GetValueOrDefault("referral") >= ReferralDailyCap) return; // 今日已达上限，奖励丢失（绑定页有提示）
+
+            newbie.ReferralPaid = true;
+            newbie.Gold += ReferralReward;
+            Db.AddGoldTx(newbie.Id, ReferralReward, "referral", inviter.Id);
+            Db.SavePlayer(newbie);
+
+            lock (inviter.Sync)
+            {
+                inviter.Gold += ReferralReward;
+                inviter.AdDailyCount["referral"] = inviter.AdDailyCount.GetValueOrDefault("referral") + 1;
+                Db.AddGoldTx(inviter.Id, ReferralReward, "referral", newbie.Id);
+                Db.SavePlayer(inviter);
+            }
+        }
+
+        /// <summary>邀请视图（我的邀请码 / 已邀请人数 / 我的邀请人）</summary>
+        private object ReferralView(Player p)
+        {
+            string inviterName = null;
+            if (p.InviterId > 0 && _store.Players.TryGetValue(p.InviterId, out var inv)) inviterName = inv.Name;
+            int invited = 0;
+            foreach (var other in _store.Players.Values)
+            {
+                if (other.InviterId == p.Id) invited++;
+            }
+            return new { myCode = p.Id, invited, reward = ReferralReward, inviter = inviterName, bound = p.InviterId != 0 };
+        }
+
         /// <summary>道具商店（买即用，无背包）：冷却重置/补签/挑战券/改名——金币的核心消耗出口</summary>
         public (bool ok, string err, object data) BuyItem(Player player, int itemId, string arg)
         {
@@ -489,6 +550,7 @@ namespace SimpleGameServer.Game
                     cycleDay,
                     message = $"签到成功（本轮第 {cycleDay} 天）：+{gold} 金币{(doubled ? "（广告双倍）" : "")}",
                     sign = SignView(player),
+                referral = ReferralView(player),
                 });
             }
         }
@@ -914,6 +976,7 @@ namespace SimpleGameServer.Game
                 ads = AdStatusView(player),
                 quests = questView,
                 sign = SignView(player),
+                referral = ReferralView(player),
                 chests,
             };
         }

@@ -47,10 +47,15 @@ namespace Game.HotUpdate.ChestGame
                 L10n.Get("签 到"), "gold", 24);
             signBtn.name = "btn_sign_entry";
             signBtn.onClick.AddListener(() => ShowSign());
+            // 邀请双奖（开关关闭时隐藏）
+            var inviteBtn = UITheme.ThemedButton(root.transform, new Vector2(-140, -50), new Vector2(170, 56),
+                L10n.Get("邀 请"), "gold", 24);
+            inviteBtn.name = "btn_invite_entry";
+            inviteBtn.onClick.AddListener(() => ShowInvite());
             UIRoot.Instance.RefreshTop();
 
-            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject);
-            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject);
+            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject);
+            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject);
             _ = MaybeShowTutorial();
         }
 
@@ -90,7 +95,7 @@ namespace Game.HotUpdate.ChestGame
         }
 
         /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决/福利按钮）</summary>
-        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null)
+        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null)
         {
             if (root == null) return;
             if (OnlineState.State == null) return; // 无快照时默认显示
@@ -101,11 +106,82 @@ namespace Game.HotUpdate.ChestGame
             if (adBtn != null) adBtn.SetActive(OnlineState.FeatureOn("ad"));
             if (questBtn != null) questBtn.SetActive(OnlineState.FeatureOn("quest"));
             if (signBtn != null) signBtn.SetActive(OnlineState.FeatureOn("sign"));
+            if (inviteBtn != null) inviteBtn.SetActive(OnlineState.FeatureOn("referral"));
         }
 
-        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null)
+        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null)
         {
-            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn, signBtn);
+            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn, signBtn, inviteBtn);
+        }
+
+        /// <summary>邀请双奖面板：我的邀请码 / 复制邀请文案 / 新人绑定邀请人</summary>
+        private static async void ShowInvite()
+        {
+            if (!OnlineState.FeatureOn("referral"))
+            {
+                UIRoot.ToastStatic(L10n.Get("该玩法已关闭"));
+                return;
+            }
+            await OnlineState.Refresh();
+            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(760, 640));
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+
+            var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
+            title.text = "<color=#F5D061>" + L10n.Get("邀请好友 · 双方得奖") + "</color>";
+            TDUIHelper.SetSize(title.rectTransform, 720, 50);
+
+            var rf = OnlineState.State != null ? OnlineState.State["data"]["referral"] : null;
+            if (rf == null || rf.IsNull) { Object.Destroy(panel); return; }
+
+            var code = TDUIHelper.MakeText(panel.transform, new Vector2(0, -110), TextAnchor.MiddleCenter, 40);
+            code.text = L10n.Get("我的邀请码") + " <color=#F5D061>" + rf["myCode"].AsLong + "</color>";
+            TDUIHelper.SetSize(code.rectTransform, 720, 60);
+            var sub = TDUIHelper.MakeText(panel.transform, new Vector2(0, -180), TextAnchor.MiddleCenter, 22);
+            sub.color = UITheme.TextSub;
+            sub.text = L10n.Get("已邀请") + " " + rf["invited"].AsInt + " " + L10n.Get("人 · 新人开完第一个宝箱双方各得") + " " + rf["reward"].AsInt + " " + L10n.Get("金币（邀请人每日最多 5 人）");
+            TDUIHelper.SetSize(sub.rectTransform, 700, 60);
+
+            var copy = UITheme.ThemedButton(panel.transform, new Vector2(0, -280), new Vector2(360, 64), L10n.Get("复制邀请文案"), "green", 24);
+            copy.onClick.AddListener(() =>
+            {
+                GUIUtility.systemCopyBuffer = L10n.Get("来和我开同一个宝箱！下载后输入我的邀请码 ") + rf["myCode"].AsLong +
+                    L10n.Get("，你开完第一个宝箱我们各得 ") + rf["reward"].AsInt + L10n.Get(" 金币");
+                UIRoot.ToastStatic(L10n.Get("邀请文案已复制"));
+            });
+
+            // 新人绑定区
+            if (!rf["bound"].AsBool)
+            {
+                var bindTitle = TDUIHelper.MakeText(panel.transform, new Vector2(0, -380), TextAnchor.MiddleCenter, 22);
+                bindTitle.color = UITheme.Blue;
+                bindTitle.text = L10n.Get("我是新人：输入邀请人的邀请码，首箱各得金币");
+                TDUIHelper.SetSize(bindTitle.rectTransform, 700, 40);
+                var input = TDUIHelper.MakeInputField(panel.transform, new Vector2(-70, -450), new Vector2(300, 56), L10n.Get("邀请码"));
+                var bind = UITheme.ThemedButton(panel.transform, new Vector2(190, -450), new Vector2(160, 56), L10n.Get("绑 定"), "gold", 24);
+                bind.onClick.AddListener(async () =>
+                {
+                    var r = await ApiClient.BindReferralAsync(input.text.Trim());
+                    if (r == null || !r["ok"].AsBool)
+                    {
+                        UIRoot.ToastStatic(L10n.Get("绑定失败：") + Screens.ErrText(r));
+                        return;
+                    }
+                    UIRoot.ToastStatic(L10n.Get("绑定成功！邀请人：") + r["data"]["inviter"].Value);
+                    Object.Destroy(panel);
+                    ShowInvite();
+                });
+            }
+            else
+            {
+                var bound = TDUIHelper.MakeText(panel.transform, new Vector2(0, -420), TextAnchor.MiddleCenter, 22);
+                bound.color = UITheme.TextSub;
+                bound.text = L10n.Get("我的邀请人：") + "<color=#F5D061>" + (rf["inviter"].IsNull ? "?" : rf["inviter"].Value) + "</color>";
+                TDUIHelper.SetSize(bound.rectTransform, 700, 40);
+            }
+
+            var close = UITheme.ThemedButton(panel.transform, new Vector2(0, -560), new Vector2(200, 52), L10n.Get("关 闭"), "red", 24);
+            close.onClick.AddListener(() => Object.Destroy(panel));
         }
 
         /// <summary>签到面板：7 天循环进度 + 签到 / 看广告双倍</summary>

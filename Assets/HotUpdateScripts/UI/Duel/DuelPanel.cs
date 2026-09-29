@@ -323,6 +323,14 @@ namespace Game.HotUpdate.ChestGame
                              : "<color=#E05D5D>" + L10n.Get("惜败") + " " + delta.ToString("N0") + "</color>");
             PushFeed("—— " + L10n.Get("结算") + " ——\n" + sb.ToString());
             UIRoot.Instance.RefreshTop();
+            long myScore = 0; long oppScore = 0; string oppName = "?";
+            foreach (JSONNode row in e["board"])
+            {
+                if (row["name"].Value == ApiClient.PlayerName) myScore = row["score"].AsLong;
+                else { oppScore = row["score"].AsLong; oppName = row["name"].Value; }
+            }
+            var shareRow = UITheme.ThemedButton(transform, new Vector2(0, -320), new Vector2(280, 56), "分享战报", "gold", 24);
+            shareRow.onClick.AddListener(() => BattleReport.ShowDuel(delta > 0, tie, delta, myScore, oppScore, oppName, _potMode));
         }
 
         private void Redraw()

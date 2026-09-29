@@ -43,6 +43,11 @@ namespace SimpleGameServer.Game
         public string QuestDay { get; set; } = "";
         /// <summary>每日挑战额外次数（挑战券，随任务日清零）</summary>
         public int DailyExtra { get; set; }
+        // ---- 邀请双奖 ----
+        /// <summary>我的邀请人（0=无；仅新人可绑定）</summary>
+        public long InviterId { get; set; }
+        /// <summary>邀请奖励是否已发放（新人首箱结算时双方发奖）</summary>
+        public bool ReferralPaid { get; set; }
         // ---- 每日签到（7 天循环递增） ----
         /// <summary>累计签到天数（终身，不清零）</summary>
         public int SignTotal { get; set; }

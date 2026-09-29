@@ -61,12 +61,18 @@ r = post('/api/item/buy', t, json.dumps({'itemId': 9999}))
 assert not r['ok'] and r['error'] == 'BAD_ITEM'
 print('PASS 无效道具拒绝')
 
-# 5) 经济报表可见 item_buy
-rep = get('/api/admin/economy', admin='dev-admin') if False else None
+# 5) 经济报表可见 item_buy（增量比对：本测试共花费 200+150+500）
 import urllib.request as u
-req = u.Request(BASE + '/api/admin/economy', headers={'X-Admin-Token': 'dev-admin'})
-rep = json.load(u.urlopen(req))['data']
-item_buy = [r for r in rep['byReason'] if r['reason'] == 'item_buy']
-assert item_buy and item_buy[0]['humanDelta'] == -(200 + 150 + 500), item_buy
-print(f"PASS 经济报表 item_buy 下水道: {item_buy[0]['humanDelta']}")
+def item_buy_delta():
+    req = u.Request(BASE + '/api/admin/economy', headers={'X-Admin-Token': 'dev-admin'})
+    rep = json.load(u.urlopen(req))['data']
+    row = [r for r in rep['byReason'] if r['reason'] == 'item_buy']
+    return row[0]['humanDelta'] if row else 0
+before = item_buy_delta()
+g_pre = state(t)['gold']
+r = post('/api/item/buy', t, json.dumps({'itemId': 2003}))  # 再买一张挑战券验证增量
+assert r['ok'], r
+after = item_buy_delta()
+assert after - before == -150, (before, after)
+print(f"PASS 经济报表 item_buy 增量: {after - before}")
 print('ALL PASS')
