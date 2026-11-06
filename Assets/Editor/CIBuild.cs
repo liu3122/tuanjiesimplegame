@@ -103,6 +103,27 @@ public static class CIBuild
         PlayerSettings.SetScriptingDefineSymbolsForGroup(group, merged);
         UnityEngine.Debug.Log($"[CIBuild] 宏 [{group}]：{prev} → {merged}");
 
+        // 构建主体 + finally 还原宏：无论成败，构建结束后剥离 CI 注入的宏，
+        // ProjectSettings 回到项目原有状态（编辑器开发环境不受构建副作用影响；产物已编译完成，事后还原不影响结果）
+        try
+        {
+            BuildContent(target, group, name, version);
+        }
+        finally
+        {
+            string current = PlayerSettings.GetScriptingDefineSymbolsForGroup(group);
+            string restored = MergeDefines(current, string.Empty); // 剥离 OwnedDefines，等价于"删掉不属于本次目标的 CI 宏"
+            if (restored != current)
+            {
+                PlayerSettings.SetScriptingDefineSymbolsForGroup(group, restored);
+                UnityEngine.Debug.Log($"[CIBuild] 宏已还原 [{group}]：{current} → {restored}");
+            }
+        }
+    }
+
+    /// <summary>构建主体：HybridCLR 生成 → 拷 DLL → 烘焙校验 → YooAsset → BuildPlayer（宏由调用方注入/还原）</summary>
+    private static void BuildContent(BuildTarget target, BuildTargetGroup group, string name, string version)
+    {
         // 3. HybridCLR 全量生成（热更 dll 编译 + link.xml + AOT 裁剪 + 桥接函数）；
         //    未初始化则自动安装默认 il2cpp（一次性动作：git clone + 拷贝 Unity il2cpp，需网络）
         var hybridclrInstaller = new HybridCLR.Editor.Installer.InstallerController();
