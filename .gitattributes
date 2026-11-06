@@ -1,0 +1,2 @@
+# ProjectSettings.asset：Unity 写 LF，固定为 LF 存储/检出，避免 autocrlf 反复翻转造成幽灵 M
+ProjectSettings/ProjectSettings.asset text eol=lf

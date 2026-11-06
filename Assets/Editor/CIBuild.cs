@@ -139,8 +139,10 @@ public static class CIBuild
         // 4. 热更/AOT 元数据 dll 拷入 Assets，交 YooAsset 收集
         ProjectSetup.CopyHotUpdateDlls();
 
-        // 5. UI prefab 烘焙（批处理下无确认弹窗）+ 契约校验（FAIL = LogError → 批处理退出码非 0）
-        BakeUIPrefabs.BakeAll();
+        // 5. UI 契约校验（对已提交 prefab；FAIL = LogError → 批处理退出码非 0）。
+        //    CI 不重烘焙 prefab：Unity 每次烘焙生成的对象哈希都会变（会话级），
+        //    自动重烘焙会导致每次构建后工作区出现无意义 diff。改布局代码后手动执行
+        //    Build/UI/Bake UI Prefabs 并提交 prefab；忘烘时契约校验（缺节点 FAIL）会拦住。
         ValidateUIPrefabs.Validate();
 
         // 6. YooAsset SBP 构建（LZ4 + 资源内置，配合 OFFLINE_BUNDLE 离线模式；走 CDN 时改 HostPlayMode 并上传 Bundles/<target> 目录）
