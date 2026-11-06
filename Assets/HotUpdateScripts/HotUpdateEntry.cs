@@ -33,7 +33,10 @@ namespace Game.HotUpdate
 
             Debug.Log($"[HotUpdate] 配置加载完成：道具 {tables.TbItem.DataList.Count} 条，宝箱 {tables.TbChest.DataList.Count} 档，角色 {tables.TbCharacter.DataList.Count} 个");
 
-            // 2. 进入主菜单（塔防 / 宝箱商人）
+            // 2. 平台引导：按编译宏（MINIGAME/STEAM/UNITY_IOS/UNITY_ANDROID）选定登录/内购 Bridge 实现
+            ChestGame.PlatformBootstrap.Init();
+
+            // 3. 进入主菜单（塔防 / 宝箱商人）
             GameHub.Show();
         }
     }

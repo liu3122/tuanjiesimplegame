@@ -67,3 +67,7 @@ crashlytics-build.properties
 # 运行时产物
 .offer_state.json
 Server/simplegame.db*
+
+# YooAsset SBP 内置包拷贝（构建产物，CIBuild 每次重拷）
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta

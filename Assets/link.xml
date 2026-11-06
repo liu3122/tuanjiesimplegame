@@ -1,0 +1,7 @@
+<linker>
+  <!-- YooAsset 运行时通过 Activator/泛型 new 实例化 FileSystem 等类型（FileSystemParameters.CreateFileSystem），
+       IL2CPP 裁剪会删掉未被静态引用的默认构造，真机运行时报
+       MissingMethodException: Default constructor not found for YooAsset.BuiltinFileSystem —— 整包保留，体积代价可忽略。
+       （Steam 冒烟实测发现；其余程序集按 HybridCLRGenerate/link.xml 的常规裁剪策略） -->
+  <assembly fullname="YooAsset" preserve="all"/>
+</linker>

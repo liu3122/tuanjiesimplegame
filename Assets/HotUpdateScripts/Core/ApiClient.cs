@@ -55,6 +55,30 @@ namespace Game.HotUpdate.ChestGame
             return false;
         }
 
+        /// <summary>
+        /// 平台身份登录（LoginBridge.LoginAsync 的服务端通道）：
+        /// Guest/无身份 → 现行 /api/login 名称登录；
+        /// 平台身份 → POST /api/auth/{platform}（服务端验签 Steam 票据/微信 code/Apple token 后发同一套 token，端点待服务端实现）。
+        /// </summary>
+        public static async Task<bool> LoginWithIdentityAsync(PlatformIdentity identity)
+        {
+            if (identity == null || identity.Platform == PlatformId.Guest)
+            {
+                return await LoginAsync();
+            }
+
+            var body = $"{{\"platform\":\"{identity.Platform}\",\"platformUserId\":\"{identity.PlatformUserId}\",\"payload\":\"{identity.AuthPayload}\",\"name\":\"{PlayerName}\",\"region\":\"{Region}\"}}";
+            var r = await PostAsync($"/api/auth/{identity.Platform.ToString().ToLowerInvariant()}", body);
+            if (r != null && r["ok"].AsBool)
+            {
+                _token = r["token"].Value;
+                PlayerId = r["playerId"].AsLong;
+                return true;
+            }
+            Debug.LogError(L10n.Get("[ApiClient] 平台登录失败：") + (r == null ? "no response" : r.ToString()));
+            return false;
+        }
+
         // ---------------- API 封装（返回 JSONNode，调用方按需取字段） ----------------
 
         public static Task<JSONNode> GetStateAsync() => GetAsync("/api/state");

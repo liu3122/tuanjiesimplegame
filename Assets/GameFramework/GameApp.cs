@@ -26,8 +26,13 @@ public class GameApp : MonoBehaviour
     /// 真机运行模式。编辑器下始终使用 EditorSimulateMode。
     /// - OfflinePlayMode：内置资源模式，资源全部打进包体，无需资源服务器。
     /// - HostPlayMode：联机模式，通过 DefaultRemoteService 从远端下载更新资源。
+    /// CI 构建注入 OFFLINE_BUNDLE 宏时默认整包离线（商店首发/提审包）；上线热更改回 HostPlayMode + CDN 地址。
     /// </summary>
+#if OFFLINE_BUNDLE
+    public static EPlayMode DevicePlayMode = EPlayMode.OfflinePlayMode;
+#else
     public static EPlayMode DevicePlayMode = EPlayMode.HostPlayMode;
+#endif
 
     /// <summary>HostPlayMode 模式下的资源服务器地址（按环境修改，或接入你自己的 CDN）</summary>
     public const string RemoteHostURL = "http://127.0.0.1/CDN";
@@ -105,7 +110,7 @@ public class GameApp : MonoBehaviour
             {
                 BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultBuiltinFileSystemParameters(),
                 CacheFileSystemParameters = FileSystemParameters.CreateDefaultSandboxFileSystemParameters(
-                    new DefaultRemoteService(RemoteHostURL)),
+                    new RemoteService(RemoteHostURL)),
             };
         }
 #endif
@@ -223,8 +228,23 @@ public class GameApp : MonoBehaviour
         throw new Exception($"[GameApp] 热更程序集 {HotUpdateAssemblyName} 不存在！真机请先构建资源包（含热更 dll）");
     }
 
-    /// <summary>反射进入热更入口</summary>
-    private void EnterHotUpdate(Assembly hotUpdateAssembly)
+        /// <summary>
+        /// CDN 远端资源地址服务（YooAsset v3 IRemoteService 最简实现：单主地址）。
+        /// 修复：原 DefaultRemoteService 类在当前 YooAsset 版本中不存在（真机分支此前从未编译过）。
+        /// </summary>
+        private class RemoteService : YooAsset.IRemoteService
+        {
+            private readonly string _host;
+            public RemoteService(string host) { _host = host.TrimEnd('/'); }
+
+            public System.Collections.Generic.IReadOnlyList<string> GetRemoteUrls(string fileName)
+            {
+                return new System.Collections.Generic.List<string> { _host + "/" + fileName };
+            }
+        }
+
+        /// <summary>反射进入热更入口</summary>
+        private void EnterHotUpdate(Assembly hotUpdateAssembly)
     {
         Type entryType = hotUpdateAssembly.GetType(EntryTypeName);
         if (entryType == null)

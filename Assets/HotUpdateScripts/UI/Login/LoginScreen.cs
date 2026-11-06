@@ -28,7 +28,7 @@ namespace Game.HotUpdate.ChestGame
             {
                 btn.interactable = false;
                 ApiClient.PlayerName = string.IsNullOrEmpty(input.text) ? L10n.Get("玩家") + Random.Range(100, 999) : input.text;
-                if (await ApiClient.LoginAsync())
+                if (await LoginBridge.LoginAsync())
                 {
                     UIRoot.ToastStatic($"欢迎，{ApiClient.PlayerName}！");
                     ShowMain(true);
