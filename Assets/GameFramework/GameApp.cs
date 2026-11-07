@@ -99,9 +99,22 @@ public class GameApp : MonoBehaviour
 #else
         if (DevicePlayMode == EPlayMode.OfflinePlayMode)
         {
+            // WebGL/微信小游戏：BuiltinFileSystem 不支持（运行时抛 YooPackageInvalidException），
+            // 改用 WebServer 文件系统。不依赖平台宏（团结 MiniGame 目标的 C# 宏定义不稳定），
+            // 编辑器按构建目标判断，真机按 Application.platform 判断。
+            bool webLike;
+#if UNITY_EDITOR
+            var t = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
+            webLike = t == UnityEditor.BuildTarget.WebGL || t.ToString() == "WeixinMiniGame";
+#else
+            webLike = Application.platform == RuntimePlatform.WebGLPlayer;
+#endif
+            var builtinParams = webLike
+                ? FileSystemParameters.CreateDefaultWebServerFileSystemParameters()
+                : FileSystemParameters.CreateDefaultBuiltinFileSystemParameters();
             options = new OfflinePlayModeOptions
             {
-                BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultBuiltinFileSystemParameters(),
+                BuiltinFileSystemParameters = builtinParams,
             };
         }
         else
