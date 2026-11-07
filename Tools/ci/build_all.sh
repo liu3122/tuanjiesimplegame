@@ -15,7 +15,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-UNITY_BIN="${UNITY_BIN:-D:/Program Files/Unity 2019.4.40f1/Editor/Unity.exe}"
+# 团结引擎 1.10.4（2022.3.62t16）——本仓主线引擎；旧仓（Unity 2019.4）用 UNITY_BIN 覆盖
+UNITY_BIN="${UNITY_BIN:-G:/Program Files/Tuanjie/Hub/Editor/2022.3.62t16/Editor/Tuanjie.exe}"
 LOG_DIR="Build/logs"
 mkdir -p "$LOG_DIR"
 

@@ -66,6 +66,26 @@ public static class CIBuild
         Build(BuildTarget.WebGL, BuildTargetGroup.WebGL, "MINIGAME;OFFLINE_BUNDLE", "webgl");
     }
 
+    /// <summary>
+    /// 自检：scripts-only 构建（复现 HybridCLR Strip 的内部构建，但去掉 CleanBuildCache 选项）。
+    /// 用于排查团结引擎下 "GenerateStripedAOTDlls failed" 静默失败的根因。
+    /// </summary>
+    public static void SelfTestStrip()
+    {
+        var options = new BuildPlayerOptions
+        {
+            scenes = new[] { "Assets/Scenes/Boot.unity" },
+            locationPathName = Path.Combine(OutputRoot, "SelfTestStripProj"),
+            target = BuildTarget.StandaloneWindows64,
+            targetGroup = BuildTargetGroup.Standalone,
+            options = BuildOptions.BuildScriptsOnly,
+        };
+        PlayerBuildReport report = BuildPipeline.BuildPlayer(options);
+        UnityEngine.Debug.Log($"[SelfTestStrip] result={report.summary.result} errors={report.summary.totalErrors} output={report.summary.outputPath}");
+        if (report.summary.result != PlayerBuildResult.Succeeded)
+            throw new Exception($"[SelfTestStrip] scripts-only 构建（无 CleanBuildCache）失败: {report.summary.result}");
+    }
+
     /// <summary>-ciTarget 可选：win / steam / android / webgl / ios / all</summary>
     public static void BuildFromArgs()
     {
