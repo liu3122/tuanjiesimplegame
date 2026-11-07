@@ -67,6 +67,21 @@ public static class CIBuild
     }
 
     /// <summary>
+    /// 微信小游戏包：团结原生 WeixinMiniGame 平台目标（需 Mini Game Build Support 模块，
+    /// MINIGAME 宏 → PlatformBootstrap 平台=WeixinMinigame、内购编译期关闭）。
+    /// 产物为小游戏工程目录，需再用微信开发者工具打开/上传；YooAsset 走 CDN 或内置首包。
+    /// </summary>
+    [MenuItem("Build/CI/WeixinMiniGame (微信小游戏·团结原生)", priority = 305)]
+    public static void BuildMinigame()
+    {
+#if TUANJIE_2022_3_OR_NEWER
+        Build(BuildTarget.WeixinMiniGame, BuildTargetGroup.WeixinMiniGame, "MINIGAME;OFFLINE_BUNDLE", "minigame");
+#else
+        throw new NotSupportedException("[CIBuild] WeixinMiniGame 目标仅团结引擎可用（国际版 Unity 走 WebGL 转换工具路径）");
+#endif
+    }
+
+    /// <summary>
     /// 自检：scripts-only 构建（复现 HybridCLR Strip 的内部构建，但去掉 CleanBuildCache 选项）。
     /// 用于排查团结引擎下 "GenerateStripedAOTDlls failed" 静默失败的根因。
     /// </summary>
@@ -96,6 +111,7 @@ public static class CIBuild
             case "steam": BuildSteam(); return;
             case "android": BuildAndroid(); return;
             case "webgl": BuildWebgl(); return;
+            case "minigame": BuildMinigame(); return;
             case "ios": BuildIos(); return;
             case "all": BuildWindows(); BuildSteam(); BuildAndroid(); BuildWebgl(); return;
             default: throw new ArgumentException($"[CIBuild] 未知 -ciTarget：{target}（可选 win/steam/android/webgl/ios/all）");

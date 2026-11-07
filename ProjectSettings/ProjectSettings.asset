@@ -44,7 +44,7 @@ PlayerSettings:
   - logo: {fileID: 21300000, guid: 3aa140e4ee08d1f46908e003b58073b8, type: 3}
     duration: 2
   m_VirtualRealitySplashScreen: {fileID: 0}
-  expectedBundleIdentifier: com.ss.rxjh2
+  expectedBundleIdentifier: com.SimpleStudio.SimpleProject
   integrityHash: 
   m_HolographicTrackingLossScreen: {fileID: 0}
   defaultScreenWidth: 1366
@@ -1052,6 +1052,7 @@ PlayerSettings:
     Stadia: UNITY_POST_PROCESSING_STACK_V2
     Standalone: LOCAL_LOGIN;QK_NATIVE_CLOSE;USE_LOG;MYDEBUG;HOT_FIX_OPEN;USE_EMMYLUA_DEBUG;UNITY_POST_PROCESSING_STACK_V2;_PROJ_SRO_;UNISTORM_PRESENT
     WebGL: USE_LOG;HOT_FIX_OPEN;UNITY_POST_PROCESSING_STACK_V2;_PROJ_SRO_;UNISTORM_PRESENT
+    WeixinMiniGame: 
     Windows Store Apps: UNITY_POST_PROCESSING_STACK_V2
     XboxOne: UNITY_POST_PROCESSING_STACK_V1;UNITY_POST_PROCESSING_STACK_V2
     iPhone: USE_LOG;LOCAL_LOGIN;QK_NATIVE_CLOSE;HOT_FIX_OPEN;_PROJ_SRO_;UNISTORM_PRESENT
@@ -1226,7 +1227,7 @@ PlayerSettings:
   weixinMiniGameMemoryGeometricGrowthCap: 96
   weixinMiniGamePowerPreference: 2
   weixinMiniGameSIMDSupport: 0
-  weixinMiniGameUseSlimMetaFileFormat: 1
+  weixinMiniGameUseSlimMetaFileFormat: 0
   weixinMiniGamePhysicsEngine: 0
   weixinMiniGameInjectStrippedMethodLogger: 0
   weixinMiniGameEnableDotNetWasmExceptionHandling: 1

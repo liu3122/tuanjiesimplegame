@@ -36,8 +36,9 @@ for t in "$@"; do
     steam)  method=CIBuild.BuildSteam ;;
     android) method=CIBuild.BuildAndroid ;;
     webgl)  method=CIBuild.BuildWebgl ;;
+    minigame) method=CIBuild.BuildMinigame ;;
     ios)    method=CIBuild.BuildIos ;;
-    all)    set -- win steam android webgl; continue ;;
+    all)    set -- win steam android webgl minigame; continue ;;
     *) echo "未知目标：$t（可选 win/steam/android/webgl/ios/all）"; exit 2 ;;
   esac
 
