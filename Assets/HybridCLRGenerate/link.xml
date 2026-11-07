@@ -8,31 +8,6 @@
     <type fullname="Luban.SimpleJSON.JSONNode/Enumerator" preserve="all" />
     <type fullname="Luban.StringUtil" preserve="all" />
   </assembly>
-  <assembly fullname="System">
-    <type fullname="System.CodeDom.Compiler.GeneratedCodeAttribute" preserve="all" />
-    <type fullname="System.ComponentModel.EditorBrowsableAttribute" preserve="all" />
-    <type fullname="System.ComponentModel.EditorBrowsableState" preserve="all" />
-    <type fullname="System.Net.WebSockets.ClientWebSocket" preserve="all" />
-    <type fullname="System.Net.WebSockets.WebSocket" preserve="all" />
-    <type fullname="System.Net.WebSockets.WebSocketCloseStatus" preserve="all" />
-    <type fullname="System.Net.WebSockets.WebSocketMessageType" preserve="all" />
-    <type fullname="System.Net.WebSockets.WebSocketReceiveResult" preserve="all" />
-    <type fullname="System.Net.WebSockets.WebSocketState" preserve="all" />
-    <type fullname="System.Uri" preserve="all" />
-  </assembly>
-  <assembly fullname="System.Core">
-    <type fullname="System.Linq.Enumerable" preserve="all" />
-  </assembly>
-  <assembly fullname="System.Net.Http">
-    <type fullname="System.Net.Http.Headers.AuthenticationHeaderValue" preserve="all" />
-    <type fullname="System.Net.Http.Headers.HttpRequestHeaders" preserve="all" />
-    <type fullname="System.Net.Http.HttpClient" preserve="all" />
-    <type fullname="System.Net.Http.HttpContent" preserve="all" />
-    <type fullname="System.Net.Http.HttpMethod" preserve="all" />
-    <type fullname="System.Net.Http.HttpRequestMessage" preserve="all" />
-    <type fullname="System.Net.Http.HttpResponseMessage" preserve="all" />
-    <type fullname="System.Net.Http.StringContent" preserve="all" />
-  </assembly>
   <assembly fullname="UnityEngine.CoreModule">
     <type fullname="UnityEngine.Application" preserve="all" />
     <type fullname="UnityEngine.AsyncOperation" preserve="all" />
@@ -101,7 +76,7 @@
     <type fullname="YooAsset.ResourcePackage" preserve="all" />
     <type fullname="YooAsset.YooAssets" preserve="all" />
   </assembly>
-  <assembly fullname="mscorlib">
+  <assembly fullname="netstandard">
     <type fullname="System.Action" preserve="all" />
     <type fullname="System.Action`1" preserve="all" />
     <type fullname="System.Array" preserve="all" />
@@ -109,6 +84,7 @@
     <type fullname="System.Boolean" preserve="all" />
     <type fullname="System.Byte" preserve="all" />
     <type fullname="System.Char" preserve="all" />
+    <type fullname="System.CodeDom.Compiler.GeneratedCodeAttribute" preserve="all" />
     <type fullname="System.Collections.Concurrent.ConcurrentQueue`1" preserve="all" />
     <type fullname="System.Collections.Generic.Dictionary`2" preserve="all" />
     <type fullname="System.Collections.Generic.Dictionary`2/Enumerator" preserve="all" />
@@ -122,6 +98,8 @@
     <type fullname="System.Collections.Generic.List`1/Enumerator" preserve="all" />
     <type fullname="System.Collections.IEnumerator" preserve="all" />
     <type fullname="System.Comparison`1" preserve="all" />
+    <type fullname="System.ComponentModel.EditorBrowsableAttribute" preserve="all" />
+    <type fullname="System.ComponentModel.EditorBrowsableState" preserve="all" />
     <type fullname="System.Convert" preserve="all" />
     <type fullname="System.Converter`2" preserve="all" />
     <type fullname="System.DateTime" preserve="all" />
@@ -135,7 +113,22 @@
     <type fullname="System.IDisposable" preserve="all" />
     <type fullname="System.Int32" preserve="all" />
     <type fullname="System.Int64" preserve="all" />
+    <type fullname="System.Linq.Enumerable" preserve="all" />
     <type fullname="System.Math" preserve="all" />
+    <type fullname="System.Net.Http.Headers.AuthenticationHeaderValue" preserve="all" />
+    <type fullname="System.Net.Http.Headers.HttpRequestHeaders" preserve="all" />
+    <type fullname="System.Net.Http.HttpClient" preserve="all" />
+    <type fullname="System.Net.Http.HttpContent" preserve="all" />
+    <type fullname="System.Net.Http.HttpMethod" preserve="all" />
+    <type fullname="System.Net.Http.HttpRequestMessage" preserve="all" />
+    <type fullname="System.Net.Http.HttpResponseMessage" preserve="all" />
+    <type fullname="System.Net.Http.StringContent" preserve="all" />
+    <type fullname="System.Net.WebSockets.ClientWebSocket" preserve="all" />
+    <type fullname="System.Net.WebSockets.WebSocket" preserve="all" />
+    <type fullname="System.Net.WebSockets.WebSocketCloseStatus" preserve="all" />
+    <type fullname="System.Net.WebSockets.WebSocketMessageType" preserve="all" />
+    <type fullname="System.Net.WebSockets.WebSocketReceiveResult" preserve="all" />
+    <type fullname="System.Net.WebSockets.WebSocketState" preserve="all" />
     <type fullname="System.NotSupportedException" preserve="all" />
     <type fullname="System.Nullable`1" preserve="all" />
     <type fullname="System.Object" preserve="all" />
@@ -164,6 +157,7 @@
     <type fullname="System.Threading.Tasks.Task`1" preserve="all" />
     <type fullname="System.TimeSpan" preserve="all" />
     <type fullname="System.Type" preserve="all" />
+    <type fullname="System.Uri" preserve="all" />
     <type fullname="System.ValueTuple`3" preserve="all" />
     <type fullname="System.ValueType" preserve="all" />
   </assembly>
