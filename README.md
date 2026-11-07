@@ -1,4 +1,8 @@
-# SimpleProject — 宝箱商人（YooAsset + HybridCLR + Luban）
+# SimpleProjectTuanjie — 宝箱商人（团结引擎迁移仓）
+
+> **迁移标记**：本仓库由 `simpleGameProject`（Unity 2019.4.40f1）于 `unity-2019-final` 标签处分叉，
+> 目标引擎：**团结引擎 1.10.x LTS**（微信小游戏原生平台 + Steam/iOS/Google 出海）。
+> 旧仓库冻结保底（2019.4 可出 Steam 包），后续开发在本仓库进行。
 
 基于三大框架的开箱即用 Unity 工程模板，当前承载玩法：**宝箱商人**（排除博弈 + 角色技能 + 拍卖行）。
 
