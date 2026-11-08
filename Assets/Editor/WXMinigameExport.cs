@@ -48,6 +48,7 @@ public static class WXMinigameExport
             throw new Exception($"[WXMinigameExport] 微信小游戏导出失败：{err}");
 
         InjectDomShim(conf.ProjectConf.DST);
+        CopyStreamingAssets(conf.ProjectConf.DST);
         Debug.Log($"[WXMinigameExport] 完成：{Path.Combine(conf.ProjectConf.DST, "minigame")}（appid={conf.ProjectConf.Appid}）");
     }
 
@@ -78,6 +79,34 @@ public static class WXMinigameExport
             "document.querySelectorAll=function(){return [];};}})();\n";
         File.WriteAllText(gameJs, shim + content);
         Debug.Log("[WXMinigameExport] DOM shim 已注入 game.js");
+    }
+
+    /// <summary>
+    /// 补拷 StreamingAssets 到小游戏工程根：WebServerFileSystem 以 https://game.weixin.qq.com（虚拟域名=包根）
+    /// 为基址请求 StreamingAssets/yoo/...，SDK 转换在分包资源模式下不拷贝该目录 → 404。
+    /// 幂等（存在则跳过，重建时覆盖）。
+    /// </summary>
+    private static void CopyStreamingAssets(string dst)
+    {
+        string src = Path.Combine(dst, "webgl", "StreamingAssets");
+        string to = Path.Combine(dst, "minigame", "StreamingAssets");
+        if (!Directory.Exists(src))
+        {
+            Debug.LogWarning($"[WXMinigameExport] 未找到 {src}，跳过 StreamingAssets 补拷");
+            return;
+        }
+        if (Directory.Exists(to)) Directory.Delete(to, true);
+        CopyDir(src, to);
+        Debug.Log($"[WXMinigameExport] StreamingAssets 已补拷 → {to}");
+    }
+
+    private static void CopyDir(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (string f in Directory.GetFiles(src))
+            File.Copy(f, Path.Combine(dst, Path.GetFileName(f)));
+        foreach (string d in Directory.GetDirectories(src))
+            CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
     }
 
     private static string GetArg(string name)
