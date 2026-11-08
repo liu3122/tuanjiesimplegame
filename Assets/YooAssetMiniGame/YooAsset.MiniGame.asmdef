@@ -1,0 +1,13 @@
+{
+    "name": "YooAsset.MiniGame",
+    "rootNamespace": "YooAsset",
+    "references": [
+        "YooAsset",
+        "Wx"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "autoReferenced": true,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

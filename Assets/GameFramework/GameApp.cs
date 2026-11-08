@@ -109,11 +109,13 @@ public class GameApp : MonoBehaviour
 
         if (webLike)
         {
-            // WebGL/微信小游戏：Builtin/Sandbox 文件系统均不支持（#if UNITY_WEBGL 编译期拒绝），
-            // 一律走包内 WebServer 文件系统（经工具本地服务/CDN HTTP 读取，SandboxFileSystem 同样不支持 WebGL）
+            // 微信小游戏：WechatFileSystem（YooAsset 官方小游戏方案，wx FS API 直读包内文件，
+            // WebServer 方案实测虚拟域名 game.weixin.qq.com 不分发任意包文件 → BuiltinCatalog 404）。
+            // 扩展源码拷自 Samples~/Mini Game，编译进 YooAsset.MiniGame 程序集（反射串要求）。
             options = new OfflinePlayModeOptions
             {
-                BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultWebServerFileSystemParameters(),
+                BuiltinFileSystemParameters = WechatFileSystemCreater.CreateFileSystemParameters(
+                    new RemoteService(RemoteHostURL)),
             };
         }
         else if (DevicePlayMode == EPlayMode.OfflinePlayMode)
