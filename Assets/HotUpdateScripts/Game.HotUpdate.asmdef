@@ -3,7 +3,8 @@
     "rootNamespace": "Game.HotUpdate",
     "references": [
         "YooAsset",
-        "Luban.Runtime"
+        "Luban.Runtime",
+        "Wx"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

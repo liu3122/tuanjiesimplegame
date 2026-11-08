@@ -18,6 +18,10 @@ namespace Game.HotUpdate.ChestGame
             if (root == null) { UIRoot.ToastStatic(L10n.Get("LoginScreen 加载失败")); return; }
 
             var input = UIManager.Find<InputField>(root.transform, "input_name");
+#if UNITY_WEBGL
+            // 微信小游戏：WASM 无键盘事件，InputField 手动接 wx.showKeyboard
+            WXKeyboard.Bind(input);
+#endif
             var langBtn = UITheme.ThemedButton(root.transform, new Vector2(410, -50), new Vector2(170, 56),
                 L10n.IsZh ? "EN" : L10n.Get("中文"), "blue", 24);
             langBtn.onClick.AddListener(L10n.ToggleLanguage);
