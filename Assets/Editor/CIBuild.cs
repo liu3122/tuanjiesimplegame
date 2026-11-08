@@ -82,6 +82,33 @@ public static class CIBuild
     }
 
     /// <summary>
+    /// 仅重建小游戏资源包（HybridCLR 生成 → 拷 DLL → UI 契约校验 → YooAsset SBP），不 BuildPlayer（分钟级快速迭代）。
+    /// 场景：改热更代码/配置后。WXMinigameExport 只做 WebGL 构建+转换、不重建资源包——
+    /// 不先跑此入口直接导出，包内热更 DLL 会停留在旧版（2026-11-08 实测：协程化改造后
+    /// 直接导出，包里仍旧 DLL，小游戏报 WebGL 禁同步加载 → cfg.Tables 构造 NRE）。
+    /// 完成后：重跑 WXMinigameExport.Run，并把本地 CDN junction（C:\tmp\cdnroot\CDN）
+    /// 指向 Build/Bundles/MiniGame/DefaultPackage/ 下的新版本目录。
+    /// </summary>
+    [MenuItem("Build/CI/WeixinMiniGame Bundles Only (只重建资源包)", priority = 306)]
+    public static void BuildMinigameBundles()
+    {
+#if TUANJIE_2022_3_OR_NEWER
+        var target = BuildTarget.WeixinMiniGame;
+        string version = PlayerSettings.bundleVersion + "-" + GitShortHash();
+        UnityEngine.Debug.Log($"[CIBuild] ===== 资源包 only({target}) 开始，版本 {version} =====");
+        if (EditorUserBuildSettings.activeBuildTarget != target)
+        {
+            if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.WeixinMiniGame, target))
+                throw new Exception($"[CIBuild] 切换平台失败：{target}");
+        }
+        BuildAssetBundles(target, version);
+        UnityEngine.Debug.Log($"[CIBuild] ===== 资源包 only 完成（版本 {version}） =====");
+#else
+        throw new NotSupportedException("[CIBuild] WeixinMiniGame 目标仅团结引擎可用（国际版 Unity 走 WebGL 转换工具路径）");
+#endif
+    }
+
+    /// <summary>
     /// 仅执行 HybridCLR Generate/All（编译热更 dll + link.xml + AOT 裁剪 + 桥接 + 生成 Il2CppCompatibleDef 版本宏头）。
     /// 全新 HybridCLRData 安装后必须先跑一次，否则 C++ 编译报
     /// "please run HybridCLR/Generate/All" / IL2CPP_POP_ACTIVE_EXCEPTION 宏参数不匹配（HYBRIDCLR_UNITY_VERSION 未定义）。
@@ -172,6 +199,38 @@ public static class CIBuild
     /// <summary>构建主体：HybridCLR 生成 → 拷 DLL → 烘焙校验 → YooAsset → BuildPlayer（宏由调用方注入/还原）</summary>
     private static void BuildContent(BuildTarget target, BuildTargetGroup group, string name, string version)
     {
+        // 步骤 3-6：HybridCLR + 资源包（与 BuildMinigameBundles 共用）
+        BuildAssetBundles(target, version);
+
+        // 7. Player 构建（BuildPlayer 自带同步编译，OFFLINE_BUNDLE/MINIGAME 等宏随之生效）
+        // HybridCLR strip 会临时置 buildScriptsOnly/createSolution=true（finally 还原，但历史会话可能残留）；
+        // 不复位的话 BuildPlayer 只导出 VS 工程不打 exe（冒烟实测踩过）。此处显式复位 + 清旧产物。
+        EditorUserBuildSettings.buildScriptsOnly = false;
+#if UNITY_EDITOR_WIN
+        UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
+#endif
+        string artifactDir = Path.Combine(OutputRoot, $"{name}_{version}");
+        if (Directory.Exists(artifactDir)) Directory.Delete(artifactDir, true);
+        var options = new BuildPlayerOptions
+        {
+            scenes = new[] { "Assets/Scenes/Boot.unity" },
+            locationPathName = target == BuildTarget.StandaloneWindows64
+                ? Path.Combine(artifactDir, name + ".exe")
+                : (target == BuildTarget.Android ? Path.Combine(artifactDir, name + ".apk") : artifactDir), // iOS=Xcode工程 / WebGL=目录
+            target = target,
+            targetGroup = group,
+            options = BuildOptions.None,
+        };
+        PlayerBuildReport report = BuildPipeline.BuildPlayer(options);
+        if (report.summary.result != PlayerBuildResult.Succeeded)
+            throw new Exception($"[CIBuild] Player 构建失败：{report.summary.result}，用时 {report.summary.totalTime}，错误 {report.summary.totalErrors} 个");
+
+        UnityEngine.Debug.Log($"[CIBuild] ===== {name} 构建成功 → {options.locationPathName}（资源版本 {version}） =====");
+    }
+
+    /// <summary>资源包构建主体（原 BuildContent 步骤 3-6）：HybridCLR 生成 → 拷 DLL → 烘焙校验 → YooAsset SBP</summary>
+    private static void BuildAssetBundles(BuildTarget target, string version)
+    {
         // 3. HybridCLR 全量生成（热更 dll 编译 + link.xml + AOT 裁剪 + 桥接函数）
         EnsureHybridCLRInstalled();
         PrebuildCommand.GenerateAll();
@@ -207,31 +266,6 @@ public static class CIBuild
         if (bundleResult == null || !bundleResult.Success)
             throw new Exception($"[CIBuild] YooAsset 资源包构建失败：{(bundleResult != null ? bundleResult.ErrorInfo : "null result")}");
         UnityEngine.Debug.Log($"[CIBuild] 资源包完成：{bundleResult.OutputPackageDirectory}");
-
-        // 7. Player 构建（BuildPlayer 自带同步编译，OFFLINE_BUNDLE/MINIGAME 等宏随之生效）
-        // HybridCLR strip 会临时置 buildScriptsOnly/createSolution=true（finally 还原，但历史会话可能残留）；
-        // 不复位的话 BuildPlayer 只导出 VS 工程不打 exe（冒烟实测踩过）。此处显式复位 + 清旧产物。
-        EditorUserBuildSettings.buildScriptsOnly = false;
-#if UNITY_EDITOR_WIN
-        UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
-#endif
-        string artifactDir = Path.Combine(OutputRoot, $"{name}_{version}");
-        if (Directory.Exists(artifactDir)) Directory.Delete(artifactDir, true);
-        var options = new BuildPlayerOptions
-        {
-            scenes = new[] { "Assets/Scenes/Boot.unity" },
-            locationPathName = target == BuildTarget.StandaloneWindows64
-                ? Path.Combine(artifactDir, name + ".exe")
-                : (target == BuildTarget.Android ? Path.Combine(artifactDir, name + ".apk") : artifactDir), // iOS=Xcode工程 / WebGL=目录
-            target = target,
-            targetGroup = group,
-            options = BuildOptions.None,
-        };
-        PlayerBuildReport report = BuildPipeline.BuildPlayer(options);
-        if (report.summary.result != PlayerBuildResult.Succeeded)
-            throw new Exception($"[CIBuild] Player 构建失败：{report.summary.result}，用时 {report.summary.totalTime}，错误 {report.summary.totalErrors} 个");
-
-        UnityEngine.Debug.Log($"[CIBuild] ===== {name} 构建成功 → {options.locationPathName}（资源版本 {version}） =====");
     }
 
     // ---------------- 工具 ----------------

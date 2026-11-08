@@ -282,10 +282,14 @@ public class GameApp : MonoBehaviour
         MethodInfo method = entryType.GetMethod(EntryMethodName, BindingFlags.Public | BindingFlags.Static);
         if (method == null)
         {
-            Debug.LogError($"[GameApp] 热更入口缺少 public static void {EntryMethodName}()");
+            Debug.LogError($"[GameApp] 热更入口缺少 public static IEnumerator/void {EntryMethodName}()");
             return;
         }
         Debug.Log("[GameApp] >>> 进入热更世界 <<<");
-        method.Invoke(null, null);
+        // 热更入口已协程化（返回 IEnumerator）：迭代器惰性，Invoke 只创建枚举器不执行代码体，
+        // 必须挂协程驱动（否则静默无动作）；兼容旧版 void 入口（Invoke 即执行完毕）
+        object result = method.Invoke(null, null);
+        if (result is IEnumerator routine)
+            StartCoroutine(routine);
     }
 }

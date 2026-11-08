@@ -334,7 +334,6 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 		// object UnityEngine.Object.FindObjectOfType<object>()
 		// object UnityEngine.Resources.GetBuiltinResource<object>(string)
 		// YooAsset.AssetHandle YooAsset.ResourcePackage.LoadAssetAsync<object>(string,uint)
-		// YooAsset.AssetHandle YooAsset.ResourcePackage.LoadAssetSync<object>(string)
 		// string string.Join<float>(string,System.Collections.Generic.IEnumerable<float>)
 		// string string.Join<int>(string,System.Collections.Generic.IEnumerable<int>)
 		// string string.JoinCore<float>(System.Char*,int,System.Collections.Generic.IEnumerable<float>)
