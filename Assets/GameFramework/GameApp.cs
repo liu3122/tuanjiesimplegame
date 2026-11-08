@@ -67,17 +67,18 @@ public class GameApp : MonoBehaviour
         // 2. 加载清单
         yield return LoadManifest();
 
-        // 3. 真机：下载资源 + AOT 补充元数据
+        // 3. 真机：下载资源 + AOT 补充元数据（异步，WebGL 不支持同步加载）
 #if !UNITY_EDITOR
         if (DevicePlayMode == EPlayMode.HostPlayMode)
         {
             yield return DownloadPatch();
         }
-        LoadAOTMetadata();
+        yield return LoadAOTMetadataAsync();
 #endif
 
         // 4. 加载热更程序集并进入热更入口
-        Assembly hotUpdateAssembly = LoadHotUpdateAssembly();
+        Assembly hotUpdateAssembly = null;
+        yield return LoadHotUpdateAssemblyAsync(a => hotUpdateAssembly = a);
         EnterHotUpdate(hotUpdateAssembly);
     }
 
@@ -195,7 +196,7 @@ public class GameApp : MonoBehaviour
     /// 说明：补充元数据 dll 为 IL2CPP 裁剪后的 AOT dll（HybridCLRData/AssembliesPostIl2CppStrip），
     /// 由 Editor 脚本拷贝到 Assets/AssetRaw/AOTMetadataAssemblies 下被 YooAsset 收集。
     /// </summary>
-    private void LoadAOTMetadata()
+    private IEnumerator LoadAOTMetadataAsync()
     {
         foreach (string assName in AOTMetadataAssemblies)
         {
@@ -205,7 +206,9 @@ public class GameApp : MonoBehaviour
                 continue;
             }
 
-            var handle = _package.LoadAssetSync<TextAsset>(assName);
+            // WebGL/微信小游戏不支持同步加载（WebGL platform does not support synchronous loading），必须异步
+            var handle = _package.LoadAssetAsync<TextAsset>(assName);
+            yield return handle;
             var textAsset = handle.AssetObject as TextAsset;
             if (textAsset == null)
             {
@@ -222,18 +225,20 @@ public class GameApp : MonoBehaviour
     }
 
     /// <summary>
-    /// 加载热更程序集。
+    /// 加载热更程序集（异步）。
     /// 优先从 YooAsset 加载 HybridCLR 编译的热更 dll；
     /// 编辑器下若未执行“拷贝热更 DLL”，回退使用 Unity 已编译进域的程序集。
     /// </summary>
-    private Assembly LoadHotUpdateAssembly()
+    private IEnumerator LoadHotUpdateAssemblyAsync(System.Action<Assembly> onLoaded)
     {
         if (_package.IsLocationValid(HotUpdateAssemblyName))
         {
-            var handle = _package.LoadAssetSync<TextAsset>(HotUpdateAssemblyName);
+            var handle = _package.LoadAssetAsync<TextAsset>(HotUpdateAssemblyName);
+            yield return handle;
             var textAsset = (TextAsset)handle.AssetObject;
             Debug.Log($"[GameApp] 加载热更程序集 {HotUpdateAssemblyName}（{(textAsset.bytes.Length / 1024)} KB）");
-            return Assembly.Load(textAsset.bytes);
+            onLoaded(Assembly.Load(textAsset.bytes));
+            yield break;
         }
 
 #if UNITY_EDITOR
@@ -242,7 +247,8 @@ public class GameApp : MonoBehaviour
             if (assembly.GetName().Name == HotUpdateAssemblyName)
             {
                 Debug.Log("[GameApp] 使用编辑器域内已编译的热更程序集（如需测试真实热更流程，请执行菜单 Build/HybridCLR/Copy HotUpdate Dlls）");
-                return assembly;
+                onLoaded(assembly);
+                yield break;
             }
         }
 #endif
