@@ -50,7 +50,7 @@ namespace Game.HotUpdate
                 {
                     "tbitem", "tbchest", "tbchestgen", "tbbankerfactor", "tbcharacter",
                     "tbrushroom", "tblevel", "tbtext", "tbfeature", "tbad",
-                    "tbquest", "tbsign", "tbglobal", "tbskill",
+                    "tbquest", "tbsign", "tbglobal",
                 };
                 foreach (string file in files)
                 {
