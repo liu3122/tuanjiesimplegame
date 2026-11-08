@@ -8,6 +8,10 @@
     <type fullname="Luban.SimpleJSON.JSONNode/Enumerator" preserve="all" />
     <type fullname="Luban.StringUtil" preserve="all" />
   </assembly>
+  <assembly fullname="UniTask">
+    <type fullname="Cysharp.Threading.Tasks.UnityAsyncExtensions" preserve="all" />
+    <type fullname="Cysharp.Threading.Tasks.UnityAsyncExtensions/UnityWebRequestAsyncOperationAwaiter" preserve="all" />
+  </assembly>
   <assembly fullname="UnityEngine.CoreModule">
     <type fullname="UnityEngine.Application" preserve="all" />
     <type fullname="UnityEngine.AsyncOperation" preserve="all" />
@@ -157,8 +161,6 @@
     <type fullname="System.Runtime.CompilerServices.RuntimeHelpers" preserve="all" />
     <type fullname="System.Runtime.CompilerServices.TaskAwaiter" preserve="all" />
     <type fullname="System.Runtime.CompilerServices.TaskAwaiter`1" preserve="all" />
-    <type fullname="System.Runtime.CompilerServices.YieldAwaitable" preserve="all" />
-    <type fullname="System.Runtime.CompilerServices.YieldAwaitable/YieldAwaiter" preserve="all" />
     <type fullname="System.RuntimeFieldHandle" preserve="all" />
     <type fullname="System.RuntimeTypeHandle" preserve="all" />
     <type fullname="System.Single" preserve="all" />
