@@ -18,6 +18,7 @@ public static class WXMinigameExport
     [MenuItem("Build/CI/WX 导出小游戏工程", priority = 306)]
     public static void Run()
     {
+        CIBuild.EnsureHybridCLRInstalled(); // SDK 的 DoExport 直调 HybridCLR 命令，无安装守卫，先确保初始化
         var conf = UnityUtil.GetEditorConf();
         string projectRoot = Directory.GetParent(Application.dataPath).FullName;
 
@@ -34,6 +35,9 @@ public static class WXMinigameExport
 
         conf.ProjectConf.relativeDST = "Build/wx";
         conf.ProjectConf.DST = Path.GetFullPath(Path.Combine(projectRoot, "Build", "wx"));
+        // 首包资源加载方式：1=小游戏包内（data-package 分包），0=CDN（需配置 DATA_CDN）。
+        // 开发期无 CDN，走包内分包加载（总包 ~16MB 远低于 30MB 上限）；上线要热更资源时改回 0+CDN。
+        conf.ProjectConf.assetLoadType = 1;
         EditorUtility.SetDirty(conf);
         AssetDatabase.SaveAssets();
         Debug.Log($"[WXMinigameExport] appid={conf.ProjectConf.Appid} DST={conf.ProjectConf.DST}");

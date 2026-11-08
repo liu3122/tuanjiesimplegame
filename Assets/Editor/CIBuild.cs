@@ -82,6 +82,18 @@ public static class CIBuild
     }
 
     /// <summary>
+    /// 仅执行 HybridCLR Generate/All（编译热更 dll + link.xml + AOT 裁剪 + 桥接 + 生成 Il2CppCompatibleDef 版本宏头）。
+    /// 全新 HybridCLRData 安装后必须先跑一次，否则 C++ 编译报
+    /// "please run HybridCLR/Generate/All" / IL2CPP_POP_ACTIVE_EXCEPTION 宏参数不匹配（HYBRIDCLR_UNITY_VERSION 未定义）。
+    /// </summary>
+    public static void HybridCLRGenerateAll()
+    {
+        EnsureHybridCLRInstalled();
+        PrebuildCommand.GenerateAll();
+        UnityEngine.Debug.Log("[CIBuild] HybridCLR GenerateAll 完成");
+    }
+
+    /// <summary>
     /// 自检：scripts-only 构建（复现 HybridCLR Strip 的内部构建，但去掉 CleanBuildCache 选项）。
     /// 用于排查团结引擎下 "GenerateStripedAOTDlls failed" 静默失败的根因。
     /// </summary>
@@ -160,16 +172,8 @@ public static class CIBuild
     /// <summary>构建主体：HybridCLR 生成 → 拷 DLL → 烘焙校验 → YooAsset → BuildPlayer（宏由调用方注入/还原）</summary>
     private static void BuildContent(BuildTarget target, BuildTargetGroup group, string name, string version)
     {
-        // 3. HybridCLR 全量生成（热更 dll 编译 + link.xml + AOT 裁剪 + 桥接函数）；
-        //    未初始化则自动安装默认 il2cpp（一次性动作：git clone + 拷贝 Unity il2cpp，需网络）
-        var hybridclrInstaller = new HybridCLR.Editor.Installer.InstallerController();
-        if (!hybridclrInstaller.HasInstalledHybridCLR())
-        {
-            UnityEngine.Debug.Log("[CIBuild] HybridCLR 未初始化，自动安装中...");
-            hybridclrInstaller.InstallDefaultHybridCLR();
-            if (!hybridclrInstaller.HasInstalledHybridCLR())
-                throw new Exception("[CIBuild] HybridCLR 自动安装失败（检查网络/git，或手动执行菜单 HybridCLR/Installer）");
-        }
+        // 3. HybridCLR 全量生成（热更 dll 编译 + link.xml + AOT 裁剪 + 桥接函数）
+        EnsureHybridCLRInstalled();
         PrebuildCommand.GenerateAll();
 
         // 4. 热更/AOT 元数据 dll 拷入 Assets，交 YooAsset 收集
@@ -231,6 +235,35 @@ public static class CIBuild
     }
 
     // ---------------- 工具 ----------------
+
+    /// <summary>
+    /// 确保 HybridCLR 已初始化（未初始化则自动安装：gitee clone + 拷贝引擎 il2cpp，需网络）。
+    /// CIBuild 与 WXMinigameExport 共用——任何走 HybridCLR 管线的批处理入口都先调它。
+    /// </summary>
+    public static void EnsureHybridCLRInstalled()
+    {
+        var installer = new HybridCLR.Editor.Installer.InstallerController();
+        if (installer.HasInstalledHybridCLR()) return;
+        UnityEngine.Debug.Log("[CIBuild] HybridCLR 未初始化，自动安装中...");
+        installer.InstallDefaultHybridCLR();
+        if (!installer.HasInstalledHybridCLR())
+            throw new Exception("[CIBuild] HybridCLR 自动安装失败（检查网络/git，或手动执行菜单 HybridCLR/Installer）");
+    }
+
+    /// <summary>
+    /// 从手动组装的源安装 HybridCLR（版本表分支缺失的兜底）：
+    /// 前置条件——HybridCLRData/il2cpp_plus_repo 已手动克隆好（libil2cpp/hybridclr 已就位，
+    /// 如：il2cpp_plus@2022-main-tuanjie + hybridclr@v8.13.0），随后本方法完成拷贝引擎 il2cpp 等安装步骤。
+    /// </summary>
+    public static void InstallHybridCLRFromLocal()
+    {
+        string dir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "HybridCLRData", "il2cpp_plus_repo", "libil2cpp");
+        if (!Directory.Exists(dir)) throw new Exception($"[CIBuild] 手动安装源不存在：{dir}");
+        var installer = new HybridCLR.Editor.Installer.InstallerController();
+        installer.InstallFromLocal(dir);
+        UnityEngine.Debug.Log($"[CIBuild] InstallFromLocal 完成，HasInstalled={installer.HasInstalledHybridCLR()}");
+        if (!installer.HasInstalledHybridCLR()) throw new Exception("[CIBuild] InstallFromLocal 后仍未初始化");
+    }
 
     /// <summary>CIBuild 自有宏：切换目标时先移除（避免 STEAM 残留到裸包），再并入本次所需</summary>
     private static readonly string[] OwnedDefines = { "STEAM", "MINIGAME", "OFFLINE_BUNDLE" };

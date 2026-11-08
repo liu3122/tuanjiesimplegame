@@ -107,8 +107,13 @@ public class GameApp : MonoBehaviour
             var t = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
             webLike = t == UnityEditor.BuildTarget.WebGL || t.ToString() == "WeixinMiniGame";
 #else
-            webLike = Application.platform == RuntimePlatform.WebGLPlayer;
+            // WebGLPlayer 之外的兜底：Web 环境的 absoluteURL 一定是 http(s) 开头（开发者工具本地服务/CDN），
+            // 原生平台为空串或 file:// —— 团结 MiniGame 真机的 Application.platform 实测非 WebGLPlayer
+            webLike = Application.platform == RuntimePlatform.WebGLPlayer
+                || Application.absoluteURL.StartsWith("http");
 #endif
+            // 决策日志：一锤定音地显示运行环境与文件系统选择（排查小游戏白屏/资源加载问题第一依据）
+            Debug.Log($"[GameApp] FS决策: platform={Application.platform} absoluteURL={Application.absoluteURL} webLike={webLike} ver=FSDECIDE-V2");
             var builtinParams = webLike
                 ? FileSystemParameters.CreateDefaultWebServerFileSystemParameters()
                 : FileSystemParameters.CreateDefaultBuiltinFileSystemParameters();
