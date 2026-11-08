@@ -207,9 +207,9 @@ namespace Game.HotUpdate.ChestGame
                     }
                     if (_token != null)
                         req.SetRequestHeader("Authorization", "Bearer " + _token);
-                    var op = req.SendWebRequest();
-                    while (!op.isDone)
-                        await Task.Yield();
+                    // 不能 await Task.Yield 轮询：AOT 裁剪掉了 YieldAwaitable，
+                    // 热更 DLL 引用即 Assembly.Load 崩；用热更侧自研 awaiter（见 WebRequestAwaiter）
+                    await new WebRequestAwaiter(req.SendWebRequest());
                     if (req.result != UnityWebRequest.Result.Success)
                     {
                         Debug.LogError($"[ApiClient] {method} {url} 失败：{req.error} {req.downloadHandler?.text}");
