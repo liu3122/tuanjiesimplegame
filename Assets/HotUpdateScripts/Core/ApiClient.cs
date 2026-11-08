@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Luban.SimpleJSON;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -207,9 +208,9 @@ namespace Game.HotUpdate.ChestGame
                     }
                     if (_token != null)
                         req.SetRequestHeader("Authorization", "Bearer " + _token);
-                    // 不能 await Task.Yield 轮询：AOT 裁剪掉了 YieldAwaitable，
-                    // 热更 DLL 引用即 Assembly.Load 崩；用热更侧自研 awaiter（见 WebRequestAwaiter）
-                    await new WebRequestAwaiter(req.SendWebRequest());
+                    // UniTask 对 UnityWebRequestAsyncOperation 的 awaiter 扩展
+                    //（不能用 Task.Yield 轮询：AOT 裁剪掉了 YieldAwaitable，热更引用即 Assembly.Load 崩）
+                    await req.SendWebRequest();
                     if (req.result != UnityWebRequest.Result.Success)
                     {
                         Debug.LogError($"[ApiClient] {method} {url} 失败：{req.error} {req.downloadHandler?.text}");

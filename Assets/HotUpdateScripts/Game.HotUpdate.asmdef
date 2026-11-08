@@ -4,7 +4,8 @@
     "references": [
         "YooAsset",
         "Luban.Runtime",
-        "Wx"
+        "Wx",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

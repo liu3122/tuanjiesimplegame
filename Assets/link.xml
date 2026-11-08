@@ -4,4 +4,8 @@
        MissingMethodException: Default constructor not found for YooAsset.BuiltinFileSystem —— 整包保留，体积代价可忽略。
        （Steam 冒烟实测发现；其余程序集按 HybridCLRGenerate/link.xml 的常规裁剪策略） -->
   <assembly fullname="YooAsset" preserve="all"/>
+  <!-- UniTask 被热更程序集引用：AOT 侧无静态引用点，不整包保留会被裁剪，
+       热更 DLL 一引用被裁类型就在 Assembly.Load 时 TYPEREF 崩
+       （ExecutionEngineException: ReadTypeFromResolutionScope，2026-11-08 YieldAwaitable 实测同类坑） -->
+  <assembly fullname="UniTask" preserve="all"/>
 </linker>

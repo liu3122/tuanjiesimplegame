@@ -166,6 +166,9 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 	// System.Threading.Tasks.TaskFactory<byte>
 	// System.Threading.Tasks.TaskFactory<object>
 	// System.ValueTuple<object,object,object>
+	// UnityEngine.Events.InvokableCall<object>
+	// UnityEngine.Events.UnityAction<object>
+	// UnityEngine.Events.UnityEvent<object>
 	// }}
 
 	public void RefMethods()
@@ -204,12 +207,10 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.ApiClient.<LoginWithIdentityAsync>d__23>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.ApiClient.<LoginWithIdentityAsync>d__23&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.LoginBridge.<LoginAsync>d__4>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.LoginBridge.<LoginAsync>d__4&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.OnlineState.<Refresh>d__22>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.OnlineState.<Refresh>d__22&)
-		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.ApiClient.<GetAsync>d__51>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.ApiClient.<GetAsync>d__51&)
-		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.ApiClient.<PostAsync>d__52>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.ApiClient.<PostAsync>d__52&)
-		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.LoginBridge.<GetIdentityAsync>d__5>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.LoginBridge.<GetIdentityAsync>d__5&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.PayBridge.<PurchaseAsync>d__7>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.PayBridge.<PurchaseAsync>d__7&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.TaskAwaiter<object>,Game.HotUpdate.ChestGame.PayBridge.<QuerySkuAsync>d__6>(System.Runtime.CompilerServices.TaskAwaiter<object>&,Game.HotUpdate.ChestGame.PayBridge.<QuerySkuAsync>d__6&)
+		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<System.Runtime.CompilerServices.YieldAwaitable.YieldAwaiter,Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53>(System.Runtime.CompilerServices.YieldAwaitable.YieldAwaiter&,Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.AwaitUnsafeOnCompleted<YooAsset.OperationAwaiter,Game.HotUpdate.ChestGame.UIManager.<ShowAsync>d__10>(YooAsset.OperationAwaiter&,Game.HotUpdate.ChestGame.UIManager.<ShowAsync>d__10&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start<Game.HotUpdate.ChestGame.AuctionPanel.<AutoRefresh>d__14>(Game.HotUpdate.ChestGame.AuctionPanel.<AutoRefresh>d__14&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start<Game.HotUpdate.ChestGame.AuctionPanel.<Bind>d__11>(Game.HotUpdate.ChestGame.AuctionPanel.<Bind>d__11&)
@@ -226,8 +227,6 @@ public class AOTGenericReferences : UnityEngine.MonoBehaviour
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.Start<Game.HotUpdate.ChestGame.ApiClient.<LoginWithIdentityAsync>d__23>(Game.HotUpdate.ChestGame.ApiClient.<LoginWithIdentityAsync>d__23&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.Start<Game.HotUpdate.ChestGame.LoginBridge.<LoginAsync>d__4>(Game.HotUpdate.ChestGame.LoginBridge.<LoginAsync>d__4&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<byte>.Start<Game.HotUpdate.ChestGame.OnlineState.<Refresh>d__22>(Game.HotUpdate.ChestGame.OnlineState.<Refresh>d__22&)
-		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.Start<Game.HotUpdate.ChestGame.ApiClient.<GetAsync>d__51>(Game.HotUpdate.ChestGame.ApiClient.<GetAsync>d__51&)
-		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.Start<Game.HotUpdate.ChestGame.ApiClient.<PostAsync>d__52>(Game.HotUpdate.ChestGame.ApiClient.<PostAsync>d__52&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.Start<Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53>(Game.HotUpdate.ChestGame.ApiClient.<SendAsync>d__53&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.Start<Game.HotUpdate.ChestGame.LoginBridge.<GetIdentityAsync>d__5>(Game.HotUpdate.ChestGame.LoginBridge.<GetIdentityAsync>d__5&)
 		// System.Void System.Runtime.CompilerServices.AsyncTaskMethodBuilder<object>.Start<Game.HotUpdate.ChestGame.PayBridge.<PurchaseAsync>d__7>(Game.HotUpdate.ChestGame.PayBridge.<PurchaseAsync>d__7&)
