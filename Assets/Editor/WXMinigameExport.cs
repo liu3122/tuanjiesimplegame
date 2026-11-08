@@ -48,6 +48,7 @@ public static class WXMinigameExport
             throw new Exception($"[WXMinigameExport] 微信小游戏导出失败：{err}");
 
         InjectDomShim(conf.ProjectConf.DST);
+        PatchDataCdn(conf.ProjectConf.DST, GetCdnUrl());
         CopyStreamingAssets(conf.ProjectConf.DST);
         Debug.Log($"[WXMinigameExport] 完成：{Path.Combine(conf.ProjectConf.DST, "minigame")}（appid={conf.ProjectConf.Appid}）");
     }
@@ -79,6 +80,47 @@ public static class WXMinigameExport
             "document.querySelectorAll=function(){return [];};}})();\n";
         File.WriteAllText(gameJs, shim + content);
         Debug.Log("[WXMinigameExport] DOM shim 已注入 game.js");
+    }
+
+    /// <summary>
+    /// 资源 CDN 前缀。WXAssetBundle 缓存层（WXAssetBundle.jslib 的 url2path）按 DATA_CDN 前缀把
+    /// 远端 bundle URL 映射为 USER_DATA_PATH/__GAME_FILE_CACHE/ 本地缓存路径；转换器在
+    /// assetLoadType=1（首包数据走包内分包）时不回填 DATA_CDN，为空时映射串损坏，
+    /// C# 侧回退 LoadFromFile(原始URL) → "Unable to open archive file: http://..."。
+    /// 取值须与 GameApp.RemoteHostURL 同前缀；真机预览时用 WX_CDN=http://<局域网IP>/CDN 覆盖。
+    /// </summary>
+    private static string GetCdnUrl()
+    {
+        return (Environment.GetEnvironmentVariable("WX_CDN") ?? "http://127.0.0.1/CDN").TrimEnd('/');
+    }
+
+    /// <summary>
+    /// 补写生成工程 game.js 的 DATA_CDN（managerConfig.DATA_CDN → 同步到 GameGlobal.DATA_CDN）。
+    /// 只替换空占位，SDK 已写入正确值时跳过；导出每次重新生成 game.js，故每次导出后都执行。
+    /// </summary>
+    private static void PatchDataCdn(string dst, string cdn)
+    {
+        string gameJs = Path.Combine(dst, "minigame", "game.js");
+        if (!File.Exists(gameJs))
+        {
+            Debug.LogWarning($"[WXMinigameExport] 未找到 {gameJs}，跳过 DATA_CDN 补写");
+            return;
+        }
+        string content = File.ReadAllText(gameJs);
+        string replacement = $"DATA_CDN: '{cdn}'";
+        if (content.Contains(replacement))
+        {
+            Debug.Log("[WXMinigameExport] DATA_CDN 已是目标值，跳过");
+            return;
+        }
+        const string placeholder = "DATA_CDN: ''";
+        if (!content.Contains(placeholder))
+        {
+            Debug.LogWarning("[WXMinigameExport] game.js 未找到 DATA_CDN 空占位（转换模板已变？），请人工确认");
+            return;
+        }
+        File.WriteAllText(gameJs, content.Replace(placeholder, replacement));
+        Debug.Log($"[WXMinigameExport] DATA_CDN 已补写 → {cdn}");
     }
 
     /// <summary>

@@ -71,3 +71,6 @@ Server/simplegame.db*
 # YooAsset SBP 内置包拷贝（构建产物，CIBuild 每次重拷）
 /Assets/StreamingAssets/
 /Assets/StreamingAssets.meta
+
+# WX SDK 纹理工具本地数据（导出时生成）
+/TextToolDatas/
