@@ -97,29 +97,30 @@ public class GameApp : MonoBehaviour
         };
         options = simulateOptions;
 #else
-        if (DevicePlayMode == EPlayMode.OfflinePlayMode)
+        // 平台判定（两个模式共用，必须在 if/else 之外——教训：SDK 构建不注入 OFFLINE_BUNDLE，
+        // DevicePlayMode 走 Host 分支时曾漏判，导致 BuiltinFileSystem 在 WebGL 抛异常）。
+        // 实测团结 MiniGame 真机 platform=MiniGamePlayer、url=https://game.weixin.qq.com：
+        // 不依赖枚举值/编译宏，字符串包含 + http 前缀双保险。
+        string platformName = Application.platform.ToString();
+        bool webLike = platformName.Contains("WebGL")
+            || platformName.Contains("MiniGame")
+            || (!string.IsNullOrEmpty(Application.absoluteURL) && Application.absoluteURL.StartsWith("http"));
+        Debug.Log($"[GameApp] FS决策: platform={platformName} absoluteURL={Application.absoluteURL} webLike={webLike} ver=FSDECIDE-V5");
+
+        if (webLike)
         {
-            // WebGL/微信小游戏：BuiltinFileSystem 不支持（运行时抛 YooPackageInvalidException），
-            // 改用 WebServer 文件系统。不依赖平台宏（团结 MiniGame 目标的 C# 宏定义不稳定），
-            // 编辑器按构建目标判断，真机按 Application.platform 判断。
-            bool webLike;
-#if UNITY_EDITOR
-            var t = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
-            webLike = t == UnityEditor.BuildTarget.WebGL || t.ToString() == "WeixinMiniGame";
-#else
-            // WebGLPlayer 之外的兜底：Web 环境的 absoluteURL 一定是 http(s) 开头（开发者工具本地服务/CDN），
-            // 原生平台为空串或 file:// —— 团结 MiniGame 真机的 Application.platform 实测非 WebGLPlayer
-            webLike = Application.platform == RuntimePlatform.WebGLPlayer
-                || Application.absoluteURL.StartsWith("http");
-#endif
-            // 决策日志：一锤定音地显示运行环境与文件系统选择（排查小游戏白屏/资源加载问题第一依据）
-            Debug.Log($"[GameApp] FS决策: platform={Application.platform} absoluteURL={Application.absoluteURL} webLike={webLike} ver=FSDECIDE-V2");
-            var builtinParams = webLike
-                ? FileSystemParameters.CreateDefaultWebServerFileSystemParameters()
-                : FileSystemParameters.CreateDefaultBuiltinFileSystemParameters();
+            // WebGL/微信小游戏：Builtin/Sandbox 文件系统均不支持（#if UNITY_WEBGL 编译期拒绝），
+            // 一律走包内 WebServer 文件系统（经工具本地服务/CDN HTTP 读取，SandboxFileSystem 同样不支持 WebGL）
             options = new OfflinePlayModeOptions
             {
-                BuiltinFileSystemParameters = builtinParams,
+                BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultWebServerFileSystemParameters(),
+            };
+        }
+        else if (DevicePlayMode == EPlayMode.OfflinePlayMode)
+        {
+            options = new OfflinePlayModeOptions
+            {
+                BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultBuiltinFileSystemParameters(),
             };
         }
         else
@@ -136,7 +137,7 @@ public class GameApp : MonoBehaviour
         yield return initOp;
         if (initOp.Status != EOperationStatus.Succeeded)
         {
-            Debug.LogError($"[GameApp] YooAsset 初始化失败：{initOp.Error}");
+            Debug.LogError($"[GameApp] YooAsset 初始化失败：{initOp.Error} | 诊断: platform={Application.platform} url={Application.absoluteURL}");
             yield break;
         }
         Debug.Log("[GameApp] YooAsset 初始化完成");
