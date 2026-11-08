@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Luban.SimpleJSON;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Game.HotUpdate.ChestGame
 {
@@ -162,20 +163,68 @@ namespace Game.HotUpdate.ChestGame
 
         // ---------------- 基础请求 ----------------
 
-        private static async Task<JSONNode> GetAsync(string path)
+        private static Task<JSONNode> GetAsync(string path)
         {
-            return await SendAsync(new HttpRequestMessage(HttpMethod.Get, BaseUrl + path));
+#if UNITY_WEBGL
+            return SendAsync("GET", BaseUrl + path, null);
+#else
+            return SendAsync(new HttpRequestMessage(HttpMethod.Get, BaseUrl + path));
+#endif
         }
 
-        private static async Task<JSONNode> PostAsync(string path, string jsonBody)
+        private static Task<JSONNode> PostAsync(string path, string jsonBody)
         {
+#if UNITY_WEBGL
+            return SendAsync("POST", BaseUrl + path, jsonBody);
+#else
             var msg = new HttpRequestMessage(HttpMethod.Post, BaseUrl + path)
             {
                 Content = new StringContent(jsonBody, Encoding.UTF8, "application/json"),
             };
-            return await SendAsync(msg);
+            return SendAsync(msg);
+#endif
         }
 
+#if UNITY_WEBGL
+        /// <summary>
+        /// WebGL/微信小游戏：HttpClient 不可用（System.Net sockets 无 WASM 实现，await 挂死），
+        /// 改走 UnityWebRequest（经 WX SDK 的 XHR 补丁，与 YooAsset 拉清单同通道）。
+        /// </summary>
+        private static async Task<JSONNode> SendAsync(string method, string url, string jsonBody)
+        {
+            try
+            {
+                using (var req = new UnityWebRequest(url, method)
+                {
+                    downloadHandler = new DownloadHandlerBuffer(),
+                    timeout = 10,
+                })
+                {
+                    if (jsonBody != null)
+                    {
+                        req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
+                        req.SetRequestHeader("Content-Type", "application/json");
+                    }
+                    if (_token != null)
+                        req.SetRequestHeader("Authorization", "Bearer " + _token);
+                    var op = req.SendWebRequest();
+                    while (!op.isDone)
+                        await Task.Yield();
+                    if (req.result != UnityWebRequest.Result.Success)
+                    {
+                        Debug.LogError($"[ApiClient] {method} {url} 失败：{req.error} {req.downloadHandler?.text}");
+                        return null;
+                    }
+                    return JSON.Parse(req.downloadHandler.text);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ApiClient] {method} {url} 异常：{e.Message}");
+                return null;
+            }
+        }
+#else
         private static async Task<JSONNode> SendAsync(HttpRequestMessage msg)
         {
             try
@@ -196,5 +245,6 @@ namespace Game.HotUpdate.ChestGame
                 return null;
             }
         }
+#endif
     }
 }
