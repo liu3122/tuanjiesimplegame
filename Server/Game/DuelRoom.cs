@@ -9,7 +9,7 @@ namespace SimpleGameServer.Game
     /// <summary>
     /// 镜像对决（1v1 即时对抗）：两名玩家各开一个「同金额池、不同洗牌位」的镜像宝箱，
     /// 并行排除 / 用技能（沿用技能冷却，跨玩法共享）/ 应对银行家报价，随时卖给银行锁定分数；
-    /// 双方锁定或超时后比分数，高分者赢走奖池（入场金×2 扣抽成），平分则各退入场金。
+    /// 双方锁定或超时后比分数，高分者赢走奖池（入场费×2 扣抽成），平分则各退入场费。
     /// 对手排除的格号与金额公开（同池不同位 → 只泄露「池面」不泄露格位，信息战核心）。
     /// 通信：原生 WebSocket（/ws/duel），JSON 事件双向推送；对手不足时机器人补位。
     /// 对决内排除免费（FreeEliminateBuff 预置），专注时机博弈；保底技能因 PaidPrice=0 无效。
@@ -36,7 +36,7 @@ namespace SimpleGameServer.Game
         private Timer? _timer;
 
         public int DuelId { get; }
-        /// <summary>对赌房模式：入场金=宝箱售价，赢家独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值</summary>
+        /// <summary>竞宝房模式：入场费=宝箱售价，胜者独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值</summary>
         public bool PotMode { get; }
 
         public DuelRoom(GameStore store, DuelManager manager, int duelId, bool potMode = false)
@@ -47,7 +47,7 @@ namespace SimpleGameServer.Game
             PotMode = potMode;
         }
 
-        /// <summary>入场金：普通对决=DuelStake；对赌房=对决宝箱售价</summary>
+        /// <summary>入场费：普通对决=DuelStake；竞宝房=对决宝箱售价</summary>
         private long Stake => PotMode
             ? GameTables.Tables.TbChest[GameTables.Tables.TbGlobal.DuelChestId].Price
             : GameTables.Tables.TbGlobal.DuelStake;
@@ -188,7 +188,7 @@ namespace SimpleGameServer.Game
                 var chest = new Chest(_store.AllocChestUid(), config, new Random(poolSeed))
                 {
                     OwnerId = pid,
-                    PaidPrice = Stake, // 保底技能兜底 60% 入场金（对决内有效）
+                    PaidPrice = Stake, // 保底技能兜底 60% 入场费（对决内有效）
                     FreeEliminateBuff = 99,  // 对决内排除免费（节奏优先）
                 };
                 chest.ShuffleAmounts(new Random(_rng.Next()));
@@ -393,8 +393,8 @@ namespace SimpleGameServer.Game
             long s1 = _scores.GetValueOrDefault(ids[1]);
             long winner = s0 > s1 ? ids[0] : s1 > s0 ? ids[1] : 0; // 0 = 平局
 
-            // 对赌房：赢家独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值
-            // 普通对决：赢家得固定奖池（入场金×2 扣抽成）；平局退入场金
+            // 竞宝房：胜者独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值
+            // 普通对决：赢家得固定奖池（入场费×2 扣抽成）；平局退入场费
             long potPayout(long pid) => PotMode
                 ? (winner == 0 ? _scores.GetValueOrDefault(pid)
                     : (pid == winner ? (long)Math.Round((s0 + s1) * (1 - g.AuctionFeeRate)) : 0))
@@ -571,7 +571,7 @@ namespace SimpleGameServer.Game
         }
     }
 
-    /// <summary>镜像对决管理器：普通/对赌双队列（1v1），结束即回收</summary>
+    /// <summary>镜像对决管理器：普通/竞宝双队列（1v1），结束即回收</summary>
     public class DuelManager
     {
         private readonly GameStore _store;

@@ -14,7 +14,7 @@ namespace SimpleGameServer.Game
         public const int XpDuelTie = 5;
         public const int XpRushJoin = 3;
 
-        /// <summary>对赌房解锁等级</summary>
+        /// <summary>竞宝房解锁等级</summary>
         public const int PotDuelMinLevel = 3;
 
         public static int MaxLevel

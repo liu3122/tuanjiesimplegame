@@ -78,7 +78,7 @@ namespace SimpleGameServer.Game
         public int SkillUsesRemaining { get; set; }
         /// <summary>已对本宝箱使用过技能的玩家集合（按玩家限一次的权威记录）</summary>
         public HashSet<long> SkillUsedBy { get; } = new();
-        /// <summary>免费排除剩余次数（赌徒技能，随宝箱转移）</summary>
+        /// <summary>免费排除剩余次数（冒险家技能，随宝箱转移）</summary>
         public int FreeEliminateBuff { get; set; }
         /// <summary>下次系统收购价 +15%（银行家技能，随宝箱转移）</summary>
         public bool PriceBuffNext { get; set; }

@@ -291,7 +291,7 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
 
         // ---------------- 在场质押（重启退款） ----------------
 
-        /// <summary>进房记录质押（抢宝门票/对决入场金）；服务端异常重启后据此退款</summary>
+        /// <summary>进房记录质押（抢宝门票/对决入场费）；服务端异常重启后据此退款</summary>
         public static void RecordStake(long playerId, string kind, long refId, int amount)
         {
             string t = DateTime.UtcNow.ToString("o");

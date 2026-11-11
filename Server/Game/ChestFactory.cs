@@ -7,7 +7,7 @@ namespace SimpleGameServer.Game
     /// 宝箱金额生成器（Rarity Template + EV Normalization）：
     /// 1. 按权重 Roll 每格稀有度档（白/绿/蓝/紫/金）
     /// 2. 档位基准金额 × 对数正态扰动（exp(jitter·N(0,1))，Box-Muller）
-    /// 3. 整体归一化到固定池期望（总池 = 期望 × 20），保证庄家边际恒定、结构随机
+    /// 3. 整体归一化到固定池期望（总池 = 期望 × 20），保证系统边际恒定、结构随机
     /// 参数配置于 TbChestGen；Chest.GenMode=1 时启用，否则用固定金额池洗牌。
     /// </summary>
     public static class ChestFactory

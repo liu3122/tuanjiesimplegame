@@ -278,7 +278,7 @@ namespace Game.HotUpdate.ChestGame
             string[] steps =
             {
                 L10n.Get("教学 1/3：点击任意未排除的格子——注意「剩余总和」与「期望 V」的变化"),
-                L10n.Get("教学 2/3：排除小额会提高期望值，但排除费会递增；随时可点【出售给系统】落袋为安"),
+                L10n.Get("教学 2/3：排除小额会提高期望值，但排除费会递增；随时可点【出售给系统】稳妥收下"),
                 L10n.Get("教学 3/3：银行家出价了！接受 = 立即到手，拒绝 = 继续排除博更高——卖或不卖，这是本游戏的核心抉择"),
             };
             _tutBanner.text = _tutStep < steps.Length ? steps[_tutStep] : L10n.Get("教学完成：去商城买真正的宝箱吧！");

@@ -73,25 +73,25 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>开箱战报（卖出/终局开箱）</summary>
         public static void ShowChestSettle(long income, bool final, string chestName, System.Action onClose)
         {
-            string title = final ? "终局开箱！" : "落袋为安";
+            string title = final ? "终局开箱！" : "稳妥收金";
             Show(title, new[]
             {
                 chestName,
                 "<color=#F5D061>+" + income.ToString("N0") + " 金币</color>",
                 "排除博弈 · 卖或不卖由我",
-            }, "我在宝箱商人" + (final ? "赌到最后一格开箱" : "精准落袋") + "，得了 " + income.ToString("N0") + " 金币！", onClose);
+            }, "我在宝箱商人" + (final ? "坚持开到最后一格" : "精准收金") + "，得了 " + income.ToString("N0") + " 金币！", onClose);
         }
 
         /// <summary>对决战报</summary>
         public static void ShowDuel(bool win, bool tie, long delta, long myScore, long oppScore, string oppName, bool potMode)
         {
-            string title = tie ? "势均力敌" : win ? (potMode ? "赢家通吃！" : "对决胜利！") : "棋差一招";
+            string title = tie ? "势均力敌" : win ? (potMode ? "胜者全得！" : "对决胜利！") : "棋差一招";
             Show(title, new[]
             {
-                (potMode ? "对赌房" : "镜像对决") + " · " + (tie ? "平局" : (win ? "WIN" : "LOSE")),
+                (potMode ? "竞宝房" : "镜像对决") + " · " + (tie ? "平局" : (win ? "WIN" : "LOSE")),
                 "我 " + myScore.ToString("N0") + "  vs  " + oppScore.ToString("N0") + " " + oppName,
                 "<color=" + (delta >= 0 ? "#4DD0A5" : "#E05D5D") + ">" + (delta >= 0 ? "+" : "") + delta.ToString("N0") + " 金币</color>",
-            }, "我在宝箱商人" + (potMode ? "对赌房" : "镜像对决") + (tie ? "和对手战平" : (win ? "战胜了 " + oppName : "惜败给 " + oppName)) + "，来和我开同一个宝箱！");
+            }, "我在宝箱商人" + (potMode ? "竞宝房" : "镜像对决") + (tie ? "和对手战平" : (win ? "战胜了 " + oppName : "惜败给 " + oppName)) + "，来和我开同一个宝箱！");
         }
     }
 }
