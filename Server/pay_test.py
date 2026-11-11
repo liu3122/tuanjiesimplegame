@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """内购全链路回归（需服务端以沙箱模式启动：dotnet run --urls http://127.0.0.1:5188 --PaySandbox true）。
 
-覆盖：SKU 列表 / 渠道拦截（wechat 拒、非沙箱渠道规则）/ 建单 → dev 收据验单 → 发货到账 /
+2026-11-11 软硬双币改造后：IAP 发钻石（gemsGranted / state.gems），金币不经充值直接变化。
+覆盖：SKU 列表 / 渠道拦截 / 建单 → dev 收据验单 → 钻石到账（金币不动）/
 幂等重放（同收据不再发货）/ 跨收据重放拒 / 他人订单拒 / 未知订单拒 / 错收据格式拒。
 """
 import json
@@ -25,10 +26,10 @@ def call(method, path, body=None, token=None):
         return json.loads(e.read().decode() or "{}")
 
 
-def state_gold(token):
+def state(token):
     r = call("GET", "/api/state", token=token)
     assert r.get("ok"), f"/api/state 失败: {r}"
-    return r["data"]["gold"]
+    return r["data"]
 
 
 def main():
@@ -48,11 +49,11 @@ def main():
     assert r.get("ok"), f"登录失败: {r}"
     token = r["token"]
 
-    # 1) SKU 列表：editor 渠道（沙箱合法）
+    # 1) SKU 列表：editor 渠道（沙箱合法），字段为 gems
     r = call("GET", "/api/pay/skus?channel=editor", token=token)
-    check("skus(editor) ok", expect_inline(r, True))
+    check("skus(editor) ok", r.get("ok") is True)
     skus = r.get("data", {}).get("skus", [])
-    check("skus 含 gold_small", any(s["skuId"] == "gold_small" for s in skus))
+    check("skus 含 gold_small(gems=60)", any(s["skuId"] == "gold_small" and s.get("gems") == 60 for s in skus))
     sku = next(s for s in skus if s["skuId"] == "gold_small")
 
     # 2) 渠道拦截：wechat 拒（小游戏无内购，服务端兜底）
@@ -61,34 +62,38 @@ def main():
     r = call("POST", "/api/pay/order", {"skuId": "gold_small", "channel": "hacker"}, token=token)
     check("order(未知渠道) 拒 PAY_CHANNEL_BAD", not r.get("ok") and r.get("error") == "PAY_CHANNEL_BAD")
 
-    # 3) 建单 → dev 收据验单 → 到账
-    gold0 = state_gold(token)
+    # 3) 建单 → dev 收据验单 → 钻石到账且金币不动
+    s0 = state(token)
+    gems0, gold0 = s0["gems"], s0["gold"]
+    check("新玩家 gems=0", gems0 == 0)
     r = call("POST", "/api/pay/order", {"skuId": "gold_small", "channel": "editor"}, token=token)
     check("order 建单 ok", r.get("ok") and r["data"]["orderNo"].startswith("PO"))
     order_no = r["data"]["orderNo"]
 
     receipt = f"dev:{order_no}:gold_small"
     r = call("POST", "/api/pay/verify", {"orderNo": order_no, "receipt": receipt}, token=token)
-    check("verify 首次 ok 且发货", r.get("ok") and r["data"]["goldGranted"] == sku["gold"])
-    gold1 = state_gold(token)
-    check(f"金币到账 {gold0}+{sku['gold']}=={gold1}", gold1 == gold0 + sku["gold"])
+    check("verify 首次 ok 且发钻石", r.get("ok") and r["data"]["gemsGranted"] == sku["gems"])
+    s1 = state(token)
+    check(f"钻石到账 {gems0}+{sku['gems']}=={s1['gems']}", s1["gems"] == gems0 + sku["gems"])
+    check("金币不受充值影响", s1["gold"] == gold0)
 
     # 4) 幂等：同一收据重放 → ok 但不再发货
     r = call("POST", "/api/pay/verify", {"orderNo": order_no, "receipt": receipt}, token=token)
     check("verify 重放幂等 ok(alreadyPaid)", r.get("ok") and r["data"].get("alreadyPaid") is True)
-    check("重放不重复发货", state_gold(token) == gold1)
+    s2 = state(token)
+    check("重放不重复发货", s2["gems"] == s1["gems"])
 
     # 5) paid 订单换收据 → 拒
     r = call("POST", "/api/pay/verify", {"orderNo": order_no, "receipt": "dev:" + order_no + ":gold_big"}, token=token)
     check("paid 订单换收据拒 PAY_REPLAY", not r.get("ok") and r.get("error") == "PAY_REPLAY")
-    check("重放拒后金币不变", state_gold(token) == gold1)
+    check("重放拒后钻石不变", state(token)["gems"] == s1["gems"])
 
     # 6) 跨订单收据重放：order1 的已支付收据拿去验 order2 → 跨订单重放防线拦截
     r = call("POST", "/api/pay/order", {"skuId": "gold_mid", "channel": "editor"}, token=token)
     order2 = r["data"]["orderNo"]
     r = call("POST", "/api/pay/verify", {"orderNo": order2, "receipt": receipt}, token=token)
     check("收据串单拒 PAY_REPLAY(跨订单已入账)", not r.get("ok") and r.get("error") == "PAY_REPLAY")
-    check("串单拒后金币不变", state_gold(token) == gold1)
+    check("串单拒后钻石不变", state(token)["gems"] == s1["gems"])
 
     # 7) 他人订单
     r2 = call("POST", "/api/login", {"name": name + "b", "region": "CN"})
@@ -104,7 +109,7 @@ def main():
 
     # 9) 正常完成 order2（收据正确格式）
     r = call("POST", "/api/pay/verify", {"orderNo": order2, "receipt": f"dev:{order2}:gold_mid"}, token=token)
-    check("order2 验单 ok", r.get("ok") and r["data"]["goldGranted"] > 0)
+    check("order2 验单 ok(320 钻)", r.get("ok") and r["data"]["gemsGranted"] == 320)
 
     # 10) 未鉴权
     r = call("GET", "/api/pay/skus?channel=editor")
@@ -112,10 +117,6 @@ def main():
 
     print(f"\n结果: {passed} 通过, {failed} 失败")
     raise SystemExit(1 if failed else 0)
-
-
-def expect_inline(resp, ok):
-    return resp.get("ok") is ok
 
 
 if __name__ == "__main__":

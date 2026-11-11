@@ -37,6 +37,7 @@ public sealed partial class Global : Luban.BeanBase
         { if(!_buf["DuelStake"].IsNumber) { throw new SerializationException(); }  DuelStake = _buf["DuelStake"]; }
         { if(!_buf["DuelChestId"].IsNumber) { throw new SerializationException(); }  DuelChestId = _buf["DuelChestId"]; }
         { if(!_buf["DuelMatchSec"].IsNumber) { throw new SerializationException(); }  DuelMatchSec = _buf["DuelMatchSec"]; }
+        { if(!_buf["GemToGold"].IsNumber) { throw new SerializationException(); }  GemToGold = _buf["GemToGold"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -64,6 +65,7 @@ public sealed partial class Global : Luban.BeanBase
     public readonly int DuelStake;
     public readonly int DuelChestId;
     public readonly int DuelMatchSec;
+    public readonly int GemToGold;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -95,6 +97,7 @@ public sealed partial class Global : Luban.BeanBase
         + "DuelStake:" + DuelStake + ","
         + "DuelChestId:" + DuelChestId + ","
         + "DuelMatchSec:" + DuelMatchSec + ","
+        + "GemToGold:" + GemToGold + ","
         + "}";
     }
 }

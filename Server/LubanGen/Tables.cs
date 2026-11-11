@@ -16,6 +16,7 @@ public partial class Tables
 {
     public TbItem TbItem {get; }
     public TbRecharge TbRecharge {get; }
+    public TbManor TbManor {get; }
     public TbChest TbChest {get; }
     public TbChestGen TbChestGen {get; }
     public TbBankerFactor TbBankerFactor {get; }
@@ -33,6 +34,7 @@ public partial class Tables
     {
         TbItem = new TbItem(loader("tbitem"));
         TbRecharge = new TbRecharge(loader("tbrecharge"));
+        TbManor = new TbManor(loader("tbmanor"));
         TbChest = new TbChest(loader("tbchest"));
         TbChestGen = new TbChestGen(loader("tbchestgen"));
         TbBankerFactor = new TbBankerFactor(loader("tbbankerfactor"));
@@ -52,6 +54,7 @@ public partial class Tables
     {
         TbItem.ResolveRef(this);
         TbRecharge.ResolveRef(this);
+        TbManor.ResolveRef(this);
         TbChest.ResolveRef(this);
         TbChestGen.ResolveRef(this);
         TbBankerFactor.ResolveRef(this);

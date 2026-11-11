@@ -72,7 +72,14 @@ namespace Game.HotUpdate.ChestGame
                 TDUIHelper.SetSize(name.rectTransform, 420, 70);
                 var info = TDUIHelper.MakeText(card.transform, new Vector2(-280, -30), TextAnchor.UpperLeft, 24);
                 info.color = UITheme.TextSub;
+                // 每日限次视图（服务端 rushDaily 下发；limit=0 不限次不显示）
+                var rd = OnlineState.State != null && OnlineState.State["data"] != null
+                    ? OnlineState.State["data"]["rushDaily"][c.Id.ToString()] : null;
+                int used = rd != null ? rd["used"].AsInt : 0;
+                int limit = rd != null ? rd["limit"].AsInt : c.DailyLimit;
+                string limitNote = limit > 0 ? "\n" + L10n.Get("今日剩余") + " " + Mathf.Max(0, limit - used) : "";
                 info.text = "门票 " + c.Ticket + " 金币\n" + c.PlayerCount + " 人同抢 · " + c.DurationSec + " 秒\n奖池约 " + poolPreview.ToString("N0")
+                    + limitNote
                     + (c.Blind ? "\n<color=#6EC6FF>" + L10n.Get("金额隐藏，抢到才揭示") + "</color>" : "");
                 var infoRt = info.rectTransform;
                 infoRt.anchorMin = infoRt.pivot = new Vector2(0, 0.5f);
@@ -80,6 +87,11 @@ namespace Game.HotUpdate.ChestGame
                 TDUIHelper.SetSize(infoRt, 560, 220);
 
                 var join = UITheme.ThemedButton(card.transform, new Vector2(330, 0), new Vector2(240, 90), L10n.Get("加 入"), "green", 30);
+                if (limit > 0 && used >= limit)
+                {
+                    join.interactable = false;
+                    join.GetComponentInChildren<Text>().text = L10n.Get("今日已达上限");
+                }
                 join.onClick.AddListener(async () =>
                 {
                     join.interactable = false;

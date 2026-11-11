@@ -29,11 +29,18 @@ namespace Game.HotUpdate.ChestGame
 
             var hint = TDUIHelper.MakeText(panel.transform, new Vector2(0, -80), TextAnchor.MiddleCenter, 20);
             hint.color = UITheme.TextSub;
-            // 货币声明按平台区分（合规口径）：小游戏纯广告无内购；内购平台（Steam/iOS/Google）金币可购买
-            hint.text = PlatformBootstrap.Current == PlatformId.WeixinMinigame
-                ? L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，无法用现金购买或兑换现金、实物")
-                : L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，可通过应用内购买获得，不可兑换现金、实物");
+            // 货币声明（合规口径，软硬双币）：金币全平台统一"不可现金购买"（钻石单向兑换而来）；
+            // 仅内购平台（PayBridge.IsAvailable）追加钻石声明
+            hint.text = L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，无法用现金购买或兑换现金、实物");
             TDUIHelper.SetSize(hint.rectTransform, 720, 40);
+
+            if (PayBridge.IsAvailable)
+            {
+                var gemHint = TDUIHelper.MakeText(panel.transform, new Vector2(0, -108), TextAnchor.MiddleCenter, 18);
+                gemHint.color = UITheme.TextSub;
+                gemHint.text = L10n.Get("钻石为游戏内付费虚拟货币，可通过应用内购买获得，仅用于兑换金币，不可兑换现金、实物");
+                TDUIHelper.SetSize(gemHint.rectTransform, 720, 36);
+            }
 
             int count = GameConfig.Tables.TbChest.DataList.Count;
             float y = -140;   // 宝箱行中心（首行）

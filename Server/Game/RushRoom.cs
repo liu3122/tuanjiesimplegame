@@ -51,6 +51,12 @@ namespace SimpleGameServer.Game
                 if (_phase != Phase.Matching) return (false, "ROOM_RUNNING");
                 if (_players.ContainsKey(player.Id)) return (true, null); // 重复加入幂等
                 if (_players.Count >= _config.PlayerCount) return (false, "ROOM_FULL");
+                // 每日限次：RTP>100% 的投放型玩法必须封顶（PoolScale>1 系统倒贴），防无限通胀；幂等重进不重复计数
+                string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                if (_config.DailyLimit > 0 && Db.RushAttemptsUsed(day, player.Id, _config.Id) >= _config.DailyLimit)
+                {
+                    return (false, "RUSH_LIMIT");
+                }
                 lock (player.Sync)
                 {
                     if (player.Gold < _config.Ticket) return (false, "NOT_ENOUGH_GOLD");
@@ -59,6 +65,7 @@ namespace SimpleGameServer.Game
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -_config.Ticket, "rush_ticket", _config.Id);
                 Db.RecordStake(player.Id, "rush", _config.Id, _config.Ticket); // 重启退款凭据
+                if (_config.DailyLimit > 0) Db.RecordRushAttempt(day, player.Id, _config.Id);
                 _players[player.Id] = player;
                 Broadcast(new { type = "joined", name = player.Name, count = _players.Count, need = _config.PlayerCount });
                 return (true, null);

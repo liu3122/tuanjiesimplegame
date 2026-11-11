@@ -160,6 +160,25 @@ app.MapPost("/api/pay/verify", async (PayVerifyReq req, HttpRequest http) =>
     return Results.Json(new { ok, error = err, data });
 });
 
+// ---------- 钻石兑换（软硬双币单向闸门：钻石 → 金币） ----------
+app.MapPost("/api/gem/exchange", (GemExchangeReq req, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    var (ok, err, data) = svc.ExchangeGems(p, req?.Gems ?? 0);
+    return Results.Json(new { ok, error = err, data });
+});
+
+// ---------- 宅邸改造（金币指数回收，梦幻家园式工程链） ----------
+app.MapPost("/api/manor/build", (ManorBuildReq req, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Manor)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = svc.ManorBuild(p, req?.Choice ?? 0);
+    return Results.Json(new { ok, error = err, data });
+});
+
 // 经济报表（管理端）：X-Admin-Token 头校验，token 来自配置 AdminToken（默认 dev-admin）
 app.MapGet("/api/admin/economy", (HttpRequest http) =>
 {
@@ -442,6 +461,8 @@ public record SkillReq(int SkillType, int? SlotIndex = null);
 public record ListReq(long ChestUid, long StartPrice, long BuyoutPrice);
 public record PayOrderReq(string SkuId, string Channel);
 public record PayVerifyReq(string OrderNo, string Receipt);
+public record GemExchangeReq(long Gems);
+public record ManorBuildReq(int Choice);
 
 namespace SimpleGameServer.Game
 {

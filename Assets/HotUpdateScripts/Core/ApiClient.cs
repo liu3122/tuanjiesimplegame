@@ -185,6 +185,14 @@ namespace Game.HotUpdate.ChestGame
         private static string EscapeJson(string s) =>
             (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
 
+        /// <summary>钻石 → 金币单向兑换（1 钻 = GemToGold 金，软硬双币闸门）</summary>
+        public static Task<JSONNode> ExchangeGemsAsync(long gems) =>
+            PostAsync("/api/gem/exchange", $"{{\"gems\":{gems}}}");
+
+        /// <summary>宅邸动工（choice 1/2 = 二选一装饰方案）</summary>
+        public static Task<JSONNode> ManorBuildAsync(int choice) =>
+            PostAsync("/api/manor/build", $"{{\"choice\":{choice}}}");
+
         // ---------------- 基础请求 ----------------
 
         private static Task<JSONNode> GetAsync(string path)

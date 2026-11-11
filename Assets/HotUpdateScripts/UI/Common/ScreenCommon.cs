@@ -43,6 +43,11 @@ namespace Game.HotUpdate.ChestGame
             if (err == "ALREADY_TOP") return L10n.Get("你已是最高出价");
             if (err == "OWN_LOT") return L10n.Get("不能竞拍自己的宝箱");
             if (err == "AUCTION_ENDED") return L10n.Get("拍卖已结束");
+            if (err == "RUSH_LIMIT") return L10n.Get("今日次数已用完");
+            if (err == "MANOR_MAX") return L10n.Get("宅邸已全部完工");
+            if (err == "BAD_CHOICE") return L10n.Get("请先选择装饰方案");
+            if (err == "NOT_ENOUGH_GEMS") return L10n.Get("钻石不足");
+            if (err == "BAD_GEMS") return L10n.Get("钻石数额不合法");
             if (string.IsNullOrEmpty(err)) return L10n.Get("未知错误");
             return err;
         }

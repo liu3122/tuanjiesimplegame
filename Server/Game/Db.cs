@@ -115,11 +115,19 @@ CREATE TABLE IF NOT EXISTS season_reward(
 );
 CREATE TABLE IF NOT EXISTS pay_order(
   row_id INTEGER PRIMARY KEY AUTOINCREMENT, order_no TEXT NOT NULL, player_id INTEGER NOT NULL,
-  sku_id TEXT NOT NULL, channel TEXT NOT NULL, gold INTEGER NOT NULL, status INTEGER NOT NULL DEFAULT 0,
+  sku_id TEXT NOT NULL, channel TEXT NOT NULL, gems INTEGER NOT NULL, status INTEGER NOT NULL DEFAULT 0,
   receipt_hash TEXT, platform_txn_id TEXT, created_utc TEXT NOT NULL, paid_utc TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_no ON pay_order(order_no);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash);");
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash);
+CREATE TABLE IF NOT EXISTS gem_tx(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, player_id INTEGER NOT NULL, delta INTEGER NOT NULL,
+  reason TEXT NOT NULL, ref_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rush_attempt(
+  day TEXT NOT NULL, player_id INTEGER NOT NULL, room_id INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day, player_id, room_id)
+);");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
             foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
@@ -136,6 +144,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash
                 catch (Exception) { }
             }
             // 旧库升级：追加新列（已存在则忽略）
+            // 软硬双币 + 宅邸改造（2026-11-11）
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN gems INTEGER NOT NULL DEFAULT 0"); } catch (Exception) { }
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN manor_stage INTEGER NOT NULL DEFAULT 0"); } catch (Exception) { }
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN manor_choices TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
+            try { Exec(conn, "ALTER TABLE pay_order RENAME COLUMN gold TO gems"); } catch (Exception) { }  // 内购发货金币→钻石
             foreach (var col in new[] { "peeked_slots TEXT NOT NULL DEFAULT '{}'", "detected_slots TEXT NOT NULL DEFAULT '[]'",
                                         "insurance INTEGER NOT NULL DEFAULT 0", "price_floor INTEGER", "tax_count INTEGER NOT NULL DEFAULT 0",
                                         "identified INTEGER NOT NULL DEFAULT 0", "is_tutorial INTEGER NOT NULL DEFAULT 0" })
@@ -185,8 +198,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash
         public static void SavePlayer(Player p)
         {
             // 快照在入队前完成（避免后台写读到后续变更）
-            long id = p.Id, gold = p.Gold;
-            int cid = p.CharacterId, xp = p.Xp, lv = p.Level, dr = p.DuelRating;
+            long id = p.Id, gold = p.Gold, gems = p.Gems;
+            int cid = p.CharacterId, xp = p.Xp, lv = p.Level, dr = p.DuelRating, manorStage = p.ManorStage;
             string name = p.Name;
             string token = p.Token, region = p.Region ?? "CN";
             string escrow = JsonSerializer.Serialize(p.Escrow, JsonOpts);
@@ -208,10 +221,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash
                 last = p.AdLastUse.ToDictionary(kv => kv.Key, kv => kv.Value),
                 count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid) VALUES($id,$n,$t,$g,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg,$iv,$rp)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg, inviter_id=$iv, referral_paid=$rp",
+            string manorChoices = JsonSerializer.Serialize(p.ManorChoices, JsonOpts);
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,gems,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,manor_stage,manor_choices) VALUES($id,$n,$t,$g,$gem,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg,$iv,$rp,$ms,$mc)
+ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, gems=$gem, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg, inviter_id=$iv, referral_paid=$rp, manor_stage=$ms, manor_choices=$mc",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
-                ("$g", gold), ("$c", cid), ("$e", escrow),
+                ("$g", gold), ("$gem", gems), ("$c", cid), ("$e", escrow),
+                ("$ms", manorStage), ("$mc", manorChoices),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
                 ("$ad", adState as object ?? DBNull.Value),
                 ("$qs", questState as object ?? DBNull.Value),
@@ -286,7 +301,7 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
         public static void SavePayOrder(PayOrder o)
         {
             string no = o.OrderNo, sku = o.SkuId, ch = o.Channel, rh = o.ReceiptHash, tx = o.PlatformTxnId;
-            long pid = o.PlayerId, gold = o.Gold, row = o.RowId;
+            long pid = o.PlayerId, gems = o.Gems, row = o.RowId;
             int st = (int)o.Status;
             DateTime ct = o.CreatedUtc;
             DateTime? pt = o.PaidUtc;
@@ -296,10 +311,10 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                 try
                 {
                     using var conn = Open();
-                    Exec(conn, @"INSERT INTO pay_order(order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
+                    Exec(conn, @"INSERT INTO pay_order(order_no,player_id,sku_id,channel,gems,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
 VALUES($no,$p,$sku,$ch,$g,$st,$rh,$tx,$ct,$pt)
 ON CONFLICT(order_no) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=$tx, paid_utc=$pt",
-                        ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gold), ("$st", st),
+                        ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gems), ("$st", st),
                         ("$rh", rh as object ?? DBNull.Value), ("$tx", tx as object ?? DBNull.Value),
                         ("$ct", ct.ToString("o")), ("$pt", pt.HasValue ? (object)pt.Value.ToString("o") : DBNull.Value));
                     using var q = conn.CreateCommand();
@@ -309,10 +324,10 @@ ON CONFLICT(order_no) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_i
                 catch (Exception e) { _log.LogError(e, "pay_order 插入失败 {Order}", no); }
                 return;
             }
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO pay_order(row_id,order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO pay_order(row_id,order_no,player_id,sku_id,channel,gems,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
 VALUES($row,$no,$p,$sku,$ch,$g,$st,$rh,$tx,$ct,$pt)
 ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=$tx, paid_utc=$pt",
-                ("$row", row), ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gold), ("$st", st),
+                ("$row", row), ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gems), ("$st", st),
                 ("$rh", rh as object ?? DBNull.Value), ("$tx", tx as object ?? DBNull.Value),
                 ("$ct", ct.ToString("o")), ("$pt", pt.HasValue ? (object)pt.Value.ToString("o") : DBNull.Value)));
         }
@@ -325,7 +340,7 @@ ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=
             {
                 using var conn = Open();
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT row_id,order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc FROM pay_order";
+                cmd.CommandText = "SELECT row_id,order_no,player_id,sku_id,channel,gems,status,receipt_hash,platform_txn_id,created_utc,paid_utc FROM pay_order";
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {
@@ -336,7 +351,7 @@ ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=
                         PlayerId = r.GetInt64(2),
                         SkuId = r.GetString(3),
                         Channel = r.GetString(4),
-                        Gold = r.GetInt64(5),
+                        Gems = r.GetInt64(5),
                         Status = (PayOrderStatus)r.GetInt32(6),
                         ReceiptHash = r.IsDBNull(7) ? null : r.GetString(7),
                         PlatformTxnId = r.IsDBNull(8) ? null : r.GetString(8),
@@ -357,6 +372,14 @@ ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=
         {
             string t = DateTime.UtcNow.ToString("o");
             EnqueueWrite(conn => Exec(conn, "INSERT INTO gold_tx(player_id,delta,reason,ref_id,created_at) VALUES($p,$d,$r,$ref,$t)",
+                ("$p", playerId), ("$d", delta), ("$r", reason), ("$ref", refId), ("$t", t)));
+        }
+
+        /// <summary>钻石流水（gem_tx 与 gold_tx 同构；reason：iap_purchase / gem_exchange）</summary>
+        public static void AddGemTx(long playerId, long delta, string reason, long refId)
+        {
+            string t = DateTime.UtcNow.ToString("o");
+            EnqueueWrite(conn => Exec(conn, "INSERT INTO gem_tx(player_id,delta,reason,ref_id,created_at) VALUES($p,$d,$r,$ref,$t)",
                 ("$p", playerId), ("$d", delta), ("$r", reason), ("$ref", refId), ("$t", t)));
         }
 
@@ -460,7 +483,20 @@ FROM gold_tx WHERE player_id>0 AND created_at >= $ws GROUP BY day ORDER BY day";
                 {
                     if (r.Read()) { humanGold = r.GetInt64(0); botGold = r.GetInt64(1); humanCount = r.GetInt64(2); }
                 }
-                return new { humanGold, botGold, humanCount, byReason, daily };
+
+                // 钻石（硬通货）：存量 + 按 reason 流水
+                long humanGems = 0;
+                var gemByReason = new List<object>();
+                using var cmd4 = conn.CreateCommand();
+                cmd4.CommandText = "SELECT COALESCE(SUM(CASE WHEN id>0 THEN gems END),0) FROM player";
+                using (var r = cmd4.ExecuteReader()) { if (r.Read()) humanGems = r.GetInt64(0); }
+                using var cmd5 = conn.CreateCommand();
+                cmd5.CommandText = "SELECT reason, SUM(delta), COUNT(*) FROM gem_tx WHERE player_id>0 GROUP BY reason ORDER BY 2";
+                using (var r = cmd5.ExecuteReader())
+                {
+                    while (r.Read()) gemByReason.Add(new { reason = r.GetString(0), delta = r.GetInt64(1), count = r.GetInt64(2) });
+                }
+                return new { humanGold, botGold, humanCount, byReason, daily, humanGems, gemByReason };
             }
             catch (Exception e)
             {
@@ -482,6 +518,23 @@ FROM gold_tx WHERE player_id>0 AND created_at >= $ws GROUP BY day ORDER BY day";
             EnqueueWrite(conn => Exec(conn, @"
 INSERT INTO daily_attempt(day,player_id,count) VALUES($d,$p,1)
 ON CONFLICT(day,player_id) DO UPDATE SET count=count+1", ("$d", day), ("$p", playerId)));
+        }
+
+        // ---------------- 抢宝房每日限次（RTP>100% 投放型玩法的通胀闸门） ----------------
+
+        public static int RushAttemptsUsed(string day, long playerId, int roomId)
+        {
+            var v = QueryScalar("SELECT COALESCE(count,0) FROM rush_attempt WHERE day=$d AND player_id=$p AND room_id=$r",
+                ("$d", day), ("$p", playerId), ("$r", roomId));
+            return v is long l ? (int)l : (v is int i ? i : 0);
+        }
+
+        public static void RecordRushAttempt(string day, long playerId, int roomId)
+        {
+            EnqueueWrite(conn => Exec(conn, @"
+INSERT INTO rush_attempt(day,player_id,room_id,count) VALUES($d,$p,$r,1)
+ON CONFLICT(day,player_id,room_id) DO UPDATE SET count=count+1",
+                ("$d", day), ("$p", playerId), ("$r", roomId)));
         }
 
         public static void RecordDailyResult(string day, long playerId, string name, long score)
@@ -731,7 +784,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,gems,manor_stage,manor_choices FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -749,6 +802,8 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                         ReferralPaid = !r.IsDBNull(15) && r.GetInt32(15) == 1,
                         Level = r.IsDBNull(9) ? 1 : r.GetInt32(9),
                         DuelRating = r.IsDBNull(10) ? Elo.StartRating : r.GetInt32(10),
+                        Gems = r.IsDBNull(16) ? 0 : r.GetInt64(16),
+                        ManorStage = r.IsDBNull(17) ? 0 : r.GetInt32(17),
                     };
                     foreach (var (lotId, amount) in JsonSerializer.Deserialize<Dictionary<long, long>>(r.GetString(5), JsonOpts) ?? new Dictionary<long, long>())
                     {
@@ -790,6 +845,13 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                         foreach (var (skillType, until) in JsonSerializer.Deserialize<Dictionary<int, long>>(r.GetString(7), JsonOpts) ?? new Dictionary<int, long>())
                         {
                             p.SkillCooldowns[skillType] = until;
+                        }
+                    }
+                    if (!r.IsDBNull(18))
+                    {
+                        foreach (var kv in JsonSerializer.Deserialize<Dictionary<int, int>>(r.GetString(18), JsonOpts) ?? new Dictionary<int, int>())
+                        {
+                            p.ManorChoices[kv.Key] = kv.Value;
                         }
                     }
                     store.Players[p.Id] = p;

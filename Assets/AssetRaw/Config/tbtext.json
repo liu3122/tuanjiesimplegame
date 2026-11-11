@@ -918,5 +918,105 @@
   {
     "Key": "全部随机结果由服务器生成；金币为游戏内虚拟货币，可通过应用内购买获得，不可兑换现金、实物",
     "En": "All random outcomes are server-generated; coins are in-game virtual currency obtainable via in-app purchase and cannot be exchanged for cash or physical goods"
+  },
+  {
+    "Key": "充值钻石",
+    "En": "Buy Gems"
+  },
+  {
+    "Key": "钻石已到账",
+    "En": "Gems delivered"
+  },
+  {
+    "Key": "钻石",
+    "En": "Gems"
+  },
+  {
+    "Key": "兑换全部钻石",
+    "En": "Exchange All Gems"
+  },
+  {
+    "Key": "全部钻石已兑换为金币",
+    "En": "All gems exchanged for coins"
+  },
+  {
+    "Key": "钻石为游戏内付费虚拟货币，可通过应用内购买获得，仅用于兑换金币，不可兑换现金、实物",
+    "En": "Gems are premium in-game currency, obtainable via in-app purchase, usable only to exchange for coins, and cannot be redeemed for cash or physical goods"
+  },
+  {
+    "Key": "宅 邸",
+    "En": "Manor"
+  },
+  {
+    "Key": "动 工",
+    "En": "Build"
+  },
+  {
+    "Key": "改造完成",
+    "En": "Renovation complete"
+  },
+  {
+    "Key": "宅邸已全部完工",
+    "En": "The manor is fully built"
+  },
+  {
+    "Key": "请先选择装饰方案",
+    "En": "Choose a design first"
+  },
+  {
+    "Key": "装饰方案",
+    "En": "Design"
+  },
+  {
+    "Key": "今日次数已用完",
+    "En": "Daily limit reached"
+  },
+  {
+    "Key": "今日剩余",
+    "En": "Left today"
+  },
+  {
+    "Key": "改造进度",
+    "En": "Renovation progress"
+  },
+  {
+    "Key": "未解锁",
+    "En": "Locked"
+  },
+  {
+    "Key": "兑换失败：",
+    "En": "Exchange failed: "
+  },
+  {
+    "Key": "动工失败：",
+    "En": "Build failed: "
+  },
+  {
+    "Key": "获得称号",
+    "En": "Title earned"
+  },
+  {
+    "Key": "钻石不足",
+    "En": "Not enough gems"
+  },
+  {
+    "Key": "钻石数额不合法",
+    "En": "Invalid gem amount"
+  },
+  {
+    "Key": "服务暂不可用，请稍后再试",
+    "En": "Service temporarily unavailable"
+  },
+  {
+    "Key": "宅邸：花金币逐区改造，每步二选一装饰方案，区域完工得称号",
+    "En": "Manor: spend coins renovating area by area; pick one of two designs per project and earn titles"
+  },
+  {
+    "Key": "今日已达上限",
+    "En": "Daily limit reached"
+  },
+  {
+    "Key": "冷却中",
+    "En": "Cooling down"
   }
 ]

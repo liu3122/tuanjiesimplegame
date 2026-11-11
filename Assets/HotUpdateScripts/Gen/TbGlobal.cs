@@ -48,6 +48,7 @@ public partial class TbGlobal
      public int DuelStake => _data.DuelStake;
      public int DuelChestId => _data.DuelChestId;
      public int DuelMatchSec => _data.DuelMatchSec;
+     public int GemToGold => _data.GemToGold;
     
     public void ResolveRef(Tables tables)
     {

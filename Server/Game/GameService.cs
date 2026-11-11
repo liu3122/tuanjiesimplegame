@@ -904,12 +904,13 @@ namespace SimpleGameServer.Game
         /// <summary>客户端状态视图：未揭示格金额绝不下发（玩家标量快照后逐箱加锁，无嵌套锁序风险）</summary>
         public object ClientState(Player player)
         {
-            long gold; long escrowSum; int characterId, level, xp, xpNext, duelRating, opens;
+            long gold; long escrowSum; int characterId, level, xp, xpNext, duelRating, opens; long gems; int manorStage;
             Dictionary<int, int> cooldowns; object lastSeasonReward;
-            List<object> questView;
+            List<object> questView; Dictionary<int, int> manorChoices;
             lock (player.Sync)
             {
                 gold = player.Gold;
+                gems = player.Gems;
                 escrowSum = player.Escrow.Values.Sum();
                 characterId = player.CharacterId;
                 level = player.Level; xp = player.Xp; xpNext = Levels.XpNext(player.Level, player.Xp);
@@ -917,6 +918,8 @@ namespace SimpleGameServer.Game
                 cooldowns = SkillCooldownView(player);
                 lastSeasonReward = player.LastSeasonReward;
                 questView = QuestView(player);
+                manorStage = player.ManorStage;
+                manorChoices = player.ManorChoices.ToDictionary(kv => kv.Key, kv => kv.Value);
             }
 
             var chests = _store.Chests.Values
@@ -979,7 +982,110 @@ namespace SimpleGameServer.Game
                 sign = SignView(player),
                 referral = ReferralView(player),
                 chests,
+                // 软硬双币：钻石（硬通货）+ 兑换比例
+                gems,
+                gemToGold = GameTables.Tables.TbGlobal.GemToGold,
+                // 宅邸改造进度
+                manor = new
+                {
+                    stage = manorStage,
+                    total = GameTables.Tables.TbManor.DataList.Count,
+                    title = ManorTitleOf(manorStage),
+                    choices = manorChoices,
+                    next = ManorNextView(manorStage),
+                },
+                // 抢宝房每日限次视图（roomId → {used, limit}）
+                rushDaily = RushDailyView(player),
             };
+        }
+
+        // ---------------- 钻石兑换（软硬双币单向闸门） ----------------
+
+        /// <summary>钻石 → 金币单向兑换（1 钻 = GemToGold 金）。双流水：gem_tx -g / gold_tx +gold</summary>
+        public (bool ok, string err, object data) ExchangeGems(Player player, long gems)
+        {
+            var g = GameTables.Tables.TbGlobal;
+            lock (player.Sync)
+            {
+                if (gems <= 0) return (false, "BAD_GEMS", null);
+                if (player.Gems < gems) return (false, "NOT_ENOUGH_GEMS", null);
+                long gold = gems * g.GemToGold;
+                player.Gems -= gems;
+                player.Gold += gold;
+                Db.SavePlayer(player);
+                Db.AddGemTx(player.Id, -gems, "gem_exchange", 0);
+                Db.AddGoldTx(player.Id, gold, "gem_exchange", 0);
+                return (true, null, new { gems = player.Gems, gold = player.Gold, goldGained = gold });
+            }
+        }
+
+        // ---------------- 宅邸改造（金币指数回收，纯称号奖励） ----------------
+
+        /// <summary>由已完成工程数推导当前称号（最新的非空 Title）</summary>
+        internal static string ManorTitleOf(int stage)
+        {
+            string title = null;
+            foreach (var m in GameTables.Tables.TbManor.DataList)
+            {
+                if (m.Id > stage) break;
+                if (!string.IsNullOrEmpty(m.Title)) title = m.Title;
+            }
+            return title;
+        }
+
+        private static object ManorNextView(int stage)
+        {
+            var next = GameTables.Tables.TbManor.GetOrDefault(stage + 1);
+            if (next == null) return null;
+            return new
+            {
+                id = next.Id,
+                area = next.Area,
+                areaName = next.AreaName,
+                name = next.Name,
+                optionA = next.OptionA,
+                optionB = next.OptionB,
+                cost = next.Cost,
+                desc = next.Desc,
+                title = next.Title,
+            };
+        }
+
+        /// <summary>动工：完成下一工程（二选一装饰方案），扣金币 + 记选择 + 流水 manor_build</summary>
+        public (bool ok, string err, object data) ManorBuild(Player player, int choice)
+        {
+            lock (player.Sync)
+            {
+                var next = GameTables.Tables.TbManor.GetOrDefault(player.ManorStage + 1);
+                if (next == null) return (false, "MANOR_MAX", null);
+                if (choice != 1 && choice != 2) return (false, "BAD_CHOICE", null);
+                if (player.Gold < next.Cost) return (false, "NOT_ENOUGH_GOLD", new { need = next.Cost });
+                player.Gold -= next.Cost;
+                player.ManorStage++;
+                player.ManorChoices[next.Id] = choice;
+                Db.SavePlayer(player);
+                Db.AddGoldTx(player.Id, -next.Cost, "manor_build", next.Id);
+                return (true, null, new
+                {
+                    message = next.Name,
+                    stage = player.ManorStage,
+                    title = ManorTitleOf(player.ManorStage),
+                    gold = player.Gold,
+                });
+            }
+        }
+
+        /// <summary>抢宝房每日限次视图：roomId → {used, limit}（limit=0 表示不限）</summary>
+        private static Dictionary<string, object> RushDailyView(Player player)
+        {
+            string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            var view = new Dictionary<string, object>();
+            foreach (var r in GameTables.Tables.TbRushRoom.DataList)
+            {
+                int used = r.DailyLimit > 0 ? Db.RushAttemptsUsed(day, player.Id, r.Id) : 0;
+                view[r.Id.ToString()] = new { used, limit = r.DailyLimit };
+            }
+            return view;
         }
 
         /// <summary>四榜查询：gold_total/gold_week/opens_total/opens_week × 全球(global)/本地区(region)</summary>

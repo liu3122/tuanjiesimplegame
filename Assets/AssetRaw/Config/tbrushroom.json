@@ -8,7 +8,8 @@
     "CountdownSec": 3,
     "PoolScale": 1.1,
     "ColorHex": "4DD0A5",
-    "Blind": false
+    "Blind": false,
+    "DailyLimit": 5
   },
   {
     "Id": 2,
@@ -19,7 +20,8 @@
     "CountdownSec": 3,
     "PoolScale": 1.15,
     "ColorHex": "E8C35A",
-    "Blind": false
+    "Blind": false,
+    "DailyLimit": 3
   },
   {
     "Id": 3,
@@ -30,7 +32,8 @@
     "CountdownSec": 3,
     "PoolScale": 1.1,
     "ColorHex": "6EC6FF",
-    "Blind": true
+    "Blind": true,
+    "DailyLimit": 5
   },
   {
     "Id": 4,
@@ -41,6 +44,7 @@
     "CountdownSec": 3,
     "PoolScale": 1.15,
     "ColorHex": "9B8EC4",
-    "Blind": true
+    "Blind": true,
+    "DailyLimit": 3
   }
 ]

@@ -19,6 +19,7 @@
     "OfferJitter": 0.08,
     "DuelStake": 100,
     "DuelChestId": 1,
-    "DuelMatchSec": 120
+    "DuelMatchSec": 120,
+    "GemToGold": 10
   }
 ]

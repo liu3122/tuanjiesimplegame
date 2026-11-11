@@ -26,6 +26,7 @@ public sealed partial class RushRoom : Luban.BeanBase
         { if(!_buf["PoolScale"].IsNumber) { throw new SerializationException(); }  PoolScale = _buf["PoolScale"]; }
         { if(!_buf["ColorHex"].IsString) { throw new SerializationException(); }  ColorHex = _buf["ColorHex"]; }
         { if(!_buf["Blind"].IsBoolean) { throw new SerializationException(); }  Blind = _buf["Blind"]; }
+        { if(!_buf["DailyLimit"].IsNumber) { throw new SerializationException(); }  DailyLimit = _buf["DailyLimit"]; }
     }
 
     public static RushRoom DeserializeRushRoom(JSONNode _buf)
@@ -42,6 +43,7 @@ public sealed partial class RushRoom : Luban.BeanBase
     public readonly float PoolScale;
     public readonly string ColorHex;
     public readonly bool Blind;
+    public readonly int DailyLimit;
    
     public const int __ID__ = -1126239671;
     public override int GetTypeId() => __ID__;
@@ -62,6 +64,7 @@ public sealed partial class RushRoom : Luban.BeanBase
         + "PoolScale:" + PoolScale + ","
         + "ColorHex:" + ColorHex + ","
         + "Blind:" + Blind + ","
+        + "DailyLimit:" + DailyLimit + ","
         + "}";
     }
 }

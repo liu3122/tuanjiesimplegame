@@ -19,12 +19,32 @@
             <var name="Id" type="int"/>
             <!-- 商店内商品 Id（Steam 微交易 / Play Billing / App Store Connect 后台配置一致） -->
             <var name="SkuId" type="string"/>
-            <!-- 发货金币数（服务端建单时快照，防改表串价） -->
-            <var name="Gold" type="long"/>
+            <!-- 发货钻石数（硬通货，经兑换成金币；服务端建单时快照，防后续改表串价） -->
+            <var name="Gems" type="long"/>
             <!-- 参考价展示文案（真实价以平台 SDK QuerySku 本地化价为准，缺省回落此文案） -->
             <var name="PriceText" type="string"/>
             <!-- 下架开关 -->
             <var name="Enabled" type="bool"/>
+        </bean>
+    </module>
+
+    <module name="manor">
+        <!-- 宅邸改造（梦幻家园式金币回收）：36 步线性工程链，6 区域 × 6 工程，费用指数增长，纯回收零产出 -->
+        <bean name="Manor">
+            <var name="Id" type="int"/>
+            <!-- 区域号（1 起，同区域连续） -->
+            <var name="Area" type="int"/>
+            <var name="AreaName" type="string"/>
+            <!-- 工程名（如"修补门面招牌"） -->
+            <var name="Name" type="string"/>
+            <!-- 二选一装饰方案名（玩家选择记录在 Player.ManorChoices） -->
+            <var name="OptionA" type="string"/>
+            <var name="OptionB" type="string"/>
+            <!-- 升级到本工程的金币消耗（服务端权威扣费） -->
+            <var name="Cost" type="long"/>
+            <var name="Desc" type="string"/>
+            <!-- 完成本工程获得的称号（仅区域最后一项非空，可不填） -->
+            <var name="Title" type="string"/>
         </bean>
     </module>
 
@@ -95,6 +115,8 @@
             <var name="ColorHex" type="string"/>
             <!-- 盲抢：开抢时金额不可见，抢到才揭示（机器人同样不可见，公平博弈） -->
             <var name="Blind" type="bool"/>
+            <!-- 每日加入次数上限（0=不限）。RTP>100% 的投放型玩法必须封顶，防无限通胀 -->
+            <var name="DailyLimit" type="int"/>
         </bean>
     </module>
 
@@ -144,6 +166,8 @@
             <var name="DuelStake" type="int"/>
             <var name="DuelChestId" type="int"/>
             <var name="DuelMatchSec" type="int"/>
+            <!-- 钻石→金币单向兑换比例（软硬双币隔离：IAP 发钻石，金币不可现金购买） -->
+            <var name="GemToGold" type="int"/>
         </bean>
     </module>
 

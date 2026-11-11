@@ -19,7 +19,7 @@ public sealed partial class Recharge : Luban.BeanBase
     {
         { if(!_buf["Id"].IsNumber) { throw new SerializationException(); }  Id = _buf["Id"]; }
         { if(!_buf["SkuId"].IsString) { throw new SerializationException(); }  SkuId = _buf["SkuId"]; }
-        { if(!_buf["Gold"].IsNumber) { throw new SerializationException(); }  Gold = _buf["Gold"]; }
+        { if(!_buf["Gems"].IsNumber) { throw new SerializationException(); }  Gems = _buf["Gems"]; }
         { if(!_buf["PriceText"].IsString) { throw new SerializationException(); }  PriceText = _buf["PriceText"]; }
         { if(!_buf["Enabled"].IsBoolean) { throw new SerializationException(); }  Enabled = _buf["Enabled"]; }
     }
@@ -31,7 +31,7 @@ public sealed partial class Recharge : Luban.BeanBase
 
     public readonly int Id;
     public readonly string SkuId;
-    public readonly long Gold;
+    public readonly long Gems;
     public readonly string PriceText;
     public readonly bool Enabled;
    
@@ -47,7 +47,7 @@ public sealed partial class Recharge : Luban.BeanBase
         return "{ "
         + "Id:" + Id + ","
         + "SkuId:" + SkuId + ","
-        + "Gold:" + Gold + ","
+        + "Gems:" + Gems + ","
         + "PriceText:" + PriceText + ","
         + "Enabled:" + Enabled + ","
         + "}";

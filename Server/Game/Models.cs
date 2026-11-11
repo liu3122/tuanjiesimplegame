@@ -10,6 +10,8 @@ namespace SimpleGameServer.Game
         public string Name { get; set; }
         public string Token { get; set; }
         public long Gold { get; set; }
+        /// <summary>钻石（硬通货）：仅 IAP 充值产出，单向按 GemToGold 兑换金币（软硬双币隔离，金币不可现金购买）</summary>
+        public long Gems { get; set; }
         public int CharacterId { get; set; } = 1;
         /// <summary>累计经验（等级门槛见 tb_level）</summary>
         public int Xp { get; set; }
@@ -55,6 +57,11 @@ namespace SimpleGameServer.Game
         public int SignStreak { get; set; }
         /// <summary>上次签到日（yyyy-MM-dd）</summary>
         public string LastSignDay { get; set; } = "";
+        // ---- 宅邸改造（梦幻家园式金币指数回收，纯称号奖励零产出） ----
+        /// <summary>已完成工程数（0=未开工；下一工程 = TbManor[ManorStage+1]）</summary>
+        public int ManorStage { get; set; }
+        /// <summary>工程 Id → 装饰方案（1/2）。称号不落库，由 stage 从 tb_manor 推导</summary>
+        public Dictionary<int, int> ManorChoices { get; } = new();
         /// <summary>细粒度并发锁。全局加锁顺序约定：Room/Lot → Chest → Player（Player 内多锁按 Id 排序）</summary>
         public readonly object Sync = new();
     }
@@ -469,7 +476,7 @@ namespace SimpleGameServer.Game
         public long PlayerId { get; set; }
         public string SkuId { get; set; }
         public string Channel { get; set; }         // steam / ios / google / editor(仅沙箱)
-        public long Gold { get; set; }              // 发货金币数（建单时从 tb_recharge 快照，防后续改表串价）
+        public long Gems { get; set; }              // 发货钻石数（建单时从 tb_recharge 快照，防后续改表串价）
         public PayOrderStatus Status { get; set; }
         /// <summary>收据哈希（SHA-256 前 16 字节 hex）：paid 订单凭此判幂等重放</summary>
         public string ReceiptHash { get; set; }

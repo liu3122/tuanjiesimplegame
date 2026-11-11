@@ -10,6 +10,17 @@ namespace Game.HotUpdate.ChestGame
     {
         public static JSONNode State { get; private set; }
         public static long Gold => State != null && State["data"] != null ? State["data"]["gold"].AsLong : 0;
+        /// <summary>钻石余额（硬通货，仅 IAP 平台充值产出；小游戏恒 0）</summary>
+        public static long Gems => State != null && State["data"] != null ? State["data"]["gems"].AsLong : 0;
+        /// <summary>宅邸称号（区域改造完成获得；null=尚未获得）</summary>
+        public static string ManorTitle
+        {
+            get
+            {
+                var t = State != null && State["data"] != null ? State["data"]["manor"]["title"] : null;
+                return t != null && !t.IsNull && !string.IsNullOrEmpty(t.Value) ? t.Value : null;
+            }
+        }
         public static JSONNode Chests => State != null && State["data"] != null ? State["data"]["chests"] : null;
         /// <summary>技能冷却快照（skillType → 剩余秒；服务端权威下发）</summary>
         public static JSONNode SkillCooldowns => State != null && State["data"] != null ? State["data"]["skillCooldowns"] : null;

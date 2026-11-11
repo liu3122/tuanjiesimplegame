@@ -87,7 +87,7 @@ namespace SimpleGameServer.Game
             var list = GameTables.Tables.TbRecharge.DataList
                 .Where(s => s.Enabled)
                 .OrderBy(s => s.Id)
-                .Select(s => new { skuId = s.SkuId, gold = s.Gold, priceText = s.PriceText })
+                .Select(s => new { skuId = s.SkuId, gems = s.Gems, priceText = s.PriceText })
                 .ToList();
             return (true, null, new { channel, skus = list });
         }
@@ -105,7 +105,7 @@ namespace SimpleGameServer.Game
                 PlayerId = player.Id,
                 SkuId = sku.SkuId,
                 Channel = channel,
-                Gold = sku.Gold,   // 建单时快照发货量，防后续改表串价
+                Gems = sku.Gems,   // 建单时快照发货量（钻石），防后续改表串价
                 Status = PayOrderStatus.Pending,
                 CreatedUtc = DateTime.UtcNow,
             };
@@ -114,7 +114,7 @@ namespace SimpleGameServer.Game
             // TODO(steam)：/api/auth/steam 落地拿到 steamid 后，真实 Steam 流程在此调
             //   ISteamMicroTxn/InitTxn(appid, orderid=OrderNo, steamid, 金额, sandbox)，客户端监听
             //   MicroTxnAuthorizationResponse → VerifyOrder；当前无 steamid，Steam 真机链路待登录端点接入。
-            return (true, null, new { orderNo = order.OrderNo, skuId = sku.SkuId, gold = sku.Gold, priceText = sku.PriceText });
+            return (true, null, new { orderNo = order.OrderNo, skuId = sku.SkuId, gems = sku.Gems, priceText = sku.PriceText });
         }
 
         public static async Task<(bool ok, string err, object data)> VerifyOrderAsync(Player player, string orderNo, string receipt)
@@ -130,7 +130,7 @@ namespace SimpleGameServer.Game
             {
                 if (order.Status == PayOrderStatus.Paid)
                     return order.ReceiptHash == hash
-                        ? (true, null, new { gold = player.Gold, goldGranted = 0, alreadyPaid = true })
+                        ? (true, null, new { gems = player.Gems, gemsGranted = 0, alreadyPaid = true })
                         : (false, "PAY_REPLAY", null);
             }
             // 跨订单重放：这枚收据已为其他订单入账
@@ -144,7 +144,7 @@ namespace SimpleGameServer.Game
             {
                 if (order.Status == PayOrderStatus.Paid)
                     return order.ReceiptHash == hash
-                        ? (true, null, new { gold = player.Gold, goldGranted = 0, alreadyPaid = true })
+                        ? (true, null, new { gems = player.Gems, gemsGranted = 0, alreadyPaid = true })
                         : (false, "PAY_REPLAY", null);
                 if (order.Status == PayOrderStatus.Pending && !_paidReceipts.TryAdd(hash, order.OrderNo))
                     return (false, "PAY_REPLAY", null);
@@ -162,12 +162,12 @@ namespace SimpleGameServer.Game
                 order.PaidUtc = DateTime.UtcNow;
                 lock (player.Sync)
                 {
-                    player.Gold += order.Gold;
+                    player.Gems += order.Gems;   // 软硬双币：IAP 只发钻石，金币经兑换而来（不可现金购买）
                     Db.SavePlayer(player);
                 }
                 Db.SavePayOrder(order);
-                Db.AddGoldTx(player.Id, order.Gold, "iap_purchase", order.RowId);
-                return (true, null, new { gold = player.Gold, goldGranted = order.Gold });
+                Db.AddGemTx(player.Id, order.Gems, "iap_purchase", order.RowId);
+                return (true, null, new { gems = player.Gems, gemsGranted = order.Gems });
             }
         }
 

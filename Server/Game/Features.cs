@@ -22,6 +22,8 @@ namespace SimpleGameServer.Game
         public const string Referral = "referral";
         /// <summary>内购总闸（steam/ios/google 渠道；小游戏编译期无支付路径，不经过此开关）</summary>
         public const string Iap = "iap";
+        /// <summary>宅邸改造（金币指数回收玩法）</summary>
+        public const string Manor = "manor";
 
         public static bool IsOn(string id)
         {

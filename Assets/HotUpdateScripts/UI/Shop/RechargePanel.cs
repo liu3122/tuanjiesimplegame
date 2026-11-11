@@ -21,12 +21,12 @@ namespace Game.HotUpdate.ChestGame
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
             var title = TDUIHelper.MakeText(panel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 32);
-            title.text = "<color=#F5D061>" + L10n.Get("充值金币") + "</color>";
+            title.text = "<color=#F5D061>" + L10n.Get("充值钻石") + "</color>";
             TDUIHelper.SetSize(title.rectTransform, 720, 50);
 
             var hint = TDUIHelper.MakeText(panel.transform, new Vector2(0, -80), TextAnchor.MiddleCenter, 20);
             hint.color = UITheme.TextSub;
-            hint.text = L10n.Get("金币为游戏内虚拟货币，可通过应用内购买获得，不可兑换现金、实物");
+            hint.text = L10n.Get("钻石为游戏内付费虚拟货币，可通过应用内购买获得，仅用于兑换金币，不可兑换现金、实物");
             TDUIHelper.SetSize(hint.rectTransform, 720, 40);
 
             var loading = TDUIHelper.MakeText(panel.transform, new Vector2(0, -220), TextAnchor.MiddleCenter, 24);
@@ -63,7 +63,7 @@ namespace Game.HotUpdate.ChestGame
             for (int i = 0; i < skus.Count; i++)
             {
                 string skuId = skus[i]["skuId"].Value;
-                long gold = skus[i]["gold"].AsLong;
+                long gems = skus[i]["gems"].AsLong;
                 string priceText = skus[i]["priceText"].Value;
                 var store = storePrices.FirstOrDefault(s => s.SkuId == skuId);
                 if (store != null && !string.IsNullOrEmpty(store.Price)) priceText = store.Price;
@@ -74,21 +74,50 @@ namespace Game.HotUpdate.ChestGame
                 grt.anchorMin = grt.pivot = new Vector2(0, 0.5f);
                 grt.anchoredPosition = new Vector2(-320, 0);
                 TDUIHelper.SetSize(grt, 400, 40);
-                goldText.text = "<color=#F5D061>" + L10n.Get("金币") + " ×" + gold.ToString("N0") + "</color>";
+                goldText.text = "<color=#6EC6FF>◆ " + L10n.Get("钻石") + " ×" + gems.ToString("N0") + "</color>";
 
                 var buy = UITheme.ThemedButton(row.transform, new Vector2(230, 0), new Vector2(200, 64), priceText, "green", 26);
                 buy.onClick.AddListener(async () =>
                 {
                     buy.interactable = false;
-                    await PurchaseFlowAsync(skuId, gold);
+                    await PurchaseFlowAsync(skuId, gems);
                     if (buy != null) buy.interactable = true;
                 });
                 y -= step;
             }
+
+            // 钻石 → 金币单向兑换行（软硬双币闸门；余额为 0 时置灰）
+            await OnlineState.Refresh();
+            int rate = OnlineState.State != null && OnlineState.State["data"] != null
+                ? OnlineState.State["data"]["gemToGold"].AsInt : 10;
+            var exRow = UITheme.CreatePanel(panel.transform, "panel_dark", new Vector2(0, -606), new Vector2(700, 84));
+            var exText = TDUIHelper.MakeText(exRow.transform, new Vector2(-150, -24), TextAnchor.MiddleCenter, 20);
+            TDUIHelper.SetSize(exText.rectTransform, 400, 36);
+            exText.color = UITheme.TextSub;
+            exText.text = "◆ " + L10n.Get("钻石") + " ×1 = " + rate + " " + L10n.Get("金币");
+            var exBtn = UITheme.ThemedButton(exRow.transform, new Vector2(215, -14), new Vector2(230, 56),
+                L10n.Get("兑换全部钻石"), "blue", 18);
+            exBtn.interactable = OnlineState.Gems > 0;
+            exBtn.onClick.AddListener(async () =>
+            {
+                exBtn.interactable = false;
+                var v = await ApiClient.ExchangeGemsAsync(OnlineState.Gems);
+                if (v != null && v["ok"].AsBool)
+                {
+                    UIRoot.ToastStatic(L10n.Get("全部钻石已兑换为金币") + " +" + v["data"]["goldGained"].AsLong.ToString("N0"));
+                    UIRoot.Instance.RefreshTop();
+                    Object.Destroy(panel);
+                }
+                else
+                {
+                    exBtn.interactable = OnlineState.Gems > 0;
+                    UIRoot.ToastStatic(L10n.Get("兑换失败：") + Screens.ErrText(v));
+                }
+            });
         }
 
-        /// <summary>建单 → 平台支付 → 服务端验单发货</summary>
-        private static async Task PurchaseFlowAsync(string skuId, long gold)
+        /// <summary>建单 → 平台支付 → 服务端验单发货（钻石）</summary>
+        private static async Task PurchaseFlowAsync(string skuId, long gems)
         {
             // 1) 建单（服务端返回 orderNo，回执带回防串单）
             var order = await ApiClient.CreatePayOrderAsync(skuId);
@@ -111,8 +140,8 @@ namespace Game.HotUpdate.ChestGame
             var verify = await ApiClient.VerifyPayAsync(result.OrderId ?? orderNo, result.PlatformReceipt);
             if (verify != null && verify["ok"].AsBool)
             {
-                long granted = verify["data"]["goldGranted"].AsLong;
-                UIRoot.ToastStatic(L10n.Get("金币已到账") + " +" + granted.ToString("N0"));
+                long granted = verify["data"]["gemsGranted"].AsLong;
+                UIRoot.ToastStatic(L10n.Get("钻石已到账") + " ◆+" + granted.ToString("N0"));
                 UIRoot.Instance.RefreshTop();
             }
             else
