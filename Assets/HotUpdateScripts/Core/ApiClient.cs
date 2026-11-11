@@ -167,6 +167,24 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> BuyoutAsync(long lotId) =>
             PostAsync($"/api/auction/{lotId}/buyout", "{}");
 
+        // ---------------- 内购（steam/ios/google；小游戏编译期无支付路径，调不到这里） ----------------
+
+        /// <summary>内购 SKU 列表（channel 取当前平台）</summary>
+        public static Task<JSONNode> PaySkusAsync() =>
+            GetAsync($"/api/pay/skus?channel={PlatformBootstrap.PayChannel}");
+
+        /// <summary>建单：返回 orderNo（随购买回执带回防串单）</summary>
+        public static Task<JSONNode> CreatePayOrderAsync(string skuId) =>
+            PostAsync("/api/pay/order", $"{{\"skuId\":\"{skuId}\",\"channel\":\"{PlatformBootstrap.PayChannel}\"}}");
+
+        /// <summary>验单发货：平台收据交服务端向商店验证，通过后金币到账</summary>
+        public static Task<JSONNode> VerifyPayAsync(string orderNo, string receipt) =>
+            PostAsync("/api/pay/verify",
+                $"{{\"orderNo\":\"{EscapeJson(orderNo)}\",\"receipt\":\"{EscapeJson(receipt)}\"}}");
+
+        private static string EscapeJson(string s) =>
+            (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+
         // ---------------- 基础请求 ----------------
 
         private static Task<JSONNode> GetAsync(string path)

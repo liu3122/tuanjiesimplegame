@@ -112,7 +112,14 @@ CREATE TABLE IF NOT EXISTS active_stake(
 CREATE TABLE IF NOT EXISTS season_reward(
   week TEXT NOT NULL, player_id INTEGER NOT NULL, rank INTEGER NOT NULL, amount INTEGER NOT NULL,
   created_at TEXT NOT NULL, PRIMARY KEY(week, player_id)
-);");
+);
+CREATE TABLE IF NOT EXISTS pay_order(
+  row_id INTEGER PRIMARY KEY AUTOINCREMENT, order_no TEXT NOT NULL, player_id INTEGER NOT NULL,
+  sku_id TEXT NOT NULL, channel TEXT NOT NULL, gold INTEGER NOT NULL, status INTEGER NOT NULL DEFAULT 0,
+  receipt_hash TEXT, platform_txn_id TEXT, created_utc TEXT NOT NULL, paid_utc TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_no ON pay_order(order_no);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payorder_receipt ON pay_order(receipt_hash);");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
             foreach (var col in new[] { "xp INTEGER NOT NULL DEFAULT 0", "level INTEGER NOT NULL DEFAULT 1", "duel_rating INTEGER NOT NULL DEFAULT 1000",
@@ -271,6 +278,77 @@ current_bidder_name=$cbn, end_time_utc=$et, settled=$st",
                 ("$sp", sp), ("$bp", bp), ("$cb", cb),
                 ("$cbi", cbi), ("$cbn", cbn as object ?? DBNull.Value),
                 ("$et", et.ToString("o")), ("$st", st ? 1 : 0)));
+        }
+
+        // ---------------- PayOrder（内购订单） ----------------
+
+        /// <summary>订单落库（照抄 SaveLot 快照模式；RowId 为 0 时同步短连接首插并回填，之后走后台写更新）</summary>
+        public static void SavePayOrder(PayOrder o)
+        {
+            string no = o.OrderNo, sku = o.SkuId, ch = o.Channel, rh = o.ReceiptHash, tx = o.PlatformTxnId;
+            long pid = o.PlayerId, gold = o.Gold, row = o.RowId;
+            int st = (int)o.Status;
+            DateTime ct = o.CreatedUtc;
+            DateTime? pt = o.PaidUtc;
+            if (row == 0)
+            {
+                // 首次落库：拿自增 row_id 回填（建单路径频次极低，同步写可接受；并发保护靠 order_no 唯一索引）
+                try
+                {
+                    using var conn = Open();
+                    Exec(conn, @"INSERT INTO pay_order(order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
+VALUES($no,$p,$sku,$ch,$g,$st,$rh,$tx,$ct,$pt)
+ON CONFLICT(order_no) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=$tx, paid_utc=$pt",
+                        ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gold), ("$st", st),
+                        ("$rh", rh as object ?? DBNull.Value), ("$tx", tx as object ?? DBNull.Value),
+                        ("$ct", ct.ToString("o")), ("$pt", pt.HasValue ? (object)pt.Value.ToString("o") : DBNull.Value));
+                    using var q = conn.CreateCommand();
+                    q.CommandText = "SELECT last_insert_rowid()";
+                    o.RowId = Convert.ToInt64(q.ExecuteScalar());
+                }
+                catch (Exception e) { _log.LogError(e, "pay_order 插入失败 {Order}", no); }
+                return;
+            }
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO pay_order(row_id,order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc)
+VALUES($row,$no,$p,$sku,$ch,$g,$st,$rh,$tx,$ct,$pt)
+ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=$tx, paid_utc=$pt",
+                ("$row", row), ("$no", no), ("$p", pid), ("$sku", sku), ("$ch", ch), ("$g", gold), ("$st", st),
+                ("$rh", rh as object ?? DBNull.Value), ("$tx", tx as object ?? DBNull.Value),
+                ("$ct", ct.ToString("o")), ("$pt", pt.HasValue ? (object)pt.Value.ToString("o") : DBNull.Value)));
+        }
+
+        /// <summary>启动恢复全部订单（paid 订单防重启后收据重放；pending 丢失无碍——客户端重下新单）</summary>
+        public static void LoadPayOrders(Action<PayOrder> add)
+        {
+            int n = 0;
+            try
+            {
+                using var conn = Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT row_id,order_no,player_id,sku_id,channel,gold,status,receipt_hash,platform_txn_id,created_utc,paid_utc FROM pay_order";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var o = new PayOrder
+                    {
+                        RowId = r.GetInt64(0),
+                        OrderNo = r.GetString(1),
+                        PlayerId = r.GetInt64(2),
+                        SkuId = r.GetString(3),
+                        Channel = r.GetString(4),
+                        Gold = r.GetInt64(5),
+                        Status = (PayOrderStatus)r.GetInt32(6),
+                        ReceiptHash = r.IsDBNull(7) ? null : r.GetString(7),
+                        PlatformTxnId = r.IsDBNull(8) ? null : r.GetString(8),
+                        CreatedUtc = DateTime.Parse(r.GetString(9)),
+                        PaidUtc = r.IsDBNull(10) ? null : DateTime.Parse(r.GetString(10)),
+                    };
+                    add(o);
+                    n++;
+                }
+                _log.LogInformation("pay_order 恢复完成：{N} 条", n);
+            }
+            catch (Exception e) { _log.LogError(e, "LoadPayOrders 失败"); }
         }
 
         // ---------------- 流水 ----------------

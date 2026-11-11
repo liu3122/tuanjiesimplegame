@@ -48,7 +48,7 @@ namespace Game.HotUpdate
                 var jsonMap = new System.Collections.Generic.Dictionary<string, JSONNode>();
                 string[] files =
                 {
-                    "tbitem", "tbchest", "tbchestgen", "tbbankerfactor", "tbcharacter",
+                    "tbitem", "tbrecharge", "tbchest", "tbchestgen", "tbbankerfactor", "tbcharacter",
                     "tbrushroom", "tblevel", "tbtext", "tbfeature", "tbad",
                     "tbquest", "tbsign", "tbglobal",
                 };

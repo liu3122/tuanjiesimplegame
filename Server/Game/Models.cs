@@ -449,4 +449,35 @@ namespace SimpleGameServer.Game
         /// <summary>细粒度并发锁（加锁顺序约定见 Player.Sync）</summary>
         public readonly object Sync = new();
     }
+
+    /// <summary>内购订单状态机：Pending（已建单待支付）→ Paid（验单通过已发货）。Failed 为终验单失败的留痕，可重验</summary>
+    public enum PayOrderStatus
+    {
+        Pending = 0,
+        Paid = 1,
+        Failed = 2,
+    }
+
+    /// <summary>
+    /// 内购订单（多平台：steam/ios/google，小游戏无内购不出现在此表）。
+    /// 收据不可信客户端：VerifyOrder 先向平台验单，再 pending→paid 幂等转换后发货（加金币 + gold_tx 流水）。
+    /// </summary>
+    public class PayOrder
+    {
+        public long RowId { get; set; }             // 数据库行号（gold_tx.ref_id 用）
+        public string OrderNo { get; set; }         // PO+Guid，下发给客户端随购买回执带回防串单
+        public long PlayerId { get; set; }
+        public string SkuId { get; set; }
+        public string Channel { get; set; }         // steam / ios / google / editor(仅沙箱)
+        public long Gold { get; set; }              // 发货金币数（建单时从 tb_recharge 快照，防后续改表串价）
+        public PayOrderStatus Status { get; set; }
+        /// <summary>收据哈希（SHA-256 前 16 字节 hex）：paid 订单凭此判幂等重放</summary>
+        public string ReceiptHash { get; set; }
+        /// <summary>平台侧交易号（Steam orderid / Google purchaseToken 前缀 / Apple transactionId）</summary>
+        public string PlatformTxnId { get; set; }
+        public DateTime CreatedUtc { get; set; }
+        public DateTime? PaidUtc { get; set; }
+        /// <summary>细粒度并发锁（加锁顺序：Order → Player，Player 最后）</summary>
+        public readonly object Sync = new();
+    }
 }

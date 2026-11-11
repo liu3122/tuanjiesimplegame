@@ -13,6 +13,21 @@
         </bean>
     </module>
 
+    <module name="recharge">
+        <!-- 真钱内购档位（steam/ios/google；小游戏无内购不消费此表）。SkuId 为各店商品 Id（三店共用） -->
+        <bean name="Recharge">
+            <var name="Id" type="int"/>
+            <!-- 商店内商品 Id（Steam 微交易 / Play Billing / App Store Connect 后台配置一致） -->
+            <var name="SkuId" type="string"/>
+            <!-- 发货金币数（服务端建单时快照，防改表串价） -->
+            <var name="Gold" type="long"/>
+            <!-- 参考价展示文案（真实价以平台 SDK QuerySku 本地化价为准，缺省回落此文案） -->
+            <var name="PriceText" type="string"/>
+            <!-- 下架开关 -->
+            <var name="Enabled" type="bool"/>
+        </bean>
+    </module>
+
     <module name="chest">
         <!-- 宝箱档位：固定 20 格金额池，购买时随机洗牌位置 -->
         <bean name="Chest">

@@ -21,8 +21,8 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>查询商品本地化信息（价格字符串直接展示）</summary>
         void QuerySku(string[] skuIds, Action<List<PaySku>> onDone);
 
-        /// <summary>发起购买，结果回调（含平台收据）</summary>
-        void Purchase(string skuId, Action<PayResult> onDone);
+        /// <summary>发起购买（orderNo 为服务端建单下发的订单号，随回执带回防串单；Steam 微交易为服务端发起模型，必须传入）</summary>
+        void Purchase(string skuId, string orderNo, Action<PayResult> onDone);
 
         /// <summary>恢复购买（iOS 必需：换机/重装找回非消耗品）</summary>
         void Restore(Action<bool> onDone);
@@ -52,17 +52,18 @@ namespace Game.HotUpdate.ChestGame
             return await tcs.Task;
         }
 
-        /// <summary>购买入口：平台不可用时直接返回失败（UI 提示"当前平台未开放支付"）</summary>
-        public static async Task<PayResult> PurchaseAsync(string skuId)
+        /// <summary>购买入口：平台不可用时直接返回失败（UI 提示"当前平台未开放支付"）。
+        /// 流程：先 POST /api/pay/order 拿 orderNo，再调本方法；成功后拿 PlatformReceipt 调 /api/pay/verify。</summary>
+        public static async Task<PayResult> PurchaseAsync(string skuId, string orderNo)
         {
             if (!_provider.IsAvailable)
             {
                 Debug.Log($"[PayBridge] 当前平台（{_provider.Name}）未开放内购，忽略购买 {skuId}");
-                return new PayResult { Success = false, SkuId = skuId, Error = "pay_unavailable" };
+                return new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "pay_unavailable" };
             }
 
             var tcs = new TaskCompletionSource<PayResult>();
-            _provider.Purchase(skuId, r => tcs.TrySetResult(r ?? new PayResult { Success = false, SkuId = skuId, Error = "null_result" }));
+            _provider.Purchase(skuId, orderNo, r => tcs.TrySetResult(r ?? new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "null_result" }));
             return await tcs.Task;
         }
 
@@ -84,9 +85,9 @@ namespace Game.HotUpdate.ChestGame
         public bool IsAvailable => false;
 
         public void QuerySku(string[] skuIds, Action<List<PaySku>> onDone) { onDone?.Invoke(new List<PaySku>()); }
-        public void Purchase(string skuId, Action<PayResult> onDone)
+        public void Purchase(string skuId, string orderNo, Action<PayResult> onDone)
         {
-            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, Error = "pay_unavailable" });
+            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "pay_unavailable" });
         }
         public void Restore(Action<bool> onDone) { onDone?.Invoke(false); }
     }

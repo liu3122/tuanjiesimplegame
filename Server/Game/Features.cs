@@ -20,6 +20,8 @@ namespace SimpleGameServer.Game
         public const string Sign = "sign";
         public const string ItemShop = "itemshop";
         public const string Referral = "referral";
+        /// <summary>内购总闸（steam/ios/google 渠道；小游戏编译期无支付路径，不经过此开关）</summary>
+        public const string Iap = "iap";
 
         public static bool IsOn(string id)
         {

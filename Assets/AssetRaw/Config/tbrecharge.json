@@ -1,0 +1,30 @@
+[
+  {
+    "Id": 1,
+    "SkuId": "gold_small",
+    "Gold": 600,
+    "PriceText": "¥6",
+    "Enabled": true
+  },
+  {
+    "Id": 2,
+    "SkuId": "gold_mid",
+    "Gold": 3200,
+    "PriceText": "¥30",
+    "Enabled": true
+  },
+  {
+    "Id": 3,
+    "SkuId": "gold_big",
+    "Gold": 12000,
+    "PriceText": "¥98",
+    "Enabled": true
+  },
+  {
+    "Id": 4,
+    "SkuId": "gold_mega",
+    "Gold": 26000,
+    "PriceText": "¥198",
+    "Enabled": true
+  }
+]

@@ -29,7 +29,10 @@ namespace Game.HotUpdate.ChestGame
 
             var hint = TDUIHelper.MakeText(panel.transform, new Vector2(0, -80), TextAnchor.MiddleCenter, 20);
             hint.color = UITheme.TextSub;
-            hint.text = L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，无法用现金购买或兑换现金、实物");
+            // 货币声明按平台区分（合规口径）：小游戏纯广告无内购；内购平台（Steam/iOS/Google）金币可购买
+            hint.text = PlatformBootstrap.Current == PlatformId.WeixinMinigame
+                ? L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，无法用现金购买或兑换现金、实物")
+                : L10n.Get("全部随机结果由服务器生成；金币为游戏内虚拟货币，可通过应用内购买获得，不可兑换现金、实物");
             TDUIHelper.SetSize(hint.rectTransform, 720, 40);
 
             int count = GameConfig.Tables.TbChest.DataList.Count;

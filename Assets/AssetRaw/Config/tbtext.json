@@ -894,5 +894,29 @@
   {
     "Key": "1. 本游戏为休闲策略类小游戏，登录仅需昵称；昵称会展示给其他玩家，请勿包含个人敏感信息。\n\n2. 游戏进度、金币与对局数据存储于游戏服务器，仅用于玩法结算与排行榜展示。\n\n3. 我们不收集设备标识、通讯录、精确定位等个人信息；地区展示来自网络接入商归属地。\n\n4. 未成年用户请在监护人指导下适度游戏。如需注销账号或删除数据，请联系客服（联系方式见小游戏主页）。\n\n5. 完整版本以小游戏平台备案公示的《用户隐私保护指引》为准。",
     "En": "1. Casual strategy mini-game; login requires only a nickname, which is visible to other players - avoid personal sensitive info.\n\n2. Game progress, coins and match data are stored on game servers solely for gameplay settlement and leaderboards.\n\n3. We do not collect device identifiers, contacts, or precise location; region shown comes from network carrier geography.\n\n4. Minors should play moderately under guardian guidance. To delete your account/data, contact support (see mini-game homepage).\n\n5. The complete version follows the User Privacy Protection Guidelines published on the mini-game platform."
+  },
+  {
+    "Key": "充值金币",
+    "En": "Buy Coins"
+  },
+  {
+    "Key": "金币已到账",
+    "En": "Coins delivered"
+  },
+  {
+    "Key": "当前平台未开放支付",
+    "En": "Payments are unavailable on this platform"
+  },
+  {
+    "Key": "充值服务暂不可用，请稍后再试",
+    "En": "Purchase service is temporarily unavailable"
+  },
+  {
+    "Key": "支付未完成",
+    "En": "Payment not completed"
+  },
+  {
+    "Key": "全部随机结果由服务器生成；金币为游戏内虚拟货币，可通过应用内购买获得，不可兑换现金、实物",
+    "En": "All random outcomes are server-generated; coins are in-game virtual currency obtainable via in-app purchase and cannot be exchanged for cash or physical goods"
   }
 ]

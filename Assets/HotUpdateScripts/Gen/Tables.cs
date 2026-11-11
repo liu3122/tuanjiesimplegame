@@ -15,6 +15,7 @@ namespace cfg
 public partial class Tables
 {
     public TbItem TbItem {get; }
+    public TbRecharge TbRecharge {get; }
     public TbChest TbChest {get; }
     public TbChestGen TbChestGen {get; }
     public TbBankerFactor TbBankerFactor {get; }
@@ -31,6 +32,7 @@ public partial class Tables
     public Tables(System.Func<string, JSONNode> loader)
     {
         TbItem = new TbItem(loader("tbitem"));
+        TbRecharge = new TbRecharge(loader("tbrecharge"));
         TbChest = new TbChest(loader("tbchest"));
         TbChestGen = new TbChestGen(loader("tbchestgen"));
         TbBankerFactor = new TbBankerFactor(loader("tbbankerfactor"));
@@ -49,6 +51,7 @@ public partial class Tables
     private void ResolveRef()
     {
         TbItem.ResolveRef(this);
+        TbRecharge.ResolveRef(this);
         TbChest.ResolveRef(this);
         TbChestGen.ResolveRef(this);
         TbBankerFactor.ResolveRef(this);

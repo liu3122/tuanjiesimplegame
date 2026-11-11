@@ -84,6 +84,17 @@ namespace Game.HotUpdate.ChestGame
             }
 
             BuildItemCards(list);
+            BuildRechargeEntry(root);
+        }
+
+        /// <summary>充值入口（真钱内购）：仅支付可用平台显示（Steam/iOS/Google；小游戏编译期无支付路径）+ iap 总开关</summary>
+        private static void BuildRechargeEntry(GameObject root)
+        {
+            if (!PayBridge.IsAvailable || !OnlineState.FeatureOn("iap")) return;
+            var btn = UITheme.ThemedButton(root.transform, new Vector2(0, -886), new Vector2(420, 64),
+                L10n.Get("充值金币"), "gold", 26);
+            btn.name = "btn_recharge_entry";
+            btn.onClick.AddListener(() => RechargePanel.Show());
         }
 
         /// <summary>道具区（金币消耗品：冷却重置/补签/挑战券/改名）</summary>

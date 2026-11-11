@@ -37,6 +37,22 @@ namespace Game.HotUpdate.ChestGame
             Debug.Log($"[PlatformBootstrap] 平台={Current} 登录={LoginBridge.ProviderName} 内购={(PayBridge.IsAvailable ? PayBridge.ProviderName : "关闭")}");
         }
 
+        /// <summary>当前平台对应的服务端支付渠道名（wechat 服务端直接拒：小游戏无内购，兜底）</summary>
+        public static string PayChannel
+        {
+            get
+            {
+                switch (Current)
+                {
+                    case PlatformId.WeixinMinigame: return "wechat";
+                    case PlatformId.Steam: return "steam";
+                    case PlatformId.Ios: return "ios";
+                    case PlatformId.GooglePlay: return "google";
+                    default: return "editor";
+                }
+            }
+        }
+
         private static ILoginProvider CreateLogin()
         {
             switch (Current)
@@ -58,7 +74,12 @@ namespace Game.HotUpdate.ChestGame
                 case PlatformId.Steam: return new SteamPayStub();
                 case PlatformId.Ios: return new IosPayStub();
                 case PlatformId.GooglePlay: return new GooglePayStub();
-                default: return new UnavailablePayProvider("editor");
+                default:
+#if UNITY_EDITOR
+                    return new DevPayProvider();   // 编辑器模拟支付：全链路联调（服务端须开 --PaySandbox）
+#else
+                    return new UnavailablePayProvider("editor");
+#endif
             }
         }
     }
@@ -115,9 +136,9 @@ namespace Game.HotUpdate.ChestGame
         public string Name => "steam";
         public bool IsAvailable => false;
         public void QuerySku(string[] skuIds, Action<List<PaySku>> onDone) { onDone?.Invoke(new List<PaySku>()); }
-        public void Purchase(string skuId, Action<PayResult> onDone)
+        public void Purchase(string skuId, string orderNo, Action<PayResult> onDone)
         {
-            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, Error = "Steamworks 微交易未接入" });
+            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "Steamworks 微交易未接入" });
         }
         public void Restore(Action<bool> onDone) { onDone?.Invoke(false); }
     }
@@ -128,9 +149,9 @@ namespace Game.HotUpdate.ChestGame
         public string Name => "iap-ios";
         public bool IsAvailable => false;
         public void QuerySku(string[] skuIds, Action<List<PaySku>> onDone) { onDone?.Invoke(new List<PaySku>()); }
-        public void Purchase(string skuId, Action<PayResult> onDone)
+        public void Purchase(string skuId, string orderNo, Action<PayResult> onDone)
         {
-            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, Error = "Unity IAP 未接入" });
+            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "Unity IAP 未接入" });
         }
         public void Restore(Action<bool> onDone) { onDone?.Invoke(false); }
     }
@@ -141,10 +162,36 @@ namespace Game.HotUpdate.ChestGame
         public string Name => "iap-google";
         public bool IsAvailable => false;
         public void QuerySku(string[] skuIds, Action<List<PaySku>> onDone) { onDone?.Invoke(new List<PaySku>()); }
-        public void Purchase(string skuId, Action<PayResult> onDone)
+        public void Purchase(string skuId, string orderNo, Action<PayResult> onDone)
         {
-            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, Error = "Unity IAP 未接入" });
+            onDone?.Invoke(new PayResult { Success = false, SkuId = skuId, OrderId = orderNo, Error = "Unity IAP 未接入" });
         }
         public void Restore(Action<bool> onDone) { onDone?.Invoke(false); }
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// 编辑器模拟支付（仅 UNITY_EDITOR 编入）：跳过真实商店直接回 dev 收据，
+    /// 服务端开 --PaySandbox true 后可走完 建单→支付→验单→发货 全链路。
+    /// 收据 dev:{orderNo}:{skuId} 与订单强绑定，服务端沙箱外一律拒绝。
+    /// </summary>
+    public class DevPayProvider : IPayProvider
+    {
+        public string Name => "editor-dev";
+        public bool IsAvailable => true;
+        public void QuerySku(string[] skuIds, Action<List<PaySku>> onDone) { onDone?.Invoke(new List<PaySku>()); }
+        public void Purchase(string skuId, string orderNo, Action<PayResult> onDone)
+        {
+            Debug.Log($"[DevPayProvider] 模拟支付 {skuId}（订单 {orderNo}）——服务端需 --PaySandbox true");
+            onDone?.Invoke(new PayResult
+            {
+                Success = true,
+                SkuId = skuId,
+                OrderId = orderNo,
+                PlatformReceipt = $"dev:{orderNo}:{skuId}",
+            });
+        }
+        public void Restore(Action<bool> onDone) { onDone?.Invoke(true); }
+    }
+#endif
 }

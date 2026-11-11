@@ -1,6 +1,8 @@
 <module name="">
     <!-- 道具表 -->
     <table name="TbItem" value="item.Item" index="Id" input="tb_item.xlsx"/>
+    <!-- 真钱内购档位（steam/ios/google 渠道；小游戏无内购） -->
+    <table name="TbRecharge" value="recharge.Recharge" index="Id" input="tb_recharge.xlsx"/>
     <!-- 宝箱档位表 -->
     <table name="TbChest" value="chest.Chest" index="Id" input="tb_chest.xlsx"/>
     <!-- 宝箱金额生成器（GenMode=1 时生效） -->

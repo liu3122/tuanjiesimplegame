@@ -30,6 +30,8 @@ store0.RestoreIdCursors();
 Db.LoadOpenCounts(store0);      // 开箱次数内存化（热路径免 SQL COUNT）
 Db.LoadSeasonRewards(store0);   // 赛季奖励缓存内存化
 Db.RefundOrphanStakes(store0);  // 房间随进程消失：退还抢宝门票/对决入场费
+PayService.LoadConfig(app.Configuration);  // 内购：沙箱开关 + 各店凭证（配置键见 PayService）
+Db.LoadPayOrders(PayService.Restore);      // 恢复订单簿（paid 订单防重启后收据重放）
 app.Logger.LogInformation("Luban 配置加载完成：宝箱 {Chest} 档，角色 {Char} 个",
     GameTables.Tables.TbChest.DataList.Count, GameTables.Tables.TbCharacter.DataList.Count);
 
@@ -127,6 +129,34 @@ app.MapPost("/api/ad/reward", (AdReq req, HttpRequest http, GameService svc) =>
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
     var (ok, err, data) = svc.AdReward(p, req?.Placement);
+    return Results.Json(new { ok, error = err, data });
+});
+
+// ---------- 内购（steam/ios/google；小游戏无内购：编译期无支付路径，wechat 渠道此处兜底拒绝） ----------
+app.MapGet("/api/pay/skus", (HttpRequest http, string channel = "editor") =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Iap)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = PayService.Skus(channel);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/pay/order", (PayOrderReq req, HttpRequest http) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Iap)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = PayService.CreateOrder(p, req?.SkuId, req?.Channel);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/pay/verify", async (PayVerifyReq req, HttpRequest http) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Iap)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = await PayService.VerifyOrderAsync(p, req?.OrderNo, req?.Receipt);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -410,6 +440,8 @@ public record BuyReq(int ConfigId);
 public record EliminateReq(int SlotIndex);
 public record SkillReq(int SkillType, int? SlotIndex = null);
 public record ListReq(long ChestUid, long StartPrice, long BuyoutPrice);
+public record PayOrderReq(string SkuId, string Channel);
+public record PayVerifyReq(string OrderNo, string Receipt);
 
 namespace SimpleGameServer.Game
 {
