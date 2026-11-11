@@ -29,7 +29,7 @@ Db.LoadAll(store0);
 store0.RestoreIdCursors();
 Db.LoadOpenCounts(store0);      // 开箱次数内存化（热路径免 SQL COUNT）
 Db.LoadSeasonRewards(store0);   // 赛季奖励缓存内存化
-Db.RefundOrphanStakes(store0);  // 房间随进程消失：退还抢宝门票/对决入场金
+Db.RefundOrphanStakes(store0);  // 房间随进程消失：退还抢宝门票/对决入场费
 app.Logger.LogInformation("Luban 配置加载完成：宝箱 {Chest} 档，角色 {Char} 个",
     GameTables.Tables.TbChest.DataList.Count, GameTables.Tables.TbCharacter.DataList.Count);
 
@@ -47,7 +47,8 @@ IResult Need(Player p) => p == null ? Results.Json(new { ok = false, error = "UN
 // ---------- 账号 ----------
 app.MapPost("/api/login", (LoginReq req, HttpContext ctx, GameStore store) =>
 {
-    if (string.IsNullOrWhiteSpace(req.Name)) return Results.Json(new { ok = false, error = "BAD_NAME" });
+    var nameErr = SensitiveFilter.ValidateName(req.Name);   // 敏感词/合法性：服务端权威拦截
+    if (nameErr != null) return Results.Json(new { ok = false, error = nameErr });
     var player = store.LoginOrRegister(req.Name.Trim());
     player.Region = RegionResolver.Resolve(ctx, req.Region);
     Db.SavePlayer(player);
@@ -190,7 +191,7 @@ app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService sv
     return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
 });
 
-// ---------- 镜像对决 / 对赌房 ----------
+// ---------- 镜像对决 / 竞宝房 ----------
 app.MapPost("/api/duel/join", (DuelJoinReq req, HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);

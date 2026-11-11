@@ -34,6 +34,8 @@ namespace Game.HotUpdate.ChestGame
             if (err == "ITEM_NO_EFFECT") return L10n.Get("当前无需使用该道具");
             if (err == "ITEM_LIMIT") return L10n.Get("今日道具使用已达上限");
             if (err == "NAME_TAKEN") return L10n.Get("这个名字已被使用");
+            if (err == "SENSITIVE_NAME") return L10n.Get("昵称含违禁词，请更换");
+            if (err == "BAD_NAME") return L10n.Get("昵称不合法：1~16位中文/字母/数字");
             if (err == "BAD_CODE") return L10n.Get("邀请码无效");
             if (err == "SELF_INVITE") return L10n.Get("不能邀请自己");
             if (err == "ALREADY_BOUND") return L10n.Get("已绑定过邀请人");
@@ -63,7 +65,7 @@ namespace Game.HotUpdate.ChestGame
             return 1;
         }
 
-        /// <summary>对赌房解锁等级</summary>
+        /// <summary>竞宝房解锁等级</summary>
         public const int PotDuelMinLevel = 3;
     }
 }

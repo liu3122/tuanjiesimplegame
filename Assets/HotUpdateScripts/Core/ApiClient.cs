@@ -44,8 +44,12 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>地区码上报（接 SDK 后替换为真实定位/玩家自选）</summary>
         public static string Region { get; set; } = "CN";
 
+        /// <summary>最近一次登录失败的响应（含 error 码，供 UI 精确提示；成功时为 null）</summary>
+        public static JSONNode LastLoginError { get; private set; }
+
         public static async Task<bool> LoginAsync()
         {
+            LastLoginError = null;
             var r = await PostAsync("/api/login", $"{{\"name\":\"{PlayerName}\",\"region\":\"{Region}\"}}");
             if (r != null && r["ok"].AsBool)
             {
@@ -53,6 +57,7 @@ namespace Game.HotUpdate.ChestGame
                 PlayerId = r["playerId"].AsLong;
                 return true;
             }
+            LastLoginError = r;
             Debug.LogError(L10n.Get("[ApiClient] 登录失败：") + (r == null ? "no response" : r.ToString()));
             return false;
         }

@@ -491,7 +491,8 @@ namespace SimpleGameServer.Game
                     case "rename":
                     {
                         string name = (arg ?? "").Trim();
-                        if (name.Length < 1 || name.Length > 16) return (false, "BAD_NAME", null);
+                        var nameErr = SensitiveFilter.ValidateName(name);   // 敏感词/合法性（扣费前校验）
+                        if (nameErr != null) return (false, nameErr, null);
                         if (_store.Players.Values.Any(p => p.Name == name && p.Id != player.Id)) return (false, "NAME_TAKEN", null);
                         message = "改名成功：" + name;
                         player.Name = name;
