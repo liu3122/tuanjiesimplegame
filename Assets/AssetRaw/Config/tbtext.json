@@ -253,7 +253,7 @@
   },
   {
     "Key": "名",
-    "En": ""
+    "En": " "
   },
   {
     "Key": "商 城",
@@ -752,8 +752,8 @@
     "En": "Banker"
   },
   {
-    "Key": "赌徒",
-    "En": "Gambler"
+    "Key": "冒险家",
+    "En": "Adventurer"
   },
   {
     "Key": "天眼",
@@ -802,5 +802,97 @@
   {
     "Key": "冷却",
     "En": "CD"
+  },
+  {
+    "Key": "竞宝房",
+    "En": "Pot Duel"
+  },
+  {
+    "Key": "竞宝房 · 胜者全得",
+    "En": "Pot Duel · Winner Takes All"
+  },
+  {
+    "Key": "胜者全得！",
+    "En": "Winner Takes All!"
+  },
+  {
+    "Key": "入场费",
+    "En": "Entry fee"
+  },
+  {
+    "Key": "坚持开到最后一格",
+    "En": "Held out to the last cell"
+  },
+  {
+    "Key": "稳妥收金",
+    "En": "Smart Cash-out"
+  },
+  {
+    "Key": "昵称含违禁词，请更换",
+    "En": "Nickname contains banned words"
+  },
+  {
+    "Key": "昵称不合法：1~16位中文/字母/数字",
+    "En": "Invalid nickname: 1-16 letters/digits/Chinese"
+  },
+  {
+    "Key": "概率与金额公示",
+    "En": "Probability & Amounts Disclosure"
+  },
+  {
+    "Key": "全部随机结果由服务器生成；金币为游戏内虚拟货币，无法用现金购买或兑换现金、实物",
+    "En": "All random outcomes are generated server-side; coins are in-game virtual currency and cannot be purchased with or exchanged for cash"
+  },
+  {
+    "Key": "售价",
+    "En": "Price"
+  },
+  {
+    "Key": "固定金额池（无抽取概率，仅格位随机洗牌）：",
+    "En": "Fixed amount pool (no draw probability, cell positions shuffled): "
+  },
+  {
+    "Key": "每格按概率抽取稀有度档：",
+    "En": "Each cell draws a rarity tier by probability: "
+  },
+  {
+    "Key": "单格金额在基准上按对数正态随机浮动（幅度约 ±",
+    "En": "Each amount fluctuates around the tier base (log-normal, approx ±"
+  },
+  {
+    "Key": "%），整体归一化后总池恒定，与固定池总和一致（期望稳定）",
+    "En": "%), then normalized so the total pool equals the fixed pool sum (stable EV)"
+  },
+  {
+    "Key": "公 示",
+    "En": "RULES"
+  },
+  {
+    "Key": "抢宝房奖池规则",
+    "En": "Rush Room Prize Pool Rules"
+  },
+  {
+    "Key": "奖池为固定金字塔结构（20 档比例恒定，仅格位随机），总奖池 = 门票 × 人数 × 倍率：",
+    "En": "Fixed pyramid structure (20 fixed tiers, only positions shuffled). Total pool = ticket × players × multiplier: "
+  },
+  {
+    "Key": "盲抢房：格位金额领取后才显示，对所有人（含机器人）同样隐藏",
+    "En": "Blind rooms: amounts hidden until claimed, equally for everyone including bots"
+  },
+  {
+    "Key": "适龄提示：本游戏适合 8 周岁以上用户，请在监护人指导下适度游戏",
+    "En": "Age rating: suitable for users aged 8+. Play moderately with parental guidance."
+  },
+  {
+    "Key": "《用户协议与隐私政策》",
+    "En": "User Agreement & Privacy Policy"
+  },
+  {
+    "Key": "用户协议与隐私政策（摘要）",
+    "En": "User Agreement & Privacy Policy (Summary)"
+  },
+  {
+    "Key": "1. 本游戏为休闲策略类小游戏，登录仅需昵称；昵称会展示给其他玩家，请勿包含个人敏感信息。\n\n2. 游戏进度、金币与对局数据存储于游戏服务器，仅用于玩法结算与排行榜展示。\n\n3. 我们不收集设备标识、通讯录、精确定位等个人信息；地区展示来自网络接入商归属地。\n\n4. 未成年用户请在监护人指导下适度游戏。如需注销账号或删除数据，请联系客服（联系方式见小游戏主页）。\n\n5. 完整版本以小游戏平台备案公示的《用户隐私保护指引》为准。",
+    "En": "1. Casual strategy mini-game; login requires only a nickname, which is visible to other players - avoid personal sensitive info.\n\n2. Game progress, coins and match data are stored on game servers solely for gameplay settlement and leaderboards.\n\n3. We do not collect device identifiers, contacts, or precise location; region shown comes from network carrier geography.\n\n4. Minors should play moderately under guardian guidance. To delete your account/data, contact support (see mini-game homepage).\n\n5. The complete version follows the User Privacy Protection Guidelines published on the mini-game platform."
   }
 ]

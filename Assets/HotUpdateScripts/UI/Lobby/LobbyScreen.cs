@@ -27,7 +27,7 @@ namespace Game.HotUpdate.ChestGame
             var langBtn = UITheme.ThemedButton(root.transform, new Vector2(410, -124), new Vector2(170, 56),
                 L10n.IsZh ? "EN" : L10n.Get("中文"), "blue", 24);
             langBtn.onClick.AddListener(L10n.ToggleLanguage);
-            // 对决入口（模式选择器：镜像对决/对赌房；开关关闭时隐藏）
+            // 对决入口（模式选择器：镜像对决/竞宝房；开关关闭时隐藏）
             var duelBtn = UITheme.ThemedButton(root.transform, new Vector2(190, -50), new Vector2(180, 56),
                 L10n.Get("对 决"), "gold", 24);
             duelBtn.name = "btn_duel_entry";
@@ -52,6 +52,11 @@ namespace Game.HotUpdate.ChestGame
                 L10n.Get("邀 请"), "gold", 24);
             inviteBtn.name = "btn_invite_entry";
             inviteBtn.onClick.AddListener(() => ShowInvite());
+            // 概率/金额公示（合规要求，常驻显示）
+            var disclosureBtn = UITheme.ThemedButton(root.transform, new Vector2(190, -124), new Vector2(180, 56),
+                L10n.Get("公 示"), "blue", 24);
+            disclosureBtn.name = "btn_disclosure_entry";
+            disclosureBtn.onClick.AddListener(() => DisclosurePanel.Show());
             UIRoot.Instance.RefreshTop();
 
             ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject);
