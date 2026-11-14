@@ -57,6 +57,7 @@ namespace Game.HotUpdate.ChestGame
             var skuIds = new string[skus.Count];
             for (int i = 0; i < skus.Count; i++) skuIds[i] = skus[i]["skuId"].Value;
             var storePrices = await PayBridge.QuerySkuAsync(skuIds);
+            if (panel == null) return; // await 期间面板已关/切屏：不再挂子节点（防 MissingReference）
 
             float y = -140;
             float step = 124;

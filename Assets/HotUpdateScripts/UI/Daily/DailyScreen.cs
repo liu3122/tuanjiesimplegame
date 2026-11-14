@@ -44,7 +44,7 @@ namespace Game.HotUpdate.ChestGame
             });
 
             var r2 = await ApiClient.GetDailyRankAsync();
-            if (r2 == null || !r2["ok"].AsBool) return;
+            if (r2 == null || !r2["ok"].AsBool || root == null) return; // await 后判屏（切屏即销毁）
             var list = root.transform.Find("rank_panel/list");
             foreach (Transform child in list) Object.Destroy(child.gameObject);
             var mine = r2["data"]["mine"];

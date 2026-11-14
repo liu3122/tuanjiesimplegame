@@ -38,7 +38,7 @@ namespace Game.HotUpdate.ChestGame
             foreach (JSONNode node in chests)
             {
                 var chest = node;
-                var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == chest["configId"].AsInt);
+                var config = GameConfig.Tables.TbChest.GetOrDefault(chest["configId"].AsInt);
                 if (config == null) continue;
                 BuildBagRow(list, y, chest, config);
                 y -= 160;

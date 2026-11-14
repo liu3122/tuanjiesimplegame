@@ -6,18 +6,24 @@ using UnityEngine.UI;
 
 namespace Game.HotUpdate.ChestGame
 {
-    /// <summary>拍卖行（prefab Bind 模式）：AuctionScreen 加载后挂本组件。列表 3 秒自动刷新。</summary>
+    /// <summary>拍卖行（prefab Bind 模式）：AuctionScreen 加载后挂本组件。列表自动刷新（失败自动退避）。
+    /// 行对象池化：3 秒轮询只改文本，不再 Destroy/重建整列表（旧实现是小游戏最大 GC 源）。</summary>
     public class AuctionPanel : MonoBehaviour
     {
         private JSONNode _lots;
         private long _selectedLot = -1;
-        private readonly System.Collections.Generic.List<GameObject> _rows = new System.Collections.Generic.List<GameObject>();
+        // 行池（Button + label 缓存；行数变化才增删对象）
+        private readonly System.Collections.Generic.List<Button> _rowBtns = new System.Collections.Generic.List<Button>();
+        private readonly System.Collections.Generic.List<Text> _rowLabels = new System.Collections.Generic.List<Text>();
         private Text _detail;
         private Button _bidBtn;
         private Text _bidText;
         private Button _buyoutBtn;
         private Text _buyoutText;
         private float _refreshTimer = 99f;
+        /// <summary>轮询间隔：成功 3s；连续失败指数退避至 15s（防网络抖动时空转刷请求）</summary>
+        private float _refreshInterval = 3f;
+        private bool _refreshInFlight;
         private Transform _listRoot;
 
         public static async void Show()
@@ -57,45 +63,69 @@ namespace Game.HotUpdate.ChestGame
             Redraw();
         }
 
-        private async Task RefreshData()
+        private async Task<bool> RefreshData()
         {
             var r = await ApiClient.GetAuctionsAsync();
-            if (r != null && r["ok"].AsBool) _lots = r["data"];
-            if (UIRoot.Instance != null) UIRoot.Instance.RefreshTop();
+            bool ok = r != null && r["ok"].AsBool;
+            if (ok) _lots = r["data"];
+            return ok;
         }
 
         private void Update()
         {
             _refreshTimer += Time.deltaTime;
-            if (_refreshTimer < 3f) return;
+            if (_refreshTimer < _refreshInterval || _refreshInFlight) return;
             _refreshTimer = 0f;
             _ = AutoRefresh();
         }
 
         private async Task AutoRefresh()
         {
-            await RefreshData();
-            if (_lots != null) Redraw();
+            _refreshInFlight = true;
+            try
+            {
+                bool ok = await RefreshData();
+                _refreshInterval = ok ? 3f : System.Math.Min(15f, _refreshInterval * 1.7f); // 失败退避，成功恢复
+                if (_lots != null && this != null) Redraw();
+            }
+            finally { _refreshInFlight = false; }
         }
 
         private void Redraw()
         {
-            foreach (var r in _rows) if (r != null) Destroy(r);
-            _rows.Clear();
+            int count = _lots.Count;
 
-            float y = 340;
-            foreach (JSONNode node in _lots)
+            // 行池：只增删差额行，其余复用（每 3 秒重建 N 行 GameObject 是小游戏 GC 大头）
+            while (_rowBtns.Count < count)
             {
-                var lot = node;
-                var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == lot["configId"].AsInt);
-                var row = UITheme.ThemedButton(_listRoot, new Vector2(0, y), new Vector2(940, 96), "", "blue", 20);
+                int idx = _rowBtns.Count;
+                var row = UITheme.ThemedButton(_listRoot, Vector2.zero, new Vector2(940, 96), "", "blue", 20);
                 UITheme.SkinButton(row, "gold");
-                row.image.color = lot["lotId"].AsLong == _selectedLot
-                    ? new Color(0.35f, 0.42f, 0.55f, 0.95f)
-                    : new Color(0.16f, 0.2f, 0.28f, 0.95f);
                 var label = row.GetComponentInChildren<Text>();
                 label.alignment = TextAnchor.MiddleLeft;
                 label.fontSize = 21;
+                row.onClick.AddListener(() => { _selectedLot = _lots[idx]["lotId"].AsLong; Redraw(); });
+                _rowBtns.Add(row);
+                _rowLabels.Add(label);
+            }
+            while (_rowBtns.Count > count)
+            {
+                int last = _rowBtns.Count - 1;
+                if (_rowBtns[last] != null) Destroy(_rowBtns[last].gameObject);
+                _rowBtns.RemoveAt(last);
+                _rowLabels.RemoveAt(last);
+            }
+
+            float y = 340;
+            for (int i = 0; i < count; i++)
+            {
+                var lot = _lots[i];
+                var row = _rowBtns[i];
+                var label = _rowLabels[i];
+                if (row == null) continue; // 池外销毁（理论不发生）
+                var rt = row.GetComponent<RectTransform>();
+                rt.anchoredPosition = new Vector2(0, y);
+                var config = GameConfig.Tables.TbChest.GetOrDefault(lot["configId"].AsInt);
 
                 long currentBid = lot["currentBid"].AsLong;
                 long startPrice = lot["startPrice"].AsLong;
@@ -109,8 +139,9 @@ namespace Game.HotUpdate.ChestGame
                 label.text = "[" + seller + "] " + identTag + (config != null ? config.Name : "?") + "  剩" + lot["remainingCount"].AsInt
                     + "格  EV " + lot["expectedValue"].AsLong.ToString("N0") + "  技能" + lot["skillUses"].AsInt + "/" + lot["skillUsesMax"].AsInt
                     + "  " + price + buyout + "  剩" + lot["endInSec"].AsInt + "s";
-                row.onClick.AddListener(() => { _selectedLot = lot["lotId"].AsLong; Redraw(); });
-                _rows.Add(row.gameObject);
+                row.image.color = lot["lotId"].AsLong == _selectedLot
+                    ? new Color(0.35f, 0.42f, 0.55f, 0.95f)
+                    : new Color(0.16f, 0.2f, 0.28f, 0.95f);
                 y -= 104;
             }
 
@@ -124,7 +155,7 @@ namespace Game.HotUpdate.ChestGame
                 return;
             }
 
-            var selConfig = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == sel["configId"].AsInt);
+            var selConfig = GameConfig.Tables.TbChest.GetOrDefault(sel["configId"].AsInt);
             long cur = sel["currentBid"].AsLong > 0 ? sel["currentBid"].AsLong : sel["startPrice"].AsLong;
             long next = cur + System.Math.Max(1, (long)(cur * 0.05));
             long selBuyout = sel["buyoutPrice"].AsLong;
@@ -153,16 +184,22 @@ namespace Game.HotUpdate.ChestGame
 
         private async void OnBid()
         {
+            if (_bidBtn != null) _bidBtn.interactable = false; // 防双击重复出价（两次预扣）
             var r = await ApiClient.BidAsync(_selectedLot);
+            if (this == null) return;
             if (r == null || !r["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("出价失败：") + Screens.ErrText(r)); }
             else UIRoot.ToastStatic(r["data"]["buyout"].AsBool ? L10n.Get("以一口价拿下！") : "出价成功 " + r["data"]["bid"].AsLong.ToString("N0"));
+            if (UIRoot.Instance != null) UIRoot.Instance.RefreshTop(); // 金币变动只在操作后刷，不随 3s 轮询
             await AutoRefresh();
         }
 
         private async void OnBuyout()
         {
+            if (_buyoutBtn != null) _buyoutBtn.interactable = false; // 防双击重复买断
             var r = await ApiClient.BuyoutAsync(_selectedLot);
+            if (this == null) return;
             if (r == null || !r["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("失败：") + Screens.ErrText(r)); }
+            if (UIRoot.Instance != null) UIRoot.Instance.RefreshTop();
             await AutoRefresh();
         }
 

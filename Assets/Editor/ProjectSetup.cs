@@ -95,6 +95,10 @@ public static class ProjectSetup
         var prefabGroup = BundleCollectorSettingData.CreateGroup(package, "PrefabBundle");
         AddCollector(prefabGroup, "Assets/AssetRaw/Prefab", ECollectorType.MainAssetCollector, nameof(PackSeparately));
 
+        // UI 主题 Sprite（代码创建的控件皮肤，UITheme.Load 运行时按文件名加载）
+        var uiSpriteGroup = BundleCollectorSettingData.CreateGroup(package, "UiSpriteBundle");
+        AddCollector(uiSpriteGroup, "Assets/AssetRaw/UI", ECollectorType.MainAssetCollector, nameof(PackDirectory));
+
         // 热更 dll（HybridCLR 编译产物，.bytes）
         var dllGroup = BundleCollectorSettingData.CreateGroup(package, "HotUpdateDllBundle");
         AddCollector(dllGroup, HotUpdateDllTargetDir, ECollectorType.MainAssetCollector, nameof(PackSeparately));

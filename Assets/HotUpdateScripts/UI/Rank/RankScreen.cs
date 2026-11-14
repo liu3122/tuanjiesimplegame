@@ -86,7 +86,7 @@ namespace Game.HotUpdate.ChestGame
             if (_board == "duel_ladder")
             {
                 var rl = await ApiClient.GetDuelRankAsync();
-                if (rl == null || !rl["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("获取排行失败")); return; }
+                if (rl == null || !rl["ok"].AsBool || root == null) { if (root != null) UIRoot.ToastStatic(L10n.Get("获取排行失败")); return; }
                 var subtitleGo0 = root.transform.Find("subtitle");
                 if (subtitleGo0 != null) subtitleGo0.GetComponent<Text>().text = L10n.Get("对决天梯") + " · Elo · " + L10n.Get("我") + " " + rl["data"]["myRating"].AsInt;
                 var list0 = root.transform.Find("list");

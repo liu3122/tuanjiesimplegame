@@ -10,11 +10,15 @@ namespace Game.HotUpdate.ChestGame
     /// </summary>
     public static class L10n
     {
+        // Lang 是每条文案的热路径读取（一个界面触发上百次）：静态缓存，仅 setter 落盘
+        private static string _lang;
+
         public static string Lang
         {
-            get => PlayerPrefs.GetString("l10n.lang", "zh");
+            get => _lang ??= PlayerPrefs.GetString("l10n.lang", "zh");
             set
             {
+                _lang = value;
                 PlayerPrefs.SetString("l10n.lang", value);
                 PlayerPrefs.Save();
             }

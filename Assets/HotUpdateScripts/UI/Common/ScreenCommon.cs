@@ -44,6 +44,7 @@ namespace Game.HotUpdate.ChestGame
             if (err == "OWN_LOT") return L10n.Get("不能竞拍自己的宝箱");
             if (err == "AUCTION_ENDED") return L10n.Get("拍卖已结束");
             if (err == "RUSH_LIMIT") return L10n.Get("今日次数已用完");
+            if (err == "WRONG_SECRET") return L10n.Get("登录凭证不符：该昵称已在本机之外的设备登录过，请换昵称或清档重试");
             if (err == "MANOR_MAX") return L10n.Get("宅邸已全部完工");
             if (err == "BAD_CHOICE") return L10n.Get("请先选择装饰方案");
             if (err == "NOT_ENOUGH_GEMS") return L10n.Get("钻石不足");

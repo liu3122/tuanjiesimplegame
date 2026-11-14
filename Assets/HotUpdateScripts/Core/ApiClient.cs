@@ -47,14 +47,21 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>最近一次登录失败的响应（含 error 码，供 UI 精确提示；成功时为 null）</summary>
         public static JSONNode LastLoginError { get; private set; }
 
+        // 登录凭证：服务端首登下发 secret，本地按玩家名持久保存，之后登录必带（防"知道昵称即可接管账号"）
+        private const string SecretPrefsPrefix = "login_secret_";
+
         public static async Task<bool> LoginAsync()
         {
             LastLoginError = null;
-            var r = await PostAsync("/api/login", $"{{\"name\":\"{PlayerName}\",\"region\":\"{Region}\"}}");
+            string secret = PlayerPrefs.GetString(SecretPrefsPrefix + PlayerName, "");
+            var r = await PostAsync("/api/login",
+                $"{{\"name\":\"{EscapeJson(PlayerName)}\",\"secret\":\"{EscapeJson(secret)}\",\"region\":\"{Region}\"}}");
             if (r != null && r["ok"].AsBool)
             {
                 _token = r["token"].Value;
                 PlayerId = r["playerId"].AsLong;
+                if (!string.IsNullOrEmpty(r["secret"].Value))
+                    PlayerPrefs.SetString(SecretPrefsPrefix + PlayerName, r["secret"].Value); // 首登绑定后保存
                 return true;
             }
             LastLoginError = r;
@@ -74,7 +81,7 @@ namespace Game.HotUpdate.ChestGame
                 return await LoginAsync();
             }
 
-            var body = $"{{\"platform\":\"{identity.Platform}\",\"platformUserId\":\"{identity.PlatformUserId}\",\"payload\":\"{identity.AuthPayload}\",\"name\":\"{PlayerName}\",\"region\":\"{Region}\"}}";
+            var body = $"{{\"platform\":\"{identity.Platform}\",\"platformUserId\":\"{EscapeJson(identity.PlatformUserId)}\",\"payload\":\"{EscapeJson(identity.AuthPayload)}\",\"name\":\"{EscapeJson(PlayerName)}\",\"region\":\"{Region}\"}}";
             var r = await PostAsync($"/api/auth/{identity.Platform.ToString().ToLowerInvariant()}", body);
             if (r != null && r["ok"].AsBool)
             {
@@ -82,6 +89,7 @@ namespace Game.HotUpdate.ChestGame
                 PlayerId = r["playerId"].AsLong;
                 return true;
             }
+            LastLoginError = r; // 与 LoginAsync 一致：供登录页精确提示（ErrText 映射）
             Debug.LogError(L10n.Get("[ApiClient] 平台登录失败：") + (r == null ? "no response" : r.ToString()));
             return false;
         }
@@ -102,11 +110,11 @@ namespace Game.HotUpdate.ChestGame
             PostAsync("/api/ad/reward", $"{{\"placement\":\"{placement}\"}}");
 
         public static Task<JSONNode> BindReferralAsync(string code) =>
-            PostAsync("/api/referral/bind", $"{{\"code\":\"{code}\"}}");
+            PostAsync("/api/referral/bind", $"{{\"code\":\"{EscapeJson(code)}\"}}"); // 入参来自用户输入，必须转义
 
         public static Task<JSONNode> BuyItemAsync(int itemId, string arg = null) =>
             PostAsync("/api/item/buy", arg != null
-                ? $"{{\"itemId\":{itemId},\"arg\":\"{arg}\"}}"
+                ? $"{{\"itemId\":{itemId},\"arg\":\"{EscapeJson(arg)}\"}}" // 改名入参来自用户输入，必须转义
                 : $"{{\"itemId\":{itemId}}}");
 
         public static Task<JSONNode> SignAsync(bool doubleReward = false) =>
@@ -268,7 +276,19 @@ namespace Game.HotUpdate.ChestGame
                 using (var resp = await Http.SendAsync(msg))
                 {
                     string body = await resp.Content.ReadAsStringAsync();
-                    return JSON.Parse(body);
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        // 非 2xx：body 若为服务端 JSON（如 401 UNAUTHORIZED）原样交给调用方走 ErrText 精确提示；
+                        // 网关 HTML 错误页则丢弃不出脏节点
+                        Debug.LogError($"[ApiClient] {msg.Method} {msg.RequestUri.PathAndQuery} HTTP {(int)resp.StatusCode}");
+                        if (!string.IsNullOrEmpty(body) && body.TrimStart().StartsWith("{"))
+                        {
+                            var errNode = JSON.Parse(body);
+                            if (errNode != null) return errNode;
+                        }
+                        return null;
+                    }
+                    return string.IsNullOrEmpty(body) ? null : JSON.Parse(body);
                 }
             }
             catch (Exception e)

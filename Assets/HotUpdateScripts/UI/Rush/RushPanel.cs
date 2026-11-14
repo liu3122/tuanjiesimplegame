@@ -204,6 +204,14 @@ namespace Game.HotUpdate.ChestGame
                     _ws?.Close();
                     break;
                 }
+                case "__disconnected":
+                    // 断线（切后台/网络抖动；结算后的主动 Close 不提示）——抢宝房无重连，提示后回大厅
+                    if (!_status.text.Contains(L10n.Get("本局结束")))
+                    {
+                        UIRoot.ToastStatic(L10n.Get("连接已断开"));
+                        Screens.ShowMain();
+                    }
+                    break;
             }
         }
 

@@ -7,7 +7,9 @@ namespace Game.HotUpdate.ChestGame
     /// <summary>UGUI 代码构建工具（热更侧公共）</summary>
     public static class TDUIHelper
     {
-        private static Font BuiltInFont => Resources.GetBuiltinResource<Font>("Arial.ttf");
+        // 静态缓存：GetBuiltinResource 每控件调一次是纯浪费（与 UITheme.BuiltinFont 同源）
+        private static Font _font;
+        private static Font BuiltInFont => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("Arial.ttf"));
 
         public static Color HexColor(string hex)
         {

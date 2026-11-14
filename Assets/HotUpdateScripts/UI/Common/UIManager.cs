@@ -21,6 +21,10 @@ namespace Game.HotUpdate.ChestGame
 
         private static readonly Dictionary<string, AssetHandle> _handles = new Dictionary<string, AssetHandle>();
 
+        /// <summary>同界面加载中去重：连点两个按钮触发两次 ShowAsync，后完成者覆盖 Current/_handles，
+        /// 先完成者的实例与句柄双泄漏（旧实现无此保护）</summary>
+        private static Task<GameObject> _inFlight;
+
         /// <summary>加载并显示界面（自动关闭上一屏）。返回根节点；失败返回 null。</summary>
         public static async Task<GameObject> ShowAsync(string name, bool unloadUnusedOnSwitch = false)
         {
@@ -28,6 +32,20 @@ namespace Game.HotUpdate.ChestGame
             {
                 return Current;
             }
+            if (_inFlight != null)
+            {
+                await _inFlight; // 已有加载在途：等它完成（其结果即为最新屏），再按需二次切换
+                if (CurrentName == name && Current != null) return Current;
+            }
+
+            var task = ShowAsyncCore(name, unloadUnusedOnSwitch);
+            _inFlight = task;
+            try { return await task; }
+            finally { _inFlight = null; }
+        }
+
+        private static async Task<GameObject> ShowAsyncCore(string name, bool unloadUnusedOnSwitch)
+        {
             CloseCurrent(unloadUnusedOnSwitch);
 
             ResourcePackage package = YooAssets.GetPackage(PackageName);
@@ -41,6 +59,7 @@ namespace Game.HotUpdate.ChestGame
             await handle;
             if (handle.Status != EOperationStatus.Succeeded)
             {
+                handle.Release(); // 失败句柄也持有引用计数，不释放会钉住整包引用链
                 Debug.LogError($"[UIManager] 界面加载失败：{name} -> {handle.Error}");
                 return null;
             }

@@ -21,7 +21,10 @@ namespace Game.HotUpdate.ChestGame
         public static readonly Color Blue = FromHex("6EC6FF");
 
         private static readonly Dictionary<string, Sprite> _cache = new Dictionary<string, Sprite>();
+        private static readonly HashSet<string> _missing = new HashSet<string>(); // 负结果缓存：防日志刷屏
         private static bool _applied;
+        /// <summary>真机 YooAsset 句柄（钉住引用，整套 UI 图很小、随包常驻不释放）</summary>
+        private static readonly Dictionary<string, YooAsset.AssetHandle> _handles = new Dictionary<string, YooAsset.AssetHandle>();
 
         /// <summary>项目根下的资源相对路径（AssetRaw/UI）</summary>
         private const string ResDir = "Assets/AssetRaw/UI";
@@ -46,14 +49,52 @@ namespace Game.HotUpdate.ChestGame
             return _atlasOf.TryGetValue(name, out atlas) ? atlas : "common";
         }
 
-        /// <summary>预加载某界面的整组图集（进入界面时可调用，减少首帧卡顿）</summary>
+        /// <summary>预加载某界面的整组图集（进入界面时可调用，减少首帧卡顿）。
+        /// 编辑器同步读；真机异步预热缓存（WebGL 禁同步加载，返回后缓存已可命中或稍后命中）</summary>
         public static void PreloadAtlas(string atlas)
         {
+#if UNITY_EDITOR
             foreach (var kv in _atlasOf)
             {
                 if (kv.Value == atlas) Load(kv.Key);
             }
+#else
+            Cysharp.Threading.Tasks.UniTask.Void(async () =>
+            {
+                foreach (var kv in _atlasOf)
+                {
+                    if (kv.Value != atlas) continue;
+                    await LoadRuntimeAsync(kv.Key);
+                }
+            });
+#endif
         }
+
+#if !UNITY_EDITOR
+        /// <summary>真机：YooAsset 异步加载 Sprite（UI png 已进收集器 UiSpriteBundle，address=文件名）</summary>
+        private static async Cysharp.Threading.Tasks.UniTask LoadRuntimeAsync(string name)
+        {
+            if (_cache.ContainsKey(name)) return;
+            var package = YooAsset.YooAssets.GetPackage("DefaultPackage");
+            if (!package.IsLocationValid(name))
+            {
+                if (_missing.Add(name)) Debug.LogWarning($"[UITheme] Sprite 不在资源包中：{name}（BundleCollectorSetting 需含 {ResDir}）");
+                return;
+            }
+            var handle = package.LoadAssetAsync<Sprite>(name);
+            await handle;
+            if (handle.Status == YooAsset.EOperationStatus.Succeeded)
+            {
+                _cache[name] = handle.AssetObject as Sprite;
+                _handles[name] = handle; // 钉住引用计数
+            }
+            else
+            {
+                if (_missing.Add(name)) Debug.LogWarning($"[UITheme] Sprite 加载失败：{name} -> {handle.Error}");
+                handle.Release();
+            }
+        }
+#endif
 
         /// <summary>当前已加载的图集及 sprite 数（调试用）</summary>
         public static string LoadedAtlasStats()
@@ -82,7 +123,8 @@ namespace Game.HotUpdate.ChestGame
                 255);
         }
 
-        /// <summary>按文件名（不含扩展名）取 Sprite；编辑器下直接读 PNG，真机走 AssetRaw 收集</summary>
+        /// <summary>按文件名（不含扩展名）取 Sprite。编辑器直接读 PNG；真机读缓存（由 PreloadAtlas 异步预热，
+        /// WebGL 禁同步加载，此处不阻塞）。未预热命中前返回 null 走纯色占位（旧实现真机恒 null）。</summary>
         public static Sprite Load(string name)
         {
             if (_cache.TryGetValue(name, out var s) && s != null) return s;
@@ -98,9 +140,13 @@ namespace Game.HotUpdate.ChestGame
                 return s;
             }
 #endif
-            Debug.LogWarning($"[UITheme] Sprite 不存在：{name}（{ResDir}/{name}.png）");
+            if (_missing.Add(name)) Debug.LogWarning($"[UITheme] Sprite 未就绪：{name}（{ResDir}/{name}.png）");
             return null;
         }
+
+        /// <summary>内置字体缓存（每个 Text 控件都 GetBuiltinResource 一次是纯浪费）</summary>
+        private static Font _builtinFont;
+        public static Font BuiltinFont => _builtinFont != null ? _builtinFont : (_builtinFont = Resources.GetBuiltinResource<Font>("Arial.ttf"));
 
         /// <summary>相机背景设为主题底色</summary>
         public static void ApplyCameraTheme()
@@ -148,7 +194,7 @@ namespace Game.HotUpdate.ChestGame
             var textGo = new GameObject("label");
             textGo.transform.SetParent(go.transform, false);
             var text = textGo.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.font = BuiltinFont;
             text.fontSize = fontSize;
             text.alignment = TextAnchor.MiddleCenter;
             text.color = skin == "gold" ? FromHex("2A230F") : Color.white;

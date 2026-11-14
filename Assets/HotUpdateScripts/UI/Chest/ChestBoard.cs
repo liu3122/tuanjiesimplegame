@@ -16,6 +16,13 @@ namespace Game.HotUpdate.ChestGame
         private long _uid;
         private JSONNode _chest;
         private readonly GameObject[] _slots = new GameObject[20];
+        // 格子控件缓存（Bind 时一次性取，Redraw 不再每次 GetComponentInChildren×20）
+        private readonly Text[] _slotTexts = new Text[20];
+        private readonly Image[] _slotImages = new Image[20];
+        /// <summary>倒计时秒缓存：值没变不 SetText（每帧字符串分配 + 整行 layout 重建）</summary>
+        private int _lastShownSec = int.MinValue;
+        /// <summary>EV 显示值缓存（F1 精度变了才 SetText）</summary>
+        private string _lastEvText;
         private Text _info;
         private Button _sellButton;
         private Text _sellText;
@@ -72,6 +79,8 @@ namespace Game.HotUpdate.ChestGame
                 var slot = root.transform.Find("slot_" + i);
                 if (slot == null) continue;
                 _slots[i] = slot.gameObject;
+                _slotTexts[i] = slot.GetComponentInChildren<Text>();
+                _slotImages[i] = slot.GetComponent<Image>();
                 var btn = slot.GetComponent<Button>();
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(() => OnEliminate(idx));
@@ -109,12 +118,14 @@ namespace Game.HotUpdate.ChestGame
             bool hasOffer = _chest["pendingOffer"] != null && !_chest["pendingOffer"].IsNull;
             if (!hasOffer)
             {
-                if (_offerPanel != null) { Object.Destroy(_offerPanel); _offerPanel = null; _offerExpireAt = -1f; }
+                if (_offerPanel != null) { Object.Destroy(_offerPanel); _offerPanel = null; _offerExpireAt = -1f; _lastShownSec = int.MinValue; }
                 return;
             }
             if (_offerPanel == null)
             {
-                _offerPanel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", new Vector2(-200, 0), new Vector2(620, 420));
+                _lastShownSec = int.MinValue; // 新报价面板：秒缓存重置，防首秒跳过 SetText
+                // 挂宿主（transform）而非 Canvas：切屏（UIManager 销毁本屏）时一并清理，不残留挡射线
+                _offerPanel = UITheme.CreatePanel(transform, "panel_gold", new Vector2(-200, 0), new Vector2(620, 420));
                 var title = TDUIHelper.MakeText(_offerPanel.transform, new Vector2(0, -30), TextAnchor.MiddleCenter, 30);
                 title.text = "<color=#F5D061>银行家出价</color>";
                 TDUIHelper.SetSize(title.rectTransform, 580, 44);
@@ -128,7 +139,13 @@ namespace Game.HotUpdate.ChestGame
                 var accept = UITheme.ThemedButton(_offerPanel.transform, new Vector2(-140, -320), new Vector2(240, 72), L10n.Get("接 受"), "green", 30);
                 accept.onClick.AddListener(async () =>
                 {
+                    // 先停倒计时再发请求：否则请求在途时倒计时归零会并发 AutoDecline（两个写请求打架）
+                    if (_busy) return; // 连点防重
+                    _busy = true;
+                    _offerExpireAt = -1f;
                     var r = await ApiClient.AcceptOfferAsync(_uid);
+                    _busy = false;
+                    if (this == null) return; // await 期间已切屏销毁
                     if (r == null || !r["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("接受失败：") + Screens.ErrText(r)); return; }
                     UIRoot.ToastStatic("成交！获得 " + r["data"]["income"].AsLong.ToString("N0"));
                     UIRoot.Instance.RefreshTop();
@@ -137,8 +154,12 @@ namespace Game.HotUpdate.ChestGame
                 var decline = UITheme.ThemedButton(_offerPanel.transform, new Vector2(140, -320), new Vector2(240, 72), L10n.Get("拒 绝"), "red", 30);
                 decline.onClick.AddListener(async () =>
                 {
+                    if (_busy) return;
+                    _busy = true;
                     _offerExpireAt = -1f;
                     var r = await ApiClient.DeclineOfferAsync(_uid);
+                    _busy = false;
+                    if (this == null) return;
                     if (r != null && r["ok"].AsBool) UIRoot.ToastStatic(L10n.Get("已拒绝，继续排除！"));
                     await RefreshData();
                     Redraw();
@@ -165,15 +186,15 @@ namespace Game.HotUpdate.ChestGame
         private void Redraw()
         {
             if (_chest == null) return;
-            var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == _chest["configId"].AsInt);
+            var config = GameConfig.Tables.TbChest.GetOrDefault(_chest["configId"].AsInt);
             var lockedSprite = UITheme.Load("slot_locked");
             var openSprite = UITheme.Load("slot_open");
 
             for (int i = 0; i < 20; i++)
             {
                 if (_slots[i] == null) continue;
-                var text = _slots[i].GetComponentInChildren<Text>();
-                var img = _slots[i].GetComponent<Image>();
+                var text = _slotTexts[i];
+                var img = _slotImages[i];
                 bool eliminated = _chest["eliminated"][i].AsBool;
                 JSONNode amount = _chest["revealedAmounts"][i];
                 if (eliminated)
@@ -236,16 +257,17 @@ namespace Game.HotUpdate.ChestGame
                     if (!_chest["eliminated"][i].AsBool && !_chest["revealedAmounts"][i].IsNull)
                         final = _chest["revealedAmounts"][i].AsInt;
                 }
-                _info.text = "<b>" + config.Name + "</b>\n\n终局！最后一格\n\n开箱可得 " + final.ToString("N0");
+                _info.text = "<b>" + (config != null ? config.Name : "宝箱") + "</b>\n\n终局！最后一格\n\n开箱可得 " + final.ToString("N0");
                 _sellText.text = L10n.Get("开 箱（") + final.ToString("N0") + "）";
             }
             else
             {
                 string kindTag = "";
                 int kind = _chest["kind"].AsInt;
-                if (kind == 2) kindTag = "\n<color=#7ED957>幸运箱：★ 格排除 +" + GameConfig.Tables.TbChest[_chest["configId"].AsInt].SpecialValue + "</color>";
-                else if (kind == 3) kindTag = "\n<color=#E05D5D>诅咒箱：☠ 格排除 -" + GameConfig.Tables.TbChest[_chest["configId"].AsInt].SpecialValue + "</color>";
-                _info.text = "<b>" + config.Name + (IsDaily ? L10n.Get("（每日挑战）") : "") + "</b>\n剩余 " + remaining + " 格\n\n剩余总和 " + sum.ToString("N0")
+                var chestCfg = GameConfig.Tables.TbChest.GetOrDefault(_chest["configId"].AsInt); // 客户端旧表可能缺服务端新箱：GetOrDefault 防炸
+                if (kind == 2 && chestCfg != null) kindTag = "\n<color=#7ED957>幸运箱：★ 格排除 +" + chestCfg.SpecialValue + "</color>";
+                else if (kind == 3 && chestCfg != null) kindTag = "\n<color=#E05D5D>诅咒箱：☠ 格排除 -" + chestCfg.SpecialValue + "</color>";
+                _info.text = "<b>" + (config != null ? config.Name : "宝箱") + (IsDaily ? L10n.Get("（每日挑战）") : "") + "</b>\n剩余 " + remaining + " 格\n\n剩余总和 " + sum.ToString("N0")
                     + "\n" + "下次排除 " + (cost == 0 ? L10n.Get("免费") : cost + " 金币") + buff + kindTag;
                 _evTarget = ev;
                 _sellText.text = "出售给系统 " + offer.ToString("N0");
@@ -359,18 +381,18 @@ namespace Game.HotUpdate.ChestGame
 
         private void Update()
         {
-            // EV 数字滚动
+            // EV 数字滚动（F1 显示值变化才 SetText，滚动期间不再每帧字符串分配）
             if (_evText != null && _evTarget > 0)
             {
                 if (System.Math.Abs(_evShown - _evTarget) > 0.5)
                 {
                     _evShown = _evShown + (_evTarget - _evShown) * Mathf.Min(1f, Time.deltaTime * 6f);
-                    _evText.text = "期望 V " + _evShown.ToString("F1");
+                    SetEvText(_evShown);
                 }
                 else if (_evShown != _evTarget)
                 {
                     _evShown = _evTarget;
-                    _evText.text = "期望 V " + _evTarget.ToString("F1");
+                    SetEvText(_evTarget);
                 }
             }
             // 技能冷却倒计时（面板打开期间逐秒刷新，到点自动解锁）
@@ -404,8 +426,23 @@ namespace Game.HotUpdate.ChestGame
                 }
                 else
                 {
-                    _offerCountdown.text = Mathf.Ceil(left).ToString("F0") + " 秒";
+                    int sec = Mathf.CeilToInt(left);
+                    if (sec != _lastShownSec) // 每秒才 SetText
+                    {
+                        _lastShownSec = sec;
+                        _offerCountdown.text = sec + " 秒";
+                    }
                 }
+            }
+        }
+
+        private void SetEvText(double v)
+        {
+            string s = "期望 V " + v.ToString("F1");
+            if (s != _lastEvText)
+            {
+                _lastEvText = s;
+                _evText.text = s;
             }
         }
 
@@ -444,7 +481,7 @@ namespace Game.HotUpdate.ChestGame
             }
             int quotaMax = GameConfig.Tables.TbGlobal.ChestMaxSkillUses;
 
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
+            var panel = UITheme.CreatePanel(transform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 
@@ -514,7 +551,7 @@ namespace Game.HotUpdate.ChestGame
                 ? "开箱获得 " + income.ToString("N0") + " 金币！"
                 : "已出售给系统，获得 " + income.ToString("N0"));
             UIRoot.Instance.RefreshTop();
-            var config = GameConfig.Tables.TbChest.DataList.FirstOrDefault(x => x.Id == _chest["configId"].AsInt);
+            var config = GameConfig.Tables.TbChest.GetOrDefault(_chest["configId"].AsInt);
             BattleReport.ShowChestSettle(income, final, config != null ? config.Name : "宝箱", () => Screens.ShowBag());
         }
     }

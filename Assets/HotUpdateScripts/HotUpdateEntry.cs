@@ -24,9 +24,21 @@ namespace Game.HotUpdate
             ResourcePackage package = YooAssets.GetPackage(PackageName);
             var loader = new ConfigLoader(package);
             yield return loader.LoadAll();
+            if (loader.Tables == null)
+            {
+                // 必需表缺失必须硬失败：null Tables 会在 Luban 生成代码里 NRE，报错位置难排查
+                Debug.LogError("[HotUpdate] 配置加载失败（Tables=null）：检查 BundleCollectorSetting 是否含 Assets/AssetRaw/Config，以及资源包是否为最新版本");
+                yield break;
+            }
             GameConfig.Tables = loader.Tables;
 
             Debug.Log($"[HotUpdate] 配置加载完成：道具 {GameConfig.Tables.TbItem.DataList.Count} 条，宝箱 {GameConfig.Tables.TbChest.DataList.Count} 档，角色 {GameConfig.Tables.TbCharacter.DataList.Count} 个");
+
+#if !UNITY_EDITOR
+            // 1b. 预热 UI 主题 Sprite（真机经 YooAsset 异步加载；编辑器走 AssetDatabase 无需预热）
+            ChestGame.UITheme.PreloadAtlas("common");
+            ChestGame.UITheme.PreloadAtlas("main");
+#endif
 
             // 2. 平台引导：按编译宏（MINIGAME/STEAM/UNITY_IOS/UNITY_ANDROID）选定登录/内购 Bridge 实现
             ChestGame.PlatformBootstrap.Init();

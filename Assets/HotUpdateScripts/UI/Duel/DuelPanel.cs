@@ -21,8 +21,14 @@ namespace Game.HotUpdate.ChestGame
         /// <summary>竞宝房模式：胜者独得两个宝箱的结算总价值</summary>
         private bool _potMode;
         private readonly GameObject[] _slots = new GameObject[20];
+        // 格子控件缓存：Redraw 每次 GetComponentInChildren×20 是纯浪费（每步操作都跑一遍）
+        private readonly Text[] _slotTexts = new Text[20];
+        private readonly Image[] _slotImages = new Image[20];
+        private readonly Button[] _slotButtons = new Button[20];
         private readonly bool[] _oppEliminated = new bool[20];
         private readonly int[] _oppAmounts = new int[20];
+        /// <summary>倒计时秒缓存：值没变不 SetText（每帧字符串分配 + 整行 layout 重建）</summary>
+        private int _lastShownSec = int.MinValue;
         private Text _status;
         private Text _timer;
         private Text _oppText;
@@ -124,7 +130,10 @@ namespace Game.HotUpdate.ChestGame
                 int col = i % 5, row = i / 5;
                 var slot = MakeSlot(root.transform, new Vector2(-256 + col * 128, 300 - row * 118), new Vector2(112, 96));
                 _slots[i] = slot;
-                slot.GetComponent<Button>().onClick.AddListener(() => OnSlot(idx));
+                _slotTexts[i] = slot.GetComponentInChildren<Text>();
+                _slotImages[i] = slot.GetComponent<Image>();
+                _slotButtons[i] = slot.GetComponent<Button>();
+                _slotButtons[i].onClick.AddListener(() => OnSlot(idx));
             }
 
             _meInfo = TDUIHelper.MakeText(root.transform, new Vector2(0, -1040), TextAnchor.UpperLeft, 22);
@@ -147,7 +156,9 @@ namespace Game.HotUpdate.ChestGame
             var sellBtn = UITheme.ThemedButton(root.transform, new Vector2(230, -690), new Vector2(280, 64), L10n.Get("卖给银行·锁定"), "green", 24);
             sellBtn.onClick.AddListener(() => _ws?.Sell());
             var back = UITheme.ThemedButton(root.transform, new Vector2(410, -730), new Vector2(170, 56), L10n.Get("离 开"), "red", 20);
-            back.onClick.AddListener(() => { _ws?.Close(); Screens.ShowMain(); });
+            // 本面板是 overlay（不归 UIManager 管）：离开必须自毁（OnDestroy 关 WS），
+            // 否则每局泄漏一个 1040×1560 面板盖住大厅（Screens.ShowMain 对已显示主屏是早退不切屏）
+            back.onClick.AddListener(() => { Screens.ShowMain(); Destroy(gameObject); });
 
             _status.text = L10n.Get("等待对手中…");
             _ws = new DuelWsClient();
@@ -197,7 +208,15 @@ namespace Game.HotUpdate.ChestGame
             if (_offerPanel != null && _offerCountdown != null && _offerExpireAt > 0)
             {
                 float left = _offerExpireAt - Time.time;
-                if (left > 0) _offerCountdown.text = Mathf.Ceil(left).ToString("F0") + " " + L10n.Get("秒");
+                if (left > 0)
+                {
+                    int sec = Mathf.CeilToInt(left);
+                    if (sec != _lastShownSec) // 每秒才 SetText（防每帧字符串分配）
+                    {
+                        _lastShownSec = sec;
+                        _offerCountdown.text = sec + " " + L10n.Get("秒");
+                    }
+                }
             }
             // 技能面板冷却倒计时
             if (_cooldownRows.Count > 0 && Time.time >= _nextCdRefresh)
@@ -279,7 +298,7 @@ namespace Game.HotUpdate.ChestGame
                 }
                 case "offerGone":
                     _offerHidden = true;
-                    if (_offerPanel != null) { Destroy(_offerPanel); _offerPanel = null; _offerExpireAt = -1f; }
+                    if (_offerPanel != null) { Destroy(_offerPanel); _offerPanel = null; _offerExpireAt = -1f; _lastShownSec = int.MinValue; }
                     break;
                 case "locked":
                     PushFeed("<color=#F5D061>" + e["name"].Value + "</color> " + L10n.Get("锁定分数") + " " + e["score"].AsLong.ToString("N0"));
@@ -300,6 +319,10 @@ namespace Game.HotUpdate.ChestGame
                     else UIRoot.ToastStatic(code);
                     break;
                 }
+                case "__disconnected":
+                    // 断线（切后台/网络抖动）；已结算/已锁分不提示（服务端断线宽限接管）
+                    if (!_finished && _phase == "match") _status.text = "<color=#E05D5D>" + L10n.Get("连接已断开，宽限重连中…") + "</color>";
+                    break;
             }
         }
 
@@ -340,8 +363,8 @@ namespace Game.HotUpdate.ChestGame
             var openSprite = UITheme.Load("slot_open");
             for (int i = 0; i < 20; i++)
             {
-                var text = _slots[i].GetComponentInChildren<Text>();
-                var img = _slots[i].GetComponent<Image>();
+                var text = _slotTexts[i];
+                var img = _slotImages[i];
                 bool eliminated = _me["eliminated"][i].AsBool;
                 if (eliminated)
                 {
@@ -350,7 +373,7 @@ namespace Game.HotUpdate.ChestGame
                     text.fontSize = 22;
                     text.color = new Color(0.55f, 0.58f, 0.62f);
                     if (openSprite != null) img.sprite = openSprite;
-                    _slots[i].GetComponent<Button>().interactable = false;
+                    _slotButtons[i].interactable = false;
                 }
                 else
                 {
@@ -375,7 +398,7 @@ namespace Game.HotUpdate.ChestGame
                         text.color = Color.white;
                     }
                     if (lockedSprite != null) img.sprite = lockedSprite;
-                    _slots[i].GetComponent<Button>().interactable = CanAct;
+                    _slotButtons[i].interactable = CanAct;
                 }
             }
 
@@ -418,7 +441,9 @@ namespace Game.HotUpdate.ChestGame
             }
             if (_offerPanel == null)
             {
-                _offerPanel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(560, 380));
+                // 挂宿主（transform）而非 Canvas：面板销毁/切屏时一并清理，不残留挡射线
+                _lastShownSec = int.MinValue; // 新报价面板：秒缓存重置
+                _offerPanel = UITheme.CreatePanel(transform, "panel_gold", Vector2.zero, new Vector2(560, 380));
                 var rt = _offerPanel.GetComponent<RectTransform>();
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
                 var title = TDUIHelper.MakeText(_offerPanel.transform, new Vector2(0, -26), TextAnchor.MiddleCenter, 28);
@@ -445,7 +470,7 @@ namespace Game.HotUpdate.ChestGame
             if (!CanAct) { UIRoot.ToastStatic(L10n.Get("当前不能使用技能")); return; }
             if (_me["skillUsedByMe"].AsBool) { UIRoot.ToastStatic(L10n.Get("你对本宝箱已用过技能")); return; }
 
-            var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
+            var panel = UITheme.CreatePanel(transform, "panel_gold", Vector2.zero, new Vector2(680, 1120));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
 

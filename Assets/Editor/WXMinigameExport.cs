@@ -48,6 +48,7 @@ public static class WXMinigameExport
             throw new Exception($"[WXMinigameExport] 微信小游戏导出失败：{err}");
 
         InjectDomShim(conf.ProjectConf.DST);
+        InjectWsBridge(conf.ProjectConf.DST);
         PatchDataCdn(conf.ProjectConf.DST, GetCdnUrl());
         CopyStreamingAssets(conf.ProjectConf.DST);
         Debug.Log($"[WXMinigameExport] 完成：{Path.Combine(conf.ProjectConf.DST, "minigame")}（appid={conf.ProjectConf.Appid}）");
@@ -80,6 +81,82 @@ public static class WXMinigameExport
             "document.querySelectorAll=function(){return [];};}})();\n";
         File.WriteAllText(gameJs, shim + content);
         Debug.Log("[WXMinigameExport] DOM shim 已注入 game.js");
+    }
+
+    private const string WsBridgeMarker = "[CI 注入 WSBridge]";
+
+    /// <summary>
+    /// 给生成工程注入 WebSocket 桥（对决/抢宝房在小游戏上的通信通道）：
+    /// C# 热更侧 WxBridgeWsConnection 经 WX.CallJSFunction 调 GameGlobal.WSBridge.{setCallback,connect,send,close}；
+    /// JS 事件经 GameGlobal.Module.dynCall_vii 回调 C# —— 对应 JsCallbackBridge.OnJsEvent 预留槽位
+    /// void(int,IntPtr)（eventId=连接号，payload=["open|msg|err|close",文本]）。
+    /// 与 DOM shim 同款幂等注入；导出会重新生成 game.js，故每次导出后都注入。
+    /// 生效前提：底包含 ReversePInvoke 槽位（HybridCLR Generate/All，见 JsCallbackBridge 注释）。
+    /// </summary>
+    private static void InjectWsBridge(string dst)
+    {
+        string gameJs = Path.Combine(dst, "minigame", "game.js");
+        if (!File.Exists(gameJs))
+        {
+            Debug.LogWarning($"[WXMinigameExport] 未找到 {gameJs}，跳过 WSBridge 注入");
+            return;
+        }
+        string content = File.ReadAllText(gameJs);
+        if (content.Contains(WsBridgeMarker))
+        {
+            Debug.Log("[WXMinigameExport] WSBridge 已存在，跳过");
+            return;
+        }
+        string bridge =
+@"// " + WsBridgeMarker + @" WebSocket 桥：wx.connectSocket ←→ C# WxBridgeWsConnection（热更侧 Platform/WsConnection.cs）
+(function () {
+  var sockets = {}, cbPtr = 0;
+  function M() { return GameGlobal.Module; }
+  function callVii(ptr, a, b) {
+    var m = M();
+    if (typeof m.dynCall_vii === 'function') return m.dynCall_vii(ptr, a, b);
+    try { // 兜底：直接查 wasm 函数表（TCPSocket 桥同款机制的降级路径）
+      var fn = m.getWasmTableEntry ? m.getWasmTableEntry(ptr) : (m.wasmTable || m.asm).get(ptr);
+      if (fn) return fn(a, b);
+    } catch (e) {}
+    console.error('[WSBridge] dynCall_vii 通道不可用，事件丢失');
+  }
+  function emit(id, kind, text) {
+    if (!cbPtr) return;
+    var m = M();
+    var json = JSON.stringify([kind, text || '']);
+    var len = m.lengthBytesUTF8(json) + 1;
+    var ptr = m._malloc(len);
+    m.stringToUTF8(json, ptr, len);
+    callVii(cbPtr, id, ptr);
+    m._free(ptr); // C# 回调内同步消费完指针才返回，此处可安全释放
+  }
+  function install() {
+    if (typeof GameGlobal === 'undefined' || typeof wx === 'undefined' || GameGlobal.WSBridge) return false;
+    GameGlobal.WSBridge = {
+      setCallback: function (ptr) { cbPtr = ptr; },
+      connect: function (id, url) {
+        try {
+          var task = wx.connectSocket({ url: url });
+          sockets[id] = task;
+          task.onOpen(function () { emit(id, 'open', ''); });
+          task.onMessage(function (res) { emit(id, 'msg', typeof res.data === 'string' ? res.data : ''); });
+          task.onError(function (err) { emit(id, 'err', (err && err.errMsg) || ''); });
+          task.onClose(function () { emit(id, 'close', ''); delete sockets[id]; });
+        } catch (e) { emit(id, 'err', String(e && e.message || e)); emit(id, 'close', ''); }
+      },
+      send: function (id, text) { var s = sockets[id]; if (s) { try { s.send({ data: text }); } catch (e) {} } },
+      close: function (id) { var s = sockets[id]; if (s) { try { s.close({}); } catch (e) {} } delete sockets[id]; },
+    };
+    return true;
+  }
+  if (!install()) { // GameGlobal/wx 若晚于本脚本就绪（适配器加载顺序差异），短轮询兜底
+    var n = 0, t = setInterval(function () { if (install() || ++n > 100) clearInterval(t); }, 100);
+  }
+})();
+";
+        File.WriteAllText(gameJs, bridge + content);
+        Debug.Log("[WXMinigameExport] WSBridge 已注入 game.js");
     }
 
     /// <summary>
