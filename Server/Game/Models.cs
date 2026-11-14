@@ -9,6 +9,8 @@ namespace SimpleGameServer.Game
         public long Id { get; set; }
         public string Name { get; set; }
         public string Token { get; set; }
+        /// <summary>登录凭证（首登下发客户端保存，之后登录必须携带；null=旧账号未绑定，首登时绑定）</summary>
+        public string Secret { get; set; }
         public long Gold { get; set; }
         /// <summary>钻石（硬通货）：仅 IAP 充值产出，单向按 GemToGold 兑换金币（软硬双币隔离，金币不可现金购买）</summary>
         public long Gems { get; set; }
@@ -45,6 +47,10 @@ namespace SimpleGameServer.Game
         public string QuestDay { get; set; } = "";
         /// <summary>每日挑战额外次数（挑战券，随任务日清零）</summary>
         public int DailyExtra { get; set; }
+        /// <summary>每日挑战今日已用次数（内存权威，随任务日清零；DB 记录仅作对账）</summary>
+        public int DailyUsed { get; set; }
+        /// <summary>抢宝房今日已用次数（roomId → count，内存权威，随任务日清零）</summary>
+        public Dictionary<int, int> RushUsed { get; } = new();
         // ---- 邀请双奖 ----
         /// <summary>我的邀请人（0=无；仅新人可绑定）</summary>
         public long InviterId { get; set; }

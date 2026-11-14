@@ -37,6 +37,8 @@ namespace SimpleGameServer.Game
                 p.QuestProgress.Clear();
                 p.QuestClaimed.Clear();
                 p.DailyExtra = 0;
+                p.DailyUsed = 0;      // 每日挑战限次与任务共用日界
+                p.RushUsed.Clear();   // 抢宝房每日限次同界清零
             }
         }
 

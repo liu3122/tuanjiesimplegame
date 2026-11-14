@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -90,10 +91,12 @@ namespace SimpleGameServer.Game
             SendTo(playerId, PersonalSnapshot(playerId));
         }
 
-        public void DetachSocket(long playerId)
+        /// <summary>连接断开。只清理"仍是这条连接"的槽位——玩家重连后旧连接的 finally 不许把新连接踢掉（否则误判断线触发 8 秒宽限强锁）</summary>
+        public void DetachSocket(long playerId, WebSocket socket)
         {
             lock (_gate)
             {
+                if (_sockets.TryGetValue(playerId, out var cur) && cur != socket) return; // 已被新连接覆盖
                 _sockets.Remove(playerId);
                 // 对局中断线：给 8 秒重连宽限，过期未归按当前收购价锁定
                 if (_phase == Phase.Match && playerId > 0 && !_finished.Contains(playerId) && _chests.ContainsKey(playerId))
@@ -215,8 +218,11 @@ namespace SimpleGameServer.Game
                 if (special != 0)
                 {
                     var p = _players[pid];
-                    p.Gold = Math.Max(0, p.Gold + special);
-                    Db.SavePlayer(p);
+                    lock (p.Sync) // 与 HTTP 侧（广告/买箱等持锁写 Gold）并发，无锁读改写会丢更新
+                    {
+                        p.Gold = Math.Max(0, p.Gold + special);
+                        Db.SavePlayer(p);
+                    }
                     Db.AddGoldTx(pid, special, special > 0 ? "lucky_slot" : "trap_slot", DuelId);
                 }
                 bool offerMade = chest.TryMakeOffer(_rng);
@@ -578,6 +584,8 @@ namespace SimpleGameServer.Game
         private readonly object _gate = new();
         private DuelRoom? _current;
         private DuelRoom? _currentPot;
+        /// <summary>进行中房间（含被新 Join 替换下仍在跑的老房间，其玩家重连不再 404）</summary>
+        private readonly ConcurrentDictionary<int, DuelRoom> _active = new();
         private int _nextDuelId = 1;
 
         public DuelManager(GameStore store)
@@ -604,6 +612,7 @@ namespace SimpleGameServer.Game
                 var (ok2, err2) = fresh.Join(player);
                 if (!ok2) return (ok2, err2, null);
                 if (potMode) _currentPot = fresh; else _current = fresh;
+                _active[fresh.DuelId] = fresh;
                 _ = Task.Run(() => fresh.StartLifecycle());
                 return (true, null, fresh);
             }
@@ -611,21 +620,22 @@ namespace SimpleGameServer.Game
 
         public DuelRoom? FindRoomOf(long playerId)
         {
-            lock (_gate)
+            // 无锁扫描（不持 manager 锁）：Settle 在 room 锁内回调 OnRoomFinished，
+            // 若此处再拿 manager 锁会与 Join（manager→room）构成相反序
+            foreach (var room in _active.Values)
             {
-                if (_current != null && _current.HasPlayer(playerId)) return _current;
-                if (_currentPot != null && _currentPot.HasPlayer(playerId)) return _currentPot;
-                return null;
+                if (room.HasPlayer(playerId)) return room;
             }
+            return null;
         }
 
         public void OnRoomFinished(DuelRoom room)
         {
-            lock (_gate)
-            {
-                if (_current == room) _current = null;
-                if (_currentPot == room) _currentPot = null;
-            }
+            // 必须无锁（Settle 持 room._gate 时调用；旧实现取 manager._gate 与 Join 的 manager→room 成 AB-BA 死锁，
+            // 一旦触发：该房间 Timer 永久持锁，所有后续 duel join 全部卡死）
+            _active.TryRemove(room.DuelId, out _);
+            Interlocked.CompareExchange(ref _current, null, room);
+            Interlocked.CompareExchange(ref _currentPot, null, room);
         }
     }
 }

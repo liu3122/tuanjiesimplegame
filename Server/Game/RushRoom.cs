@@ -51,25 +51,37 @@ namespace SimpleGameServer.Game
                 if (_phase != Phase.Matching) return (false, "ROOM_RUNNING");
                 if (_players.ContainsKey(player.Id)) return (true, null); // 重复加入幂等
                 if (_players.Count >= _config.PlayerCount) return (false, "ROOM_FULL");
-                // 每日限次：RTP>100% 的投放型玩法必须封顶（PoolScale>1 系统倒贴），防无限通胀；幂等重进不重复计数
                 string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                if (_config.DailyLimit > 0 && Db.RushAttemptsUsed(day, player.Id, _config.Id) >= _config.DailyLimit)
-                {
-                    return (false, "RUSH_LIMIT");
-                }
                 lock (player.Sync)
                 {
+                    // 每日限次（内存权威）：RTP>100% 的投放型玩法必须封顶（PoolScale>1 系统倒贴），防无限通胀；
+                    // 旧实现查 SQLite 而记账走异步合批，写未 flush 前快速连发可突破 DailyLimit；幂等重进不重复计数
+                    if (_config.DailyLimit > 0)
+                    {
+                        Quests.RollDay(player);
+                        if (player.RushUsed.GetValueOrDefault(_config.Id) >= _config.DailyLimit)
+                        {
+                            return (false, "RUSH_LIMIT");
+                        }
+                    }
                     if (player.Gold < _config.Ticket) return (false, "NOT_ENOUGH_GOLD");
                     player.Gold -= _config.Ticket;
+                    if (_config.DailyLimit > 0) player.RushUsed[_config.Id] = player.RushUsed.GetValueOrDefault(_config.Id) + 1;
                 }
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -_config.Ticket, "rush_ticket", _config.Id);
                 Db.RecordStake(player.Id, "rush", _config.Id, _config.Ticket); // 重启退款凭据
-                if (_config.DailyLimit > 0) Db.RecordRushAttempt(day, player.Id, _config.Id);
+                if (_config.DailyLimit > 0) Db.RecordRushAttempt(day, player.Id, _config.Id); // 对账审计
                 _players[player.Id] = player;
                 Broadcast(new { type = "joined", name = player.Name, count = _players.Count, need = _config.PlayerCount });
                 return (true, null);
             }
+        }
+
+        /// <summary>是否房内成员（WS 连接前的成员资格校验，防未付门票白嫖广播）</summary>
+        public bool HasPlayer(long playerId)
+        {
+            lock (_gate) return _players.ContainsKey(playerId);
         }
 
         public void AttachSocket(long playerId, WebSocket socket)
@@ -82,10 +94,12 @@ namespace SimpleGameServer.Game
             SendTo(playerId, Snapshot());
         }
 
-        public void DetachSocket(long playerId)
+        /// <summary>连接断开。只清理"仍是这条连接"的槽位——玩家重连后旧连接的 finally 不许把新连接踢掉</summary>
+        public void DetachSocket(long playerId, WebSocket socket)
         {
             lock (_gate)
             {
+                if (_sockets.TryGetValue(playerId, out var cur) && cur != socket) return; // 已被新连接覆盖
                 _sockets.Remove(playerId);
             }
         }
@@ -313,6 +327,8 @@ namespace SimpleGameServer.Game
         private readonly GameService _svc;
         private readonly ConcurrentDictionary<int, RushRoom> _rooms = new();
         private readonly ConcurrentDictionary<int, byte> _starting = new();
+        /// <summary>Join 串行锁（lock(this) 可被外部锁死，改私有对象）</summary>
+        private readonly object _gate = new();
 
         public RushManager(GameStore store, GameService svc)
         {
@@ -349,7 +365,7 @@ namespace SimpleGameServer.Game
             var config = GameTables.Tables.TbRushRoom.GetOrDefault(roomId);
             if (config == null) return (false, "ROOM_NOT_FOUND", null);
 
-            lock (this)
+            lock (_gate)
             {
                 if (_rooms.TryGetValue(roomId, out var existing))
                 {

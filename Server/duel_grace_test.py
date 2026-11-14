@@ -1,3 +1,5 @@
+import time
+_SUF = str(int(time.time()) % 10**6)
 import asyncio, json, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
@@ -7,8 +9,16 @@ def post(path, token, body='{}'):
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
     return json.load(urllib.request.urlopen(req))
 
+SECRETS = {}  # 登录凭证记忆（服务端首登绑定 secret 后，同账号重登必须携带）
+
 def login(name):
-    return post('/api/login', '', json.dumps({'name': name}))['token']
+    body = {'name': name}
+    if name in SECRETS:
+        body['secret'] = SECRETS[name]
+    r = post('/api/login', '', json.dumps(body))
+    assert r.get('ok'), r
+    SECRETS[name] = r['secret']
+    return r['token']
 
 async def run_duel(name, actions, disconnect_at=None, reconnect_after=None):
     """通用对决客户端：match 后按序执行动作；disconnect_at=动作数达到后断线"""
@@ -71,11 +81,11 @@ async def run_duel(name, actions, disconnect_at=None, reconnect_after=None):
 
 async def scenario_reconnect():
     """断线 3 秒内重连：对局继续，双方正常结算"""
-    a = asyncio.create_task(run_duel('grace_r1',
+    a = asyncio.create_task(run_duel('gr_r1_' + _SUF,
         [{'type': 'eliminate', 'slot': s} for s in (0, 1, 2)] + [{'type': 'sell'}],
         disconnect_at=2, reconnect_after=3.0))
     await asyncio.sleep(0.5)
-    b = asyncio.create_task(run_duel('grace_r2',
+    b = asyncio.create_task(run_duel('gr_r2_' + _SUF,
         [{'type': 'eliminate', 'slot': s} for s in (5, 9)] + [{'type': 'sell'}]))
     ra, rb = await asyncio.wait_for(asyncio.gather(a, b), 60)
     assert ra and rb, 'both must settle'
@@ -83,16 +93,16 @@ async def scenario_reconnect():
 
 async def scenario_expire():
     """断线不归：8 秒宽限后按收购价锁定，留守方收到结算"""
-    a = asyncio.create_task(run_duel('grace_e1',
+    a = asyncio.create_task(run_duel('grace_e1_' + _SUF,
         [{'type': 'eliminate', 'slot': s} for s in (0, 1, 2)] + [{'type': 'sell'}]))
     await asyncio.sleep(0.5)
-    b = asyncio.create_task(run_duel('grace_e2',
+    b = asyncio.create_task(run_duel('grace_e2_' + _SUF,
         [{'type': 'eliminate', 'slot': 7}], disconnect_at=1, reconnect_after=None))
     ra, rb = await asyncio.wait_for(asyncio.gather(a, b), 60)
     # e2 断线未归 → 宽限到期被锁定；e2 的 ws 已关收不到 settled（返回 {}），e1 必须结算
     assert ra, 'remaining player must settle'
     names = [x['name'] for x in ra['board']]
-    assert 'grace_e1' in names and 'grace_e2' in names, ra['board']
+    assert 'grace_e1_' + _SUF in names and 'grace_e2_' + _SUF in names, ra['board']
     print(f'PASS 宽限到期: e1 结算正常 board={[(x["name"], x["score"]) for x in ra["board"]]}')
 
 async def main():

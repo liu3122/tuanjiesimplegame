@@ -14,7 +14,8 @@ builder.Services.AddSingleton<GameService>();
 builder.Services.AddHostedService<AuctionBotService>();
 builder.Services.AddHostedService<SeasonService>();
 builder.Services.AddHostedService<DbWriterService>();
-builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(_ => true).AllowCredentials()));
+// CORS：WebGL/小游戏浏览器运行时需要放开来源；不使用 cookie 凭证（鉴权走 Bearer 头），不放大攻击面
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(_ => true)));
 
 var app = builder.Build();
 app.UseCors();
@@ -49,19 +50,21 @@ IResult Need(Player p) => p == null ? Results.Json(new { ok = false, error = "UN
 // ---------- 账号 ----------
 app.MapPost("/api/login", (LoginReq req, HttpContext ctx, GameStore store) =>
 {
+    if (string.IsNullOrWhiteSpace(req?.Name)) return Results.Json(new { ok = false, error = "BAD_NAME" });
     var nameErr = SensitiveFilter.ValidateName(req.Name);   // 敏感词/合法性：服务端权威拦截
     if (nameErr != null) return Results.Json(new { ok = false, error = nameErr });
-    var player = store.LoginOrRegister(req.Name.Trim());
+    var (player, err) = store.LoginOrRegister(req.Name.Trim(), req.Secret);
+    if (player == null) return Results.Json(new { ok = false, error = err }); // WRONG_SECRET：知道昵称不再等于拿到账号
     player.Region = RegionResolver.Resolve(ctx, req.Region);
     Db.SavePlayer(player);
-    return Results.Json(new { ok = true, token = player.Token, playerId = player.Id, name = player.Name, gold = player.Gold, region = player.Region });
+    return Results.Json(new { ok = true, token = player.Token, secret = player.Secret, playerId = player.Id, name = player.Name, gold = player.Gold, region = player.Region });
 });
 
 app.MapPost("/api/character", (CharacterReq req, HttpRequest http, GameStore store) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    if (GameTables.Tables.TbCharacter.DataList.All(c => c.Id != req.CharacterId)) return Results.Json(new { ok = false, error = "BAD_CHARACTER" });
+    if (GameTables.Tables.TbCharacter.DataList.All(c => c.Id != (req?.CharacterId ?? 0))) return Results.Json(new { ok = false, error = "BAD_CHARACTER" });
     lock (p.Sync) p.CharacterId = req.CharacterId;
     return Results.Json(new { ok = true });
 });
@@ -78,7 +81,7 @@ app.MapPost("/api/chest/buy", (BuyReq req, HttpRequest http, GameService svc) =>
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    var (ok, err, data) = svc.BuyChest(p, req.ConfigId);
+    var (ok, err, data) = svc.BuyChest(p, req?.ConfigId ?? 0);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -179,11 +182,14 @@ app.MapPost("/api/manor/build", (ManorBuildReq req, HttpRequest http, GameServic
     return Results.Json(new { ok, error = err, data });
 });
 
-// 经济报表（管理端）：X-Admin-Token 头校验，token 来自配置 AdminToken（默认 dev-admin）
+// 经济报表（管理端）：X-Admin-Token 头校验，token 来自配置 AdminToken。
+// 未配置时：Development 沿用 dev-admin（本地联调），生产环境直接 404 关闭（防止忘配即裸奔）
 app.MapGet("/api/admin/economy", (HttpRequest http) =>
 {
+    string expect = app.Configuration["AdminToken"]
+        ?? (app.Environment.IsDevelopment() ? "dev-admin" : null);
+    if (expect == null) return Results.NotFound();
     string token = http.Headers["X-Admin-Token"].ToString();
-    string expect = app.Configuration["AdminToken"] ?? "dev-admin";
     if (token != expect) return Results.Json(new { ok = false, error = "FORBIDDEN" }, statusCode: 403);
     return Results.Json(new { ok = true, data = Db.EconomyReport() });
 });
@@ -192,7 +198,7 @@ app.MapPost("/api/chest/{uid}/eliminate", (long uid, EliminateReq req, HttpReque
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    var (ok, err, data) = svc.Eliminate(p, uid, req.SlotIndex);
+    var (ok, err, data) = svc.Eliminate(p, uid, req?.SlotIndex ?? -1);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -200,7 +206,7 @@ app.MapPost("/api/chest/{uid}/skill", (long uid, SkillReq req, HttpRequest http,
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    var (ok, err, data) = svc.UseSkill(p, uid, req.SkillType, req.SlotIndex);
+    var (ok, err, data) = svc.UseSkill(p, uid, req?.SkillType ?? 0, req?.SlotIndex);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -236,7 +242,7 @@ app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService sv
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
     if (!Features.IsOn(Features.Rush)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
-    var (ok, err, room) = svc.Rush.Join(req.RoomId, p);
+    var (ok, err, room) = svc.Rush.Join(req?.RoomId ?? 0, p);
     return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
 });
 
@@ -267,18 +273,17 @@ app.Use(async (context, next) =>
         var svc = context.RequestServices.GetRequiredService<GameService>();
         var room = svc.Rush.GetRoom(roomId);
         if (room == null) { context.Response.StatusCode = 404; return; }
+        if (!room.HasPlayer(player.Id)) { context.Response.StatusCode = 403; return; } // 未付门票不入流（防白嫖金额分布广播）
 
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         room.AttachSocket(player.Id, ws);
-        var buffer = new byte[4096];
         try
         {
             while (ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                var json = System.Text.Json.JsonDocument.Parse(msg).RootElement;
+                var msg = await ReceiveWsMessage(ws, context.RequestAborted);
+                if (msg == null) break;
+                if (!TryParseWsJson(msg, out var json)) continue; // 单条坏消息不断连（旧实现解析异常直接踢连接）
                 if (json.GetProperty("type").GetString() == "claim")
                 {
                     int slot = json.GetProperty("slot").GetInt32();
@@ -289,7 +294,7 @@ app.Use(async (context, next) =>
         catch { }
         finally
         {
-            room.DetachSocket(player.Id);
+            room.DetachSocket(player.Id, ws);
         }
         return;
     }
@@ -308,15 +313,13 @@ app.Use(async (context, next) =>
 
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         room.AttachSocket(player.Id, ws);
-        var buffer = new byte[4096];
         try
         {
             while (ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                var json = System.Text.Json.JsonDocument.Parse(msg).RootElement;
+                var msg = await ReceiveWsMessage(ws, context.RequestAborted);
+                if (msg == null) break;
+                if (!TryParseWsJson(msg, out var json)) continue;
                 switch (json.GetProperty("type").GetString())
                 {
                     case "eliminate":
@@ -338,13 +341,42 @@ app.Use(async (context, next) =>
         catch { }
         finally
         {
-            room.DetachSocket(player.Id);
+            room.DetachSocket(player.Id, ws);
         }
         return;
     }
 
     await next();
 });
+
+/// <summary>收一条完整 WS 消息：拼分帧（endOfMessage=false 的 continuation），上限 64KB，Close/连接中止返回 null</summary>
+static async Task<byte[]?> ReceiveWsMessage(WebSocket ws, CancellationToken ct)
+{
+    using var buf = new MemoryStream();
+    var chunk = new byte[8192];
+    while (true)
+    {
+        var result = await ws.ReceiveAsync(new ArraySegment<byte>(chunk), ct);
+        if (result.MessageType == WebSocketMessageType.Close) return null;
+        buf.Write(chunk, 0, result.Count);
+        if (buf.Length > 64 * 1024) return null; // 超限：按断连处理（防恶意大消息耗内存）
+        if (result.EndOfMessage) return buf.ToArray();
+    }
+}
+
+static bool TryParseWsJson(byte[] msg, out System.Text.Json.JsonElement json)
+{
+    try
+    {
+        json = System.Text.Json.JsonDocument.Parse(msg).RootElement;
+        return true;
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        json = default;
+        return false;
+    }
+}
 
 // ---------- 分享 ----------
 app.MapGet("/api/share/content", (HttpRequest http, GameService svc, string contentId = "default") =>
@@ -358,7 +390,7 @@ app.MapPost("/api/share/report", (ShareReq req, HttpRequest http, GameService sv
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    svc.ReportShare(p, req.Channel, req.ContentId);
+    svc.ReportShare(p, req?.Channel ?? "", req?.ContentId ?? "");
     return Results.Json(new { ok = true });
 });
 
@@ -409,6 +441,7 @@ app.MapGet("/api/daily/rank", (HttpRequest http, GameService svc) =>
 app.MapGet("/api/auction", (HttpRequest http, GameService svc, GameStore store) =>
 {
     var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny; // 此前全文件唯一漏鉴权端点（拍卖行含玩家昵称/出价分布）
     if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
     store.EnsureBotLots();
     return Results.Json(new { ok = true, data = svc.AuctionList(p) });
@@ -419,7 +452,7 @@ app.MapPost("/api/auction/list", (ListReq req, HttpRequest http, GameService svc
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
     if (!Features.IsOn(Features.Auction)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
-    var (ok, err, data) = svc.ListChest(p, req.ChestUid, req.StartPrice, req.BuyoutPrice);
+    var (ok, err, data) = svc.ListChest(p, req?.ChestUid ?? 0, req?.StartPrice ?? 0, req?.BuyoutPrice ?? 0);
     return Results.Json(new { ok, error = err, data });
 });
 
@@ -445,7 +478,7 @@ app.MapHub<AuctionHub>("/hubs/auction");
 app.Run();
 
 // ---------- 请求模型 ----------
-public record LoginReq(string Name, string Region = null);
+public record LoginReq(string Name, string Secret = null, string Region = null);
 public record ShareReq(string Channel, string ContentId = "");
 public record RushJoinReq(int RoomId);
 public record DuelJoinReq(string Mode = "stake");
@@ -470,7 +503,8 @@ namespace SimpleGameServer.Game
     /// <summary>Db 后台单写者宿主：启动写循环；停机时取消并等循环排空剩余写（保证落盘再退出）</summary>
     public class DbWriterService : BackgroundService
     {
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(() => Db.RunWriterLoop(stoppingToken), stoppingToken);
+        // Task.Run 不带 token：若启动即取消，带 token 会跳过委托导致停机排空逻辑不执行（队列余写丢失）
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(() => Db.RunWriterLoop(stoppingToken));
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
@@ -505,7 +539,8 @@ namespace SimpleGameServer.Game
             while (!stoppingToken.IsCancellationRequested)
             {
                 _svc.BotTick();
-                await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+                try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); }
+                catch (OperationCanceledException) { break; } // 停机取消：勿让 OCE 冒泡拖垮宿主
             }
         }
     }

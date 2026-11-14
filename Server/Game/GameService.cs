@@ -28,7 +28,7 @@ namespace SimpleGameServer.Game
 
         public (bool ok, string err, object data) BuyChest(Player player, int configId)
         {
-            var config = GameTables.Tables.TbChest.DataList.FirstOrDefault(c => c.Id == configId);
+            var config = GameTables.Tables.TbChest.GetOrDefault(configId);
             if (config == null)
             {
                 return (false, "CONFIG_NOT_FOUND", null);
@@ -68,22 +68,24 @@ namespace SimpleGameServer.Game
                 }
                 chest.ExpireOfferIfNeeded();
                 int cost = chest.ChargeEliminateCost();
+                // 先扣后退：检查+扣款同一锁作用域（否则同一玩家并发排除两个宝箱会双双通过检查 → 金币变负）
                 lock (player.Sync)
                 {
                     if (player.Gold < cost)
                     {
                         return (false, "NOT_ENOUGH_GOLD", null);
                     }
+                    player.Gold -= cost;
                 }
                 var (revealed, special, err) = chest.EliminateEx(slotIndex, player);
                 if (err != null)
                 {
+                    lock (player.Sync) player.Gold += cost; // 排除失败退还预扣
                     return (false, err, null);
                 }
                 string specialMsg = null;
                 lock (player.Sync)
                 {
-                    player.Gold -= cost;
                     Quests.Progress(player, "eliminate");
                     if (special > 0)
                     {
@@ -123,7 +125,7 @@ namespace SimpleGameServer.Game
             {
                 return (false, "CHEST_NOT_FOUND", null);
             }
-            var character = GameTables.Tables.TbCharacter.DataList.FirstOrDefault(c => c.SkillType == skillType);
+            var character = GameTables.Tables.TbCharacter.DataList.FirstOrDefault(c => c.SkillType == skillType); // 技能表极小（9 行），线性即可
             if (character == null)
             {
                 return (false, "BAD_SKILL", null);
@@ -219,6 +221,7 @@ namespace SimpleGameServer.Game
                 Db.AddGoldTx(player.Id, income, "sell_banker", chest.Uid);
                 Db.AddGoldTx(player.Id, 0, "chest_settled", chest.Uid); // 开箱完成计数（出售/终局开箱）
                 RecordDailyIfNeed(player, chest, income);
+                _store.Chests.TryRemove(chest.Uid, out _); // 已终局：移出内存（DB 留档），防 ClientState 全字典扫描无界增长
                 return (true, null, new { income, gold = player.Gold, final = chest.EliminatedCount >= chest.Amounts.Length });
             }
         }
@@ -252,6 +255,7 @@ namespace SimpleGameServer.Game
                 Db.AddGoldTx(player.Id, income, "accept_offer", chest.Uid);
                 Db.AddGoldTx(player.Id, 0, "chest_settled", chest.Uid); // 开箱完成计数（接受报价）
                 RecordDailyIfNeed(player, chest, income);
+                _store.Chests.TryRemove(chest.Uid, out _); // 已终局：移出内存（DB 留档）
                 return (true, null, new { income, gold = player.Gold });
             }
         }
@@ -283,14 +287,15 @@ namespace SimpleGameServer.Game
                 if (player.Gold < g.DailyTicketCost) return (false, "NOT_ENOUGH_GOLD", null);
                 string day = TodayDay();
                 Quests.RollDay(player);
-                int used = Db.DailyAttemptsUsed(day, player.Id);
+                // 限次内存权威：异步落库的旧读法在写未 flush 前可被快速连发突破 DailyLimit
+                int used = player.DailyUsed;
                 if (used >= g.DailyAttemptsPerDay + player.DailyExtra) return (false, "DAILY_LIMIT", null);
 
                 player.Gold -= g.DailyTicketCost;
                 Db.AddGoldTx(player.Id, -g.DailyTicketCost, "daily_ticket", player.Id);
 
                 var config = GameTables.Tables.TbChest[g.DailyChestId];
-                int seed = day.GetHashCode(); // 全服同构种子
+                int seed = StableDaySeed(day); // 全服同构种子（跨进程稳定：string.GetHashCode 每进程随机化，勿用）
                 var chest = new Chest(_store.AllocChestUid(), config, new Random(seed), true, seed)
                 {
                     OwnerId = player.Id,
@@ -298,10 +303,22 @@ namespace SimpleGameServer.Game
                     DailyDay = day,
                 };
                 _store.Chests[chest.Uid] = chest;
+                player.DailyUsed = used + 1;
                 Db.SaveChest(chest);
                 Db.SavePlayer(player);
-                Db.RecordDailyAttempt(day, player.Id);
+                Db.RecordDailyAttempt(day, player.Id); // 仅对账审计，限次以上方内存计数为准
                 return (true, null, new { chestUid = chest.Uid, attemptsLeft = g.DailyAttemptsPerDay + player.DailyExtra - used - 1, gold = player.Gold });
+            }
+        }
+
+        /// <summary>日期字符串 → 稳定种子（FNV-1a，跨进程/跨重启同日同值）</summary>
+        private static int StableDaySeed(string day)
+        {
+            unchecked
+            {
+                uint h = 2166136261;
+                foreach (var c in day) { h ^= c; h *= 16777619; }
+                return (int)h;
             }
         }
 
@@ -409,44 +426,58 @@ namespace SimpleGameServer.Game
                 if (player.InviterId != 0) return (false, "ALREADY_BOUND", null);
                 if (player.Opens > 0) return (false, "NOT_ROOKIE", null);
                 if (!_store.Players.TryGetValue(inviterId, out var inviter)) return (false, "BAD_CODE", null);
+                // 成环检测：沿 InviterId 回溯，若回到自己则拒绝——
+                // 互绑成环的两人同时首箱结算会以相反顺序拿对方 Sync（AB-BA 死锁）
+                for (long cur = inviter.InviterId, hops = 0; cur > 0 && hops < 64; cur = _store.Players.TryGetValue(cur, out var up) ? up.InviterId : 0, hops++)
+                {
+                    if (cur == player.Id) return (false, "BAD_CODE", null);
+                }
                 player.InviterId = inviterId;
+                _store.InviteCount.AddOrUpdate(inviterId, 1, (_, c) => c + 1);
                 Db.SavePlayer(player);
                 return (true, null, new { inviter = inviter.Name, reward = ReferralReward });
             }
         }
 
-        /// <summary>新人首箱结算 → 双方发奖（调用方持新人 player.Sync；锁序：新人 → 邀请人按 Id）</summary>
+        /// <summary>新人首箱结算 → 双方发奖（调用方持新人 player.Sync）。
+        /// 邀请人锁用 TryEnter：绑定处的成环检测存在并发窗口（TOCTOU），环形成后双方同时结算会反向互取对方锁；
+        /// 与对决 Elo 的按 Id 排序嵌套也可能交叉。拿不到锁 500ms 即放弃本次发奖（与"每日上限丢失"同级降级），绝不冒死锁风险。</summary>
         private void PayReferralIfNeeded(Player newbie)
         {
             if (newbie.ReferralPaid || newbie.InviterId <= 0) return;
             if (!_store.Players.TryGetValue(newbie.InviterId, out var inviter)) return;
-            RollAdDay(inviter);
-            if (inviter.AdDailyCount.GetValueOrDefault("referral") >= ReferralDailyCap) return; // 今日已达上限，奖励丢失（绑定页有提示）
+
+            bool locked = System.Threading.Monitor.TryEnter(inviter.Sync, TimeSpan.FromMilliseconds(500));
+            if (!locked)
+            {
+                Db.AddGoldTx(newbie.Id, 0, "referral_skip", inviter.Id); // 留痕：奖励因锁冲突跳过（对账可见）
+                return;
+            }
+            try
+            {
+                RollAdDay(inviter);
+                if (inviter.AdDailyCount.GetValueOrDefault("referral") >= ReferralDailyCap) return; // 今日已达上限，奖励丢失（绑定页有提示）
+                inviter.AdDailyCount["referral"] = inviter.AdDailyCount.GetValueOrDefault("referral") + 1;
+                inviter.Gold += ReferralReward;
+                Db.AddGoldTx(inviter.Id, ReferralReward, "referral", newbie.Id);
+                Db.SavePlayer(inviter);
+            }
+            finally
+            {
+                System.Threading.Monitor.Exit(inviter.Sync);
+            }
 
             newbie.ReferralPaid = true;
             newbie.Gold += ReferralReward;
             Db.AddGoldTx(newbie.Id, ReferralReward, "referral", inviter.Id);
             Db.SavePlayer(newbie);
-
-            lock (inviter.Sync)
-            {
-                inviter.Gold += ReferralReward;
-                inviter.AdDailyCount["referral"] = inviter.AdDailyCount.GetValueOrDefault("referral") + 1;
-                Db.AddGoldTx(inviter.Id, ReferralReward, "referral", newbie.Id);
-                Db.SavePlayer(inviter);
-            }
         }
 
-        /// <summary>邀请视图（我的邀请码 / 已邀请人数 / 我的邀请人）</summary>
+        /// <summary>邀请视图（我的邀请码 / 已邀请人数 / 我的邀请人；需持 player.Sync）</summary>
         private object ReferralView(Player p)
         {
-            string inviterName = null;
-            if (p.InviterId > 0 && _store.Players.TryGetValue(p.InviterId, out var inv)) inviterName = inv.Name;
-            int invited = 0;
-            foreach (var other in _store.Players.Values)
-            {
-                if (other.InviterId == p.Id) invited++;
-            }
+            string inviterName = p.InviterId > 0 && _store.Players.TryGetValue(p.InviterId, out var inv) ? inv.Name : null;
+            int invited = _store.InviteCount.GetValueOrDefault(p.Id);
             return new { myCode = p.Id, invited, reward = ReferralReward, inviter = inviterName, bound = p.InviterId != 0 };
         }
 
@@ -493,7 +524,11 @@ namespace SimpleGameServer.Game
                         string name = (arg ?? "").Trim();
                         var nameErr = SensitiveFilter.ValidateName(name);   // 敏感词/合法性（扣费前校验）
                         if (nameErr != null) return (false, nameErr, null);
-                        if (_store.Players.Values.Any(p => p.Name == name && p.Id != player.Id)) return (false, "NAME_TAKEN", null);
+                        if (name == player.Name) return (false, "ITEM_NO_EFFECT", null); // 名字未变化：不扣费
+                        // 原子裁决（名字索引 AddOrUpdate）：两人同时改成同名只有一个成功，
+                        // 旧实现各自持 player.Sync 全表扫描会双双通过 → 撞 idx_player_name 唯一索引 → 整批落库回滚
+                        if (!_store.TryAcquireName(name, player.Id)) return (false, "NAME_TAKEN", null);
+                        _store.ReleaseName(player.Name, player.Id);
                         message = "改名成功：" + name;
                         player.Name = name;
                         break;
@@ -644,20 +679,24 @@ namespace SimpleGameServer.Game
 
         public object DailyRank(Player viewer)
         {
+            string day = TodayDay();
+            var rows = Db.DailyRank(day);
+            var list = rows.Select((r, i) => new
             {
-                string day = TodayDay();
-                var rows = Db.DailyRank(day);
-                var list = rows.Select((r, i) => new
-                {
-                    rank = i + 1,
-                    name = r.name,
-                    score = r.score,
-                    isMe = r.playerId == viewer.Id,
-                }).ToList();
+                rank = i + 1,
+                name = r.name,
+                score = r.score,
+                isMe = r.playerId == viewer.Id,
+            }).ToList();
+            int used, extra;
+            lock (viewer.Sync)
+            {
                 Quests.RollDay(viewer);
-                long? mine = Db.MyDailyBest(day, viewer.Id);
-                return new { day, attemptsLeft = Math.Max(0, GameTables.Tables.TbGlobal.DailyAttemptsPerDay + viewer.DailyExtra - Db.DailyAttemptsUsed(day, viewer.Id)), mine, list };
+                used = viewer.DailyUsed;
+                extra = viewer.DailyExtra;
             }
+            long? mine = Db.MyDailyBest(day, viewer.Id);
+            return new { day, attemptsLeft = Math.Max(0, GameTables.Tables.TbGlobal.DailyAttemptsPerDay + extra - used), mine, list };
         }
 
         // ---------------- 拍卖 ----------------
@@ -716,31 +755,29 @@ namespace SimpleGameServer.Game
                 bool asBuyout = lot.BuyoutPrice > 0 && next >= lot.BuyoutPrice;
                 if (asBuyout) next = lot.BuyoutPrice;
 
-                // 退被超价者的预扣（与出价者排序加锁，避免死锁）
-                Player loser = lot.CurrentBidderId > 0 && _store.Players.TryGetValue(lot.CurrentBidderId, out var l) ? l : null;
-                var parties = new[] { player, loser }.Where(p => p != null).OrderBy(p => p.Id).ToList();
-                foreach (var p in parties)
+                // 两阶段（先扣后退）：出价者校验+扣款必须先于退被超价者预扣——
+                // 旧实现按 Id 排序处理，loser 较小时先退款、出价者余额不足早退 → lot 仍指向 loser 而预扣已退，白拿拍品。
+                // 两把锁均单独获取（无嵌套），不存在交叉双拍的 AB-BA。
+                lock (player.Sync)
                 {
-                    lock (p.Sync)
+                    if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < next)
                     {
-                        if (p == player)
-                        {
-                            if (player.Gold + player.Escrow.GetValueOrDefault(lot.LotId) < next)
-                            {
-                                return (false, "NOT_ENOUGH_GOLD", null);
-                            }
-                            player.Gold += player.Escrow.GetValueOrDefault(lot.LotId);
-                            player.Escrow.Remove(lot.LotId);
-                            player.Gold -= next;
-                            player.Escrow[lot.LotId] = next;
-                            Quests.Progress(player, "auction");
-                        }
-                        else
-                        {
-                            loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
-                            loser.Escrow.Remove(lot.LotId);
-                            Db.SavePlayer(loser);
-                        }
+                        return (false, "NOT_ENOUGH_GOLD", null);
+                    }
+                    player.Gold += player.Escrow.GetValueOrDefault(lot.LotId) - next;
+                    player.Escrow.Remove(lot.LotId);
+                    player.Escrow[lot.LotId] = next;
+                    Quests.Progress(player, "auction");
+                }
+                Player loser = lot.CurrentBidderId > 0 && lot.CurrentBidderId != player.Id
+                    && _store.Players.TryGetValue(lot.CurrentBidderId, out var l) ? l : null;
+                if (loser != null)
+                {
+                    lock (loser.Sync)
+                    {
+                        loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
+                        loser.Escrow.Remove(lot.LotId);
+                        Db.SavePlayer(loser);
                     }
                 }
 
@@ -780,6 +817,19 @@ namespace SimpleGameServer.Game
                     player.Escrow.Remove(lot.LotId);
                     player.Gold -= price;
                     player.Escrow[lot.LotId] = price;
+                }
+
+                // 退被一口价压掉的上一出价者（与 Bid 同款两阶段；漏退会永久滞留预扣）
+                Player loser = lot.CurrentBidderId > 0 && lot.CurrentBidderId != player.Id
+                    && _store.Players.TryGetValue(lot.CurrentBidderId, out var l2) ? l2 : null;
+                if (loser != null)
+                {
+                    lock (loser.Sync)
+                    {
+                        loser.Gold += loser.Escrow.GetValueOrDefault(lot.LotId);
+                        loser.Escrow.Remove(lot.LotId);
+                        Db.SavePlayer(loser);
+                    }
                 }
 
                 lot.CurrentBid = price;
@@ -827,10 +877,20 @@ namespace SimpleGameServer.Game
                 {
                     lock (chest.Sync)
                     {
-                        chest.OwnerId = lot.CurrentBidderId;
-                        chest.State = ChestState.Owned;
+                        if (lot.CurrentBidderId < 0)
+                        {
+                            // 机器人赢拍：宝箱直接系统回收（否则永久滞留内存字典无人再操作）
+                            chest.OwnerId = 0;
+                            chest.State = ChestState.Finished;
+                        }
+                        else
+                        {
+                            chest.OwnerId = lot.CurrentBidderId;
+                            chest.State = ChestState.Owned;
+                        }
                         Db.SaveChest(chest);
                     }
+                    if (lot.CurrentBidderId < 0) _store.Chests.TryRemove(lot.ChestUid, out _);
                 }
             }
             else
@@ -846,6 +906,7 @@ namespace SimpleGameServer.Game
                 }
             }
             Db.SaveLot(lot);
+            _store.Lots.TryRemove(lot.LotId, out _); // 已结算拍品移出内存（DB 留档），AuctionList/BotTick 不再遍历
             _ = _events.LotSettled(lot);
         }
 
@@ -907,6 +968,7 @@ namespace SimpleGameServer.Game
             long gold; long escrowSum; int characterId, level, xp, xpNext, duelRating, opens; long gems; int manorStage;
             Dictionary<int, int> cooldowns; object lastSeasonReward;
             List<object> questView; Dictionary<int, int> manorChoices;
+            object adsView, signView, referralView; Dictionary<string, object> rushDaily;
             lock (player.Sync)
             {
                 gold = player.Gold;
@@ -920,6 +982,12 @@ namespace SimpleGameServer.Game
                 questView = QuestView(player);
                 manorStage = player.ManorStage;
                 manorChoices = player.ManorChoices.ToDictionary(kv => kv.Key, kv => kv.Value);
+                // 三个视图会读/写字典（AdStatusView→RollAdDay 可能 Clear），必须在锁内取快照，
+                // 旧实现在锁外调用与 AdReward/SignIn 持锁写并发 → Dictionary 竞态
+                adsView = AdStatusView(player);
+                signView = SignView(player);
+                referralView = ReferralView(player);
+                rushDaily = RushDailyView(player);
             }
 
             var chests = _store.Chests.Values
@@ -977,10 +1045,10 @@ namespace SimpleGameServer.Game
                 lastSeasonReward,
                 skillCooldowns = cooldowns,
                 featureFlags = Features.View(),
-                ads = AdStatusView(player),
+                ads = adsView,
                 quests = questView,
-                sign = SignView(player),
-                referral = ReferralView(player),
+                sign = signView,
+                referral = referralView,
                 chests,
                 // 软硬双币：钻石（硬通货）+ 兑换比例
                 gems,
@@ -995,7 +1063,7 @@ namespace SimpleGameServer.Game
                     next = ManorNextView(manorStage),
                 },
                 // 抢宝房每日限次视图（roomId → {used, limit}）
-                rushDaily = RushDailyView(player),
+                rushDaily = rushDaily,
             };
         }
 
@@ -1075,14 +1143,13 @@ namespace SimpleGameServer.Game
             }
         }
 
-        /// <summary>抢宝房每日限次视图：roomId → {used, limit}（limit=0 表示不限）</summary>
+        /// <summary>抢宝房每日限次视图：roomId → {used, limit}（内存权威计数；需持 player.Sync）</summary>
         private static Dictionary<string, object> RushDailyView(Player player)
         {
-            string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
             var view = new Dictionary<string, object>();
             foreach (var r in GameTables.Tables.TbRushRoom.DataList)
             {
-                int used = r.DailyLimit > 0 ? Db.RushAttemptsUsed(day, player.Id, r.Id) : 0;
+                int used = r.DailyLimit > 0 ? player.RushUsed.GetValueOrDefault(r.Id) : 0;
                 view[r.Id.ToString()] = new { used, limit = r.DailyLimit };
             }
             return view;

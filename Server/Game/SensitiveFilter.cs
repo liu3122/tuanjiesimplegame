@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 
 namespace SimpleGameServer.Game;
@@ -29,7 +30,8 @@ public static class SensitiveFilter
         "反动", "法轮", "台独", "藏独", "疆独",
     };
 
-    private static readonly HashSet<string> _words = new(BaseWords, StringComparer.OrdinalIgnoreCase);
+    /// <summary>预归一化词表（登录热路径避免每次对 60+ 词各跑一遍 Normalize 分配 StringBuilder）</summary>
+    private static readonly string[] _normalizedWords = BaseWords.Select(Normalize).ToArray();
 
     /// <summary>昵称合法性校验：通过返回 null，否则返回错误码（SENSITIVE_NAME / BAD_NAME）</summary>
     public static string ValidateName(string name)
@@ -47,9 +49,9 @@ public static class SensitiveFilter
         }
 
         // 归一化后匹配：去空白、全角转半角、小写——防 "s b"、"ＳＢ" 这类插空/全角绕过
-        if (_words.Contains(Normalize(name))) return "SENSITIVE_NAME";
-        foreach (var w in _words)
-            if (Normalize(name).Contains(Normalize(w))) return "SENSITIVE_NAME";
+        string n = Normalize(name);
+        foreach (var w in _normalizedWords)
+            if (n.Contains(w)) return "SENSITIVE_NAME";
         return null;
     }
 
@@ -58,8 +60,8 @@ public static class SensitiveFilter
     {
         if (string.IsNullOrEmpty(text)) return false;
         var n = Normalize(text);
-        foreach (var w in _words)
-            if (n.Contains(Normalize(w)) || text.Contains(w, StringComparison.OrdinalIgnoreCase))
+        foreach (var w in _normalizedWords)
+            if (n.Contains(w) || text.Contains(w, StringComparison.OrdinalIgnoreCase))
                 return true;
         return false;
     }

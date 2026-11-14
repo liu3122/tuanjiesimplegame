@@ -1,3 +1,5 @@
+import time
+_SUF = str(int(time.time()) % 10**6)
 import asyncio, json, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
@@ -12,7 +14,7 @@ def login(name):
     return post('/api/login', '', json.dumps({'name': name}))['token']
 
 async def main():
-    token = login('duel_courage')
+    token = login('dc_' + _SUF)
     r = post('/api/duel/join', token)
     assert r['ok'], r
     ws = await websockets.connect(f'ws://127.0.0.1:5188/ws/duel?token={token}')
@@ -46,7 +48,7 @@ async def main():
         elif t == 'offerGone':
             state['offer'] = False
         elif t == 'settled':
-            my = [b for b in e['board'] if b['name'] == 'duel_courage'][0]
+            my = [b for b in e['board'] if b['name'] == 'dc_' + _SUF][0]
             expected = round(state['final'] * 1.2)
             print(f'  final={state["final"]} score={my["score"]} expected(×1.2)={expected} win={my["win"]}')
             assert my['score'] == expected, f'courage bonus mismatch: {my["score"]} vs {expected}'

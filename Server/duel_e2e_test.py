@@ -1,3 +1,5 @@
+import time
+_SUF = str(int(time.time()) % 10**6)
 import asyncio, json, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
@@ -22,6 +24,7 @@ async def run_player(name, actions):
     pending = list(actions)
     offer_active = False
     started = False
+    stale_checked = False
 
     async def action_pump():
         nonlocal offer_active
@@ -38,6 +41,11 @@ async def run_player(name, actions):
         t = e['type']
         if t == 'snapshot' and e.get('me'):
             pools[name] = e['me']['remainingSum']
+            others = [p['name'] for p in e['players'] if p['name'] != name]
+            stale = [n for n in others if not n.startswith('duel_p')]
+            if stale and not stale_checked:
+                raise StaleRoomError(f'合并进残房（对手 {stale}），弃局重试')
+            stale_checked = True
             print(f'  [{name}] snapshot phase={e["phase"]} pool={pools[name]} opp={e["opp"]["name"]}')
         elif t == 'phase' and e['phase'] == 'match' and not started:
             started = True
@@ -56,15 +64,33 @@ async def run_player(name, actions):
             await ws.close()
             return
 
-async def main():
-    a = asyncio.create_task(run_player('duel_p1',
+class StaleRoomError(Exception):
+    pass
+
+pools.clear()
+
+async def attempt(suf):
+    global settled_count
+    settled_count = 0
+    a = asyncio.create_task(run_player('duel_p1_' + suf,
         [{'type': 'eliminate', 'slot': s} for s in (0, 1, 2, 3, 4, 5)] + [{'type': 'sell'}]))
     await asyncio.sleep(0.5)
-    b = asyncio.create_task(run_player('duel_p2',
+    b = asyncio.create_task(run_player('duel_p2_' + suf,
         [{'type': 'eliminate', 'slot': s} for s in (5, 9, 13)] + [{'type': 'sell'}]))
     await asyncio.wait_for(asyncio.gather(a, b), timeout=90)
     assert settled_count == 2, 'both players must receive settled'
-    assert pools.get('duel_p1') == pools.get('duel_p2'), f'mirror pools differ: {pools}'
-    print(f'PASS: mirror pool={pools["duel_p1"]}, both settled')
+    assert pools.get('duel_p1_' + suf) == pools.get('duel_p2_' + suf), f'mirror pools differ: {pools}'
+    print(f'PASS: mirror pool={pools["duel_p1_" + suf]}, both settled')
+
+async def main():
+    # 残房合并（其他测试留下的匹配期房间）属正常匹配语义，但会让对局等到 120s 超时——检测后换名重试
+    for i in range(3):
+        try:
+            await attempt(_SUF + str(i))
+            return
+        except StaleRoomError as e:
+            print(f'  [retry {i}] {e}')
+            await asyncio.sleep(0.2)
+    raise AssertionError('连续 3 次合并残房')
 
 asyncio.run(main())

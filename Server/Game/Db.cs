@@ -48,18 +48,33 @@ namespace SimpleGameServer.Game
 
         private static void DrainBatch(SqliteConnection conn, Action<SqliteConnection> first)
         {
-            using var tx = conn.BeginTransaction();
-            int n = 1;
+            var batch = new List<Action<SqliteConnection>> { first };
+            while (batch.Count < 64 && _writes.Reader.TryRead(out var w)) batch.Add(w);
             try
             {
-                first(conn);
-                while (n < 64 && _writes.Reader.TryRead(out var w)) { w(conn); n++; }
-                tx.Commit();
+                using (var tx = conn.BeginTransaction())
+                {
+                    foreach (var w in batch) w(conn);
+                    tx.Commit();
+                }
             }
             catch (Exception e)
             {
-                _log.LogError(e, "SQLite 批量写失败（回滚 {N} 条，内存状态未受影响）", n);
-                try { tx.Rollback(); } catch { }
+                // 整批事务失败（如唯一索引冲突）：逐条重放，单条失败只丢该条，不再炸掉整批其他玩家的写
+                _log.LogError(e, "SQLite 批量写失败（{N} 条整批回滚，转逐条重放）", batch.Count);
+                foreach (var w in batch)
+                {
+                    try
+                    {
+                        using var tx = conn.BeginTransaction();
+                        w(conn);
+                        tx.Commit();
+                    }
+                    catch (Exception e2)
+                    {
+                        _log.LogError(e2, "SQLite 单条写重放仍失败（已丢弃，内存状态未受影响）");
+                    }
+                }
             }
         }
 
@@ -67,6 +82,12 @@ namespace SimpleGameServer.Game
         {
             _connString = new SqliteConnectionStringBuilder { DataSource = dbPath, Mode = SqliteOpenMode.ReadWriteCreate }.ToString();
             using var conn = Open();
+            // WAL 为库级持久属性，进程生命周期内设一次即可（读路径不再每次付出 PRAGMA 往返）
+            using (var prag = conn.CreateCommand())
+            {
+                prag.CommandText = "PRAGMA journal_mode=WAL;";
+                prag.ExecuteNonQuery();
+            }
             Exec(conn, @"
 CREATE TABLE IF NOT EXISTS player(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, token TEXT, gold INTEGER NOT NULL,
@@ -148,6 +169,8 @@ CREATE TABLE IF NOT EXISTS rush_attempt(
             try { Exec(conn, "ALTER TABLE player ADD COLUMN gems INTEGER NOT NULL DEFAULT 0"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN manor_stage INTEGER NOT NULL DEFAULT 0"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN manor_choices TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
+            // 登录凭证（2026-11-14：按名重发 token 的接管漏洞修复；null=旧账号待首登绑定）
+            try { Exec(conn, "ALTER TABLE player ADD COLUMN secret TEXT"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE pay_order RENAME COLUMN gold TO gems"); } catch (Exception) { }  // 内购发货金币→钻石
             foreach (var col in new[] { "peeked_slots TEXT NOT NULL DEFAULT '{}'", "detected_slots TEXT NOT NULL DEFAULT '[]'",
                                         "insurance INTEGER NOT NULL DEFAULT 0", "price_floor INTEGER", "tax_count INTEGER NOT NULL DEFAULT 0",
@@ -163,8 +186,9 @@ CREATE TABLE IF NOT EXISTS rush_attempt(
         {
             var conn = new SqliteConnection(_connString);
             conn.Open();
+            // journal_mode=WAL 是库级持久属性（Initialize 时已生效），这里只设连接级 synchronous
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;";
+            cmd.CommandText = "PRAGMA synchronous=NORMAL;";
             cmd.ExecuteNonQuery();
             return conn;
         }
@@ -210,6 +234,8 @@ CREATE TABLE IF NOT EXISTS rush_attempt(
                 progress = p.QuestProgress.ToDictionary(kv => kv.Key, kv => kv.Value),
                 claimed = p.QuestClaimed.ToList(),
                 dailyExtra = p.DailyExtra,
+                dailyUsed = p.DailyUsed,
+                rushUsed = p.RushUsed.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
             string signState = JsonSerializer.Serialize(new SignStateDto
             {
@@ -222,9 +248,11 @@ CREATE TABLE IF NOT EXISTS rush_attempt(
                 count = p.AdDailyCount.ToDictionary(kv => kv.Key, kv => kv.Value),
             }, JsonOpts);
             string manorChoices = JsonSerializer.Serialize(p.ManorChoices, JsonOpts);
-            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,gold,gems,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,manor_stage,manor_choices) VALUES($id,$n,$t,$g,$gem,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg,$iv,$rp,$ms,$mc)
-ON CONFLICT(id) DO UPDATE SET token=$t, gold=$g, gems=$gem, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg, inviter_id=$iv, referral_paid=$rp, manor_stage=$ms, manor_choices=$mc",
+            string secret = p.Secret;
+            EnqueueWrite(conn => Exec(conn, @"INSERT INTO player(id,name,token,secret,gold,gems,character_id,escrow,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,manor_stage,manor_choices) VALUES($id,$n,$t,$sec,$g,$gem,$c,$e,$cd,$xp,$lv,$dr,$ad,$qs,$sg,$iv,$rp,$ms,$mc)
+ON CONFLICT(id) DO UPDATE SET name=$n, token=$t, secret=$sec, gold=$g, gems=$gem, character_id=$c, escrow=$e, region=$r, skill_cooldowns=$cd, xp=$xp, level=$lv, duel_rating=$dr, ad_state=$ad, quest_state=$qs, sign_state=$sg, inviter_id=$iv, referral_paid=$rp, manor_stage=$ms, manor_choices=$mc",
                 ("$id", id), ("$n", name), ("$t", token as object ?? DBNull.Value),
+                ("$sec", secret as object ?? DBNull.Value),
                 ("$g", gold), ("$gem", gems), ("$c", cid), ("$e", escrow),
                 ("$ms", manorStage), ("$mc", manorChoices),
                 ("$cd", cds), ("$xp", xp), ("$lv", lv), ("$dr", dr),
@@ -784,7 +812,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
             using var conn = Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,gems,manor_stage,manor_choices FROM player";
+            cmd.CommandText = "SELECT id,name,token,gold,character_id,escrow,region,skill_cooldowns,xp,level,duel_rating,ad_state,quest_state,sign_state,inviter_id,referral_paid,gems,manor_stage,manor_choices,secret FROM player";
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
@@ -804,6 +832,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                         DuelRating = r.IsDBNull(10) ? Elo.StartRating : r.GetInt32(10),
                         Gems = r.IsDBNull(16) ? 0 : r.GetInt64(16),
                         ManorStage = r.IsDBNull(17) ? 0 : r.GetInt32(17),
+                        Secret = r.IsDBNull(19) ? null : r.GetString(19),
                     };
                     foreach (var (lotId, amount) in JsonSerializer.Deserialize<Dictionary<long, long>>(r.GetString(5), JsonOpts) ?? new Dictionary<long, long>())
                     {
@@ -828,6 +857,8 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                             foreach (var kv in qs.progress ?? new Dictionary<string, int>()) p.QuestProgress[kv.Key] = kv.Value;
                             foreach (var id in qs.claimed ?? new List<string>()) p.QuestClaimed.Add(id);
                             p.DailyExtra = qs.dailyExtra;
+                            p.DailyUsed = qs.dailyUsed;
+                            foreach (var kv in qs.rushUsed ?? new Dictionary<int, int>()) p.RushUsed[kv.Key] = kv.Value;
                         }
                     }
                     if (!r.IsDBNull(13))
@@ -945,6 +976,10 @@ namespace SimpleGameServer.Game
         public Dictionary<string, int> progress { get; set; }
         public List<string> claimed { get; set; }
         public int dailyExtra { get; set; }
+        /// <summary>每日挑战今日已用（内存权威的对账持久化）</summary>
+        public int dailyUsed { get; set; }
+        /// <summary>抢宝房今日已用（roomId → count）</summary>
+        public Dictionary<int, int> rushUsed { get; set; }
     }
 }
 

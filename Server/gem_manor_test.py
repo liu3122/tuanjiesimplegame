@@ -125,18 +125,16 @@ def main():
     r = call("POST", "/api/login", {"name": rname, "region": "CN"})
     rtoken, rpid = r["token"], r["playerId"]
 
-    # sqlite 预插房 1 满次数（限次读路径实时查库，无需重启）
-    conn = sqlite3.connect(DB)
-    conn.execute("INSERT OR REPLACE INTO rush_attempt(day,player_id,room_id,count) VALUES(?,?,?,?)",
-                 (TODAY, rpid, 1, 5))
-    conn.commit()
-    conn.close()
-
+    # 限次为内存权威（防异步落库窗口被连发突破）：真实打满 5 次入场后拒绝
+    # 每次等房间离开匹配期（填充4s+倒计时3s+余量），重进才计一次新入场
+    for i in range(5):
+        r = call("POST", "/api/rush/join", {"roomId": 1}, token=rtoken)
+        assert r.get("ok"), f"第{i+1}次加入失败: {r}"
+        time.sleep(10)
     r = call("POST", "/api/rush/join", {"roomId": 1}, token=rtoken)
     check("房1 满次拒 RUSH_LIMIT", not r.get("ok") and r.get("error") == "RUSH_LIMIT")
     r = call("POST", "/api/rush/join", {"roomId": 2}, token=rtoken)
     check("房2 正常加入", r.get("ok") is True)
-    time.sleep(1.5)   # 等后台写队列落 rush_attempt
     s = state(rtoken)
     rd = s["rushDaily"]
     check(f"限次视图 房1 used=5/5 房2 used=1/3",

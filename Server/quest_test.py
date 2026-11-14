@@ -24,7 +24,7 @@ QUESTS = [('q_chest2','chest',2,60,20),('q_elim15','eliminate',15,40,15),('q_due
 day_index = int(time.time()) // 86400
 expected_ids = [QUESTS[(day_index + i) % len(QUESTS)][0] for i in range(3)]
 
-t = post('/api/login', body=json.dumps({'name': 'quest_tester_' + str(random.randint(10000, 99999))}))['token']
+t = post('/api/login', body=json.dumps({'name': 'qt_' + str(random.randint(10000, 99999))}))['token']
 
 # 1) 轮换确定性
 qs = state(t)['quests']
@@ -44,12 +44,13 @@ if any(q['id'] == 'q_chest2' for q in qs):
     assert chest_q['progress'] == 1, chest_q
     print('PASS 开箱任务进度 +1')
 
-# 3) 未完成不可领取
-chest_q = [q for q in state(t)['quests'] if q['id'] == 'q_chest2'][0]
-if chest_q['progress'] < chest_q['target']:
-    r = post('/api/quest/claim', t, json.dumps({'questId': 'q_chest2'}))
-    assert not r['ok'] and r['error'] == 'QUEST_NOT_READY', r
-    print('PASS 未完成拒绝领取')
+# 3) 未完成不可领取（q_chest2 不在今日窗口时跳过——任务按天轮换，旧断言只在部分日子成立）
+if any(q['id'] == 'q_chest2' for q in state(t)['quests']):
+    chest_q = [q for q in state(t)['quests'] if q['id'] == 'q_chest2'][0]
+    if chest_q['progress'] < chest_q['target']:
+        r = post('/api/quest/claim', t, json.dumps({'questId': 'q_chest2'}))
+        assert not r['ok'] and r['error'] == 'QUEST_NOT_READY', r
+        print('PASS 未完成拒绝领取')
 
 # 4) 广告任务可完成并双倍领取
 if any(q['id'] == 'q_ad1' for q in state(t)['quests']):

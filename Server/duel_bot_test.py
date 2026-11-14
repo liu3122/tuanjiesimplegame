@@ -1,3 +1,5 @@
+import time
+_SUF = str(int(time.time()) % 10**6)
 import asyncio, json, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
@@ -15,7 +17,7 @@ def login(name):
     return post('/api/login', '', json.dumps({'name': name}))['token']
 
 async def main():
-    token = login('duel_solo')
+    token = login('duel_solo_' + _SUF)
     gold_before = get_state(token)['gold']
     r = post('/api/duel/join', token)
     assert r['ok'], r

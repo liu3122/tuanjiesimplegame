@@ -35,7 +35,10 @@ namespace SimpleGameServer.Game
         private void Tick()
         {
             string curWeek = Db.WeekStartUtcIso();
-            string prevWeek = DateTime.Parse(curWeek).ToUniversalTime().AddDays(-7).ToString("o");
+            // "o" 无时区后缀 → Unspecified，ToUniversalTime 会按服务器本地时区折算（UTC+8 上周界漂移 8 小时）。
+            // 按 UTC 语义解析（与 gold_tx.created_at / WeekGoldBoard 的 UTC 口径一致）。
+            string prevWeek = DateTime.Parse(curWeek, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal).ToUniversalTime().AddDays(-7).ToString("o");
             if (Db.SeasonPaid(prevWeek)) return;
 
             var board = Db.WeekGoldBoard(prevWeek, curWeek, Rewards.Length);

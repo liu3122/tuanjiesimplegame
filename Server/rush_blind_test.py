@@ -1,3 +1,5 @@
+import time
+_SUF = str(int(time.time()) % 10**6)
 import asyncio, json, urllib.request, websockets
 
 BASE = 'http://127.0.0.1:5188'
@@ -11,7 +13,7 @@ def login(name):
     return post('/api/login', '', json.dumps({'name': name}))['token']
 
 async def main():
-    token = login('blind_tester')
+    token = login('bt_' + _SUF)
     r = post('/api/rush/join', token, '{"roomId":3}')  # 盲抢新手房
     assert r['ok'], r
     ws = await websockets.connect(f'ws://127.0.0.1:5188/ws/rush?roomId=3&token={token}')

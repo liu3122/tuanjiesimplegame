@@ -50,7 +50,7 @@ async def run_player(name, actions):
     return None
 
 async def main():
-    S = str(random.randint(10000, 99999))
+    S = str(int(__import__('time').time() * 1000) % 10**9)
     a = asyncio.create_task(run_player('elo_a' + S,
         [{'type': 'eliminate', 'slot': s} for s in (0, 1, 2, 3, 4, 5)] + [{'type': 'sell'}]))
     await asyncio.sleep(0.5)
