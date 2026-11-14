@@ -74,3 +74,5 @@ Server/simplegame.db*
 
 # WX SDK 纹理工具本地数据（导出时生成）
 /TextToolDatas/
+__pycache__/
+*.pyc
