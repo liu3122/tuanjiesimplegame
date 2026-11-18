@@ -244,6 +244,7 @@ CREATE TABLE IF NOT EXISTS friend_req(
                 dailyExtra = p.DailyExtra,
                 dailyUsed = p.DailyUsed,
                 rushUsed = p.RushUsed.ToDictionary(kv => kv.Key, kv => kv.Value),
+                potDuelUsed = p.PotDuelUsed,
             }, JsonOpts);
             string signState = JsonSerializer.Serialize(new SignStateDto
             {
@@ -922,6 +923,7 @@ GROUP BY t.player_id ORDER BY 3 DESC LIMIT $lim";
                             foreach (var id in qs.claimed ?? new List<string>()) p.QuestClaimed.Add(id);
                             p.DailyExtra = qs.dailyExtra;
                             p.DailyUsed = qs.dailyUsed;
+                            p.PotDuelUsed = qs.potDuelUsed;
                             foreach (var kv in qs.rushUsed ?? new Dictionary<int, int>()) p.RushUsed[kv.Key] = kv.Value;
                         }
                     }
@@ -1044,6 +1046,8 @@ namespace SimpleGameServer.Game
         public int dailyUsed { get; set; }
         /// <summary>抢宝房今日已用（roomId → count）</summary>
         public Dictionary<int, int> rushUsed { get; set; }
+        /// <summary>竞宝房今日已用</summary>
+        public int potDuelUsed { get; set; }
     }
 }
 

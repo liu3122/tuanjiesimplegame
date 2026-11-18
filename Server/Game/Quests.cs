@@ -39,6 +39,7 @@ namespace SimpleGameServer.Game
                 p.DailyExtra = 0;
                 p.DailyUsed = 0;      // 每日挑战限次与任务共用日界
                 p.RushUsed.Clear();   // 抢宝房每日限次同界清零
+                p.PotDuelUsed = 0;    // 竞宝房限次同界清零
             }
         }
 

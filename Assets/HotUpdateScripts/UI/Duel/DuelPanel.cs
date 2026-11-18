@@ -282,7 +282,7 @@ namespace Game.HotUpdate.ChestGame
                 case "phase":
                     _phase = e["phase"].Value;
                     if (_phase == "countdown") _status.text = "<color=#E05D5D>" + L10n.Get("准备！") + "</color>";
-                    else if (_phase == "match")
+                    else if (_phase == "countdown" || _phase == "match")
                     {
                         if (_inviteBtn != null) { Destroy(_inviteBtn.gameObject); _inviteBtn = null; }
                         _status.text = "<color=#4DD0A5>" + L10n.Get("对决开始！随时可卖给银行锁定分数") + "</color>";

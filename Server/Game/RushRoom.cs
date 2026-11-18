@@ -291,8 +291,12 @@ namespace SimpleGameServer.Game
                 long earn = _earnings.GetValueOrDefault(p.Id);
                 lock (p.Sync)
                 {
-                    Levels.AddXp(p, Levels.XpRushJoin);
-                    Quests.Progress(p, "rush");
+                    // 好友私人局跳过经验/任务进度（防熟人互刷，与 DuelRoom 口径一致）；金币照常
+                    if (!IsPrivate)
+                    {
+                        Levels.AddXp(p, Levels.XpRushJoin);
+                        Quests.Progress(p, "rush");
+                    }
                     if (earn > 0) p.Gold += earn;
                     Db.SavePlayer(p);
                 }
@@ -452,13 +456,16 @@ namespace SimpleGameServer.Game
             }
         }
 
-        /// <summary>凭码加入好友私人抢宝房（码即门票）</summary>
+        /// <summary>凭码加入好友私人抢宝房（码即门票）。持 _gate 与公共 Join 互斥</summary>
         public (bool ok, string err, RushRoom? room) JoinPrivate(string code, Player player)
         {
-            if (!_private.TryGetValue((code ?? "").Trim(), out var room))
-                return (false, "ROOM_NOT_FOUND", null);
-            var (ok, err) = room.Join(player); // 幂等重进不重复扣费/计数
-            return (ok, err, ok ? room : null);
+            lock (_gate)
+            {
+                if (!_private.TryGetValue((code ?? "").Trim(), out var room))
+                    return (false, "ROOM_NOT_FOUND", null);
+                var (ok, err) = room.Join(player); // 幂等重进不重复扣费/计数
+                return (ok, err, ok ? room : null);
+            }
         }
 
         public (bool ok, string err, RushRoom? room) Join(int roomId, Player player)

@@ -81,7 +81,7 @@ namespace Game.HotUpdate.ChestGame
                     ok.onClick.AddListener(async () =>
                     {
                         var rr = await ApiClient.FriendAcceptAsync(req["id"].AsLong);
-                        if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
+                        if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
                         UIRoot.ToastStatic(L10n.Get("已添加好友"));
                         Object.Destroy(panel);
                         Show("friends");
@@ -90,7 +90,7 @@ namespace Game.HotUpdate.ChestGame
                     no.onClick.AddListener(async () =>
                     {
                         var rr = await ApiClient.FriendRejectAsync(req["id"].AsLong);
-                        if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
+                        if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
                         Object.Destroy(panel);
                         Show("requests");
                     });
@@ -127,7 +127,7 @@ namespace Game.HotUpdate.ChestGame
                     rm.onClick.AddListener(async () =>
                     {
                         var rr = await ApiClient.FriendRemoveAsync(f["id"].AsLong);
-                        if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
+                        if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("操作失败：") + Screens.ErrText(rr)); return; }
                         Object.Destroy(panel);
                         Show("friends");
                     });
@@ -157,7 +157,7 @@ namespace Game.HotUpdate.ChestGame
             createRush.onClick.AddListener(async () =>
             {
                 var rr = await ApiClient.CreatePrivateRushAsync(1); // 新手档（100 门票）
-                if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("创建失败：") + Screens.ErrText(rr)); return; }
+                if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("创建失败：") + Screens.ErrText(rr)); return; }
                 string code = rr["data"]["roomCode"].Value;
                 Object.Destroy(panel);
                 RushPanel.ShowPrivate(code);
@@ -170,7 +170,7 @@ namespace Game.HotUpdate.ChestGame
                 var code = input.text.Trim();
                 if (code.Length != 6) { UIRoot.ToastStatic(L10n.Get("请输入 6 位房间码")); return; }
                 var rr = await ApiClient.JoinPrivateDuelAsync(code);
-                if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(rr)); return; }
+                if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(rr)); return; }
                 Object.Destroy(panel);
                 DuelPanel.ShowPrivate(code, false);
             });
@@ -180,7 +180,7 @@ namespace Game.HotUpdate.ChestGame
                 var code = input.text.Trim();
                 if (code.Length != 6) { UIRoot.ToastStatic(L10n.Get("请输入 6 位房间码")); return; }
                 var rr = await ApiClient.JoinPrivateRushAsync(code);
-                if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(rr)); return; }
+                if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(rr)); return; }
                 Object.Destroy(panel);
                 RushPanel.ShowPrivate(code);
             });
@@ -190,7 +190,7 @@ namespace Game.HotUpdate.ChestGame
             add.onClick.AddListener(async () =>
             {
                 var rr = await ApiClient.FriendRequestAsync(fInput.text.Trim());
-                if (rr == null || !rr["ok"].AsBool) { UIRoot.ToastStatic(L10n.Get("申请失败：") + Screens.ErrText(rr)); return; }
+                if (rr == null || !rr["ok"].AsBool || panel == null) { if (panel != null) UIRoot.ToastStatic(L10n.Get("申请失败：") + Screens.ErrText(rr)); return; }
                 UIRoot.ToastStatic(L10n.Get("已发送申请（若对方也申请你，将直接成为好友）"));
                 Object.Destroy(panel);
                 Show(curTab);
@@ -204,9 +204,9 @@ namespace Game.HotUpdate.ChestGame
         private static async Task CreateDuelAndInviteAsync(GameObject panel, long inviteTo, bool potMode)
         {
             var r = await ApiClient.CreatePrivateDuelAsync(potMode);
-            if (r == null || !r["ok"].AsBool)
+            if (r == null || !r["ok"].AsBool || panel == null)
             {
-                UIRoot.ToastStatic(L10n.Get("创建失败：") + Screens.ErrText(r));
+                if (panel != null) UIRoot.ToastStatic(L10n.Get("创建失败：") + Screens.ErrText(r));
                 return;
             }
             string code = r["data"]["roomCode"].Value;
@@ -270,6 +270,12 @@ namespace Game.HotUpdate.ChestGame
     /// </summary>
     public class FriendInboxPoller : MonoBehaviour
     {
+        /// <summary>静默标志：已入房后不再弹邀请，Screens.ShowMain 复位（跨屏静态，随大厅重进解除）</summary>
+        public static bool Muted;
+
+        /// <summary>回到大厅时解除静默（Screens.ShowMain 调用）</summary>
+        public static void Unmute() => Muted = false;
+
         private Button _btn;
         private Text _label;
         private string _baseText;
@@ -305,7 +311,7 @@ namespace Game.HotUpdate.ChestGame
                 if (_label.text != want) _label.text = want;
             }
             var invite = data["invite"];
-            if (invite != null && !invite.IsNull && !_popupShowing && UIManager.CurrentName == "MainScreen")
+            if (invite != null && !invite.IsNull && !_popupShowing && !Muted && UIManager.CurrentName == "MainScreen")
             {
                 ShowInvitePopup(invite);
             }
@@ -339,6 +345,7 @@ namespace Game.HotUpdate.ChestGame
                 {
                     var r = await ApiClient.JoinPrivateRushAsync(code);
                     if (r == null || !r["ok"].AsBool) { join.interactable = true; UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(r)); return; }
+                    Muted = true; // 已入房：对局中静默邀请弹窗，回大厅（ShowMain→Unmute）再恢复
                     Object.Destroy(panel);
                     RushPanel.ShowPrivate(code);
                 }
@@ -346,6 +353,7 @@ namespace Game.HotUpdate.ChestGame
                 {
                     var r = await ApiClient.JoinPrivateDuelAsync(code);
                     if (r == null || !r["ok"].AsBool) { join.interactable = true; UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(r)); return; }
+                    Muted = true;
                     Object.Destroy(panel);
                     DuelPanel.ShowPrivate(code, mode == "pot");
                 }

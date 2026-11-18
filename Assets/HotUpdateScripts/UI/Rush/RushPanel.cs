@@ -175,10 +175,10 @@ namespace Game.HotUpdate.ChestGame
                     break;
                 }
                 case "closed":
-                    // 好友房解散（等待超时未开局）：已退款
+                    // 好友房解散（等待超时未开局）：已退款；销毁残留的开局按钮（防误点）
                     _status.text = L10n.Get("好友房已解散（入场费已退回）");
                     _ws?.Close();
-                    _startBtn = null;
+                    if (_startBtn != null) { Destroy(_startBtn.gameObject); _startBtn = null; }
                     break;
                 case "joined":
                     PushFeed(e["name"].Value + " 进入房间（" + e["count"].AsInt + "/" + e["need"].AsInt + "）");

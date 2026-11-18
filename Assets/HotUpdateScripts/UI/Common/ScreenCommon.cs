@@ -54,6 +54,10 @@ namespace Game.HotUpdate.ChestGame
             if (err == "REQ_NOT_FOUND") return L10n.Get("该申请不存在（可能已处理）");
             if (err == "ROOM_NOT_FOUND") return L10n.Get("房间不存在或已结束");
             if (err == "ROOM_NEED_TWO") return L10n.Get("至少 2 名玩家才能开局");
+            if (err == "ROOM_RUNNING") return L10n.Get("你已在一场对局中，先完成或离开当前对局");
+            if (err == "ROOM_FULL") return L10n.Get("房间已满");
+            if (err == "NOT_HOST") return L10n.Get("只有房主可以开始游戏");
+            if (err == "POT_LIMIT") return L10n.Get("今日竞宝房次数已用完");
             if (err == "MANOR_MAX") return L10n.Get("宅邸已全部完工");
             if (err == "BAD_CHOICE") return L10n.Get("请先选择装饰方案");
             if (err == "NOT_ENOUGH_GEMS") return L10n.Get("钻石不足");

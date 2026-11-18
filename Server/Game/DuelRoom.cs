@@ -17,6 +17,9 @@ namespace SimpleGameServer.Game
     /// </summary>
     public class DuelRoom
     {
+        /// <summary>竞宝房每日限次（公私统一；后续可迁 tbglobal）</summary>
+        public const int PotDuelDailyLimit = 3;
+
         private enum Phase { Matching, Countdown, Match, Settled }
 
         private readonly GameStore _store;
@@ -75,8 +78,16 @@ namespace SimpleGameServer.Game
                 long stake = Stake;
                 lock (player.Sync)
                 {
+                    // 竞宝房每日限次（公私统一）：竞宝奖池=两个宝箱的内容价值而非入场费池，非零和，
+                    // 复审确认免费排除下熟人可稳定套利——不限次即定向水龙头（rush 同款内存权威计数）
+                    if (PotMode)
+                    {
+                        Quests.RollDay(player);
+                        if (player.PotDuelUsed >= PotDuelDailyLimit) return (false, "POT_LIMIT");
+                    }
                     if (player.Gold < stake) return (false, "NOT_ENOUGH_GOLD");
                     player.Gold -= stake;
+                    if (PotMode) player.PotDuelUsed++;
                 }
                 Db.SavePlayer(player);
                 Db.AddGoldTx(player.Id, -stake, "duel_stake", DuelId);
@@ -706,14 +717,18 @@ namespace SimpleGameServer.Game
             }
         }
 
-        /// <summary>凭码加入好友私人房（Mode=friend 带 Code）：码即门票，不校验好友关系</summary>
+        /// <summary>凭码加入好友私人房（Mode=friend 带 Code）：码即门票，不校验好友关系。
+        /// 持 manager._gate：PlayerActive 防重入检查与 room.Join 必须原子（否则同玩家并发双请求可进两房）</summary>
         public (bool ok, string err, DuelRoom? room) JoinPrivate(string code, Player player)
         {
-            if (!_private.TryGetValue((code ?? "").Trim(), out var room))
-                return (false, "ROOM_NOT_FOUND", null);
-            if (PlayerActive(player.Id)) return (false, "ROOM_RUNNING", null);
-            var (ok, err) = room.Join(player); // 幂等：已在房内重进不重复扣费
-            return (ok, err, ok ? room : null);
+            lock (_gate)
+            {
+                if (!_private.TryGetValue((code ?? "").Trim(), out var room))
+                    return (false, "ROOM_NOT_FOUND", null);
+                if (PlayerActive(player.Id)) return (false, "ROOM_RUNNING", null);
+                var (ok, err) = room.Join(player); // 幂等：已在房内重进不重复扣费
+                return (ok, err, ok ? room : null);
+            }
         }
 
         public DuelRoom? FindRoomOf(long playerId)

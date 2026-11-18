@@ -14,6 +14,7 @@ namespace Game.HotUpdate.ChestGame
 
         public static async void ShowMain(bool unloadUnused = false)
         {
+            FriendInboxPoller.Unmute(); // 回大厅：恢复好友邀请弹窗
             UITheme.PreloadAtlas("main");
             var root = await UIManager.ShowAsync("MainScreen", unloadUnused);
             if (root == null) { UIRoot.ToastStatic(L10n.Get("MainScreen 加载失败")); return; }

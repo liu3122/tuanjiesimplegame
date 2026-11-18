@@ -49,6 +49,8 @@ namespace SimpleGameServer.Game
         public int DailyExtra { get; set; }
         /// <summary>每日挑战今日已用次数（内存权威，随任务日清零；DB 记录仅作对账）</summary>
         public int DailyUsed { get; set; }
+        /// <summary>竞宝房今日已用次数（内存权威；竞宝池=箱内容非入场费，非零和，必须限次防刷）</summary>
+        public int PotDuelUsed { get; set; }
         /// <summary>抢宝房今日已用次数（roomId → count，内存权威，随任务日清零）</summary>
         public Dictionary<int, int> RushUsed { get; } = new();
         // ---- 邀请双奖 ----
