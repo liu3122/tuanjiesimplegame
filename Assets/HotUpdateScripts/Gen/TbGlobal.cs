@@ -52,6 +52,9 @@ public partial class TbGlobal
      public int FriendMax => _data.FriendMax;
      public int FriendReqDailyCap => _data.FriendReqDailyCap;
      public int FriendRoomTimeoutSec => _data.FriendRoomTimeoutSec;
+     public int PotDuelEntryPct => _data.PotDuelEntryPct;
+     public int PotDuelPayoutCapK => _data.PotDuelPayoutCapK;
+     public int PotDuelDailyLimit => _data.PotDuelDailyLimit;
     
     public void ResolveRef(Tables tables)
     {

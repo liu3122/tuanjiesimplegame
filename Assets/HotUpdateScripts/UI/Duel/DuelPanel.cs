@@ -77,8 +77,14 @@ namespace Game.HotUpdate.ChestGame
             }
             if (OnlineState.FeatureOn("potduel"))
             {
+                // 入场费/封顶按配置实时算（服务端同口径：入场=奖池×Pct%，赔付封顶=K×双方入场）
+                var g = GameConfig.Tables.TbGlobal;
+                long pool = 0;
+                foreach (var v in GameConfig.Tables.TbChest[g.DuelChestId].SlotAmounts) pool += v;
+                long entry = System.Math.Max(1, (long)System.Math.Round(pool * g.PotDuelEntryPct / 100.0));
+                long cap = entry * 2 * System.Math.Max(1, g.PotDuelPayoutCapK);
                 var b = UITheme.ThemedButton(panel.transform, new Vector2(0, -240), new Vector2(700, 120),
-                    "<color=#E05D5D>竞宝房</color> · 入场费 = 宝箱售价\n<color=#9AA3B2>同箱对开，胜者独得两个宝箱的全部价值（扣 5%）</color>", "gold", 24);
+                    $"<color=#E05D5D>竞宝房</color> · 入场费 {entry}（奖池 {pool} 的 {g.PotDuelEntryPct}%）\n<color=#9AA3B2>同箱对开排除收费，胜者独得双方得分之和（扣 5%，封顶 {cap}）· 每日 {g.PotDuelDailyLimit} 次</color>", "gold", 24);
                 if (OnlineState.Level < Screens.PotDuelMinLevel)
                 {
                     b.interactable = false;
@@ -435,6 +441,8 @@ namespace Game.HotUpdate.ChestGame
             string buff = "";
             if (_me["priceBuffNext"].AsBool) buff += "\n抬价 +15% 已就绪";
             if (_me["insuranceActive"].AsBool) buff += "\n保底已生效";
+            int nextCost = _me["nextEliminateCost"].AsInt; // 竞宝模式：免费额度后收费（普通对决恒 0）
+            if (nextCost > 0) buff += "\n<color=#E05D5D>下次排除 " + nextCost + " 金币</color>";
             _meInfo.text = L10n.Get("剩余") + " " + _me["remainingCount"].AsInt + " " + L10n.Get("格") + " · " + L10n.Get("总和") + " " + _me["remainingSum"].AsLong.ToString("N0")
                 + "\nEV " + _me["expectedValue"].AsDouble.ToString("F1") + " · " + L10n.Get("银行收购") + " " + _me["bankerOffer"].AsLong.ToString("N0") + buff;
             RefreshOppView();

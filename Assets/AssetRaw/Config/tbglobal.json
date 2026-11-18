@@ -23,6 +23,9 @@
     "GemToGold": 10,
     "FriendMax": 50,
     "FriendReqDailyCap": 20,
-    "FriendRoomTimeoutSec": 300
+    "FriendRoomTimeoutSec": 300,
+    "PotDuelEntryPct": 5,
+    "PotDuelPayoutCapK": 3,
+    "PotDuelDailyLimit": 3
   }
 ]

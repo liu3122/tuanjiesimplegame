@@ -17,8 +17,8 @@ namespace SimpleGameServer.Game
     /// </summary>
     public class DuelRoom
     {
-        /// <summary>竞宝房每日限次（公私统一；后续可迁 tbglobal）</summary>
-        public const int PotDuelDailyLimit = 3;
+        /// <summary>竞宝房每日限次（tbglobal.PotDuelDailyLimit，公私统一）</summary>
+        public static int PotDuelDailyLimit => GameTables.Tables.TbGlobal.PotDuelDailyLimit;
 
         private enum Phase { Matching, Countdown, Match, Settled }
 
@@ -55,10 +55,21 @@ namespace SimpleGameServer.Game
             RoomCode = roomCode;
         }
 
-        /// <summary>入场费：普通对决=DuelStake；竞宝房=对决宝箱售价</summary>
-        private long Stake => PotMode
-            ? GameTables.Tables.TbChest[GameTables.Tables.TbGlobal.DuelChestId].Price
-            : GameTables.Tables.TbGlobal.DuelStake;
+        /// <summary>入场费：普通对决=DuelStake；竞宝房=奖池内容价值×PotDuelEntryPct%。
+        /// 根治刷金：竞宝赔付基准是宝箱内容（1540×2）而非入场池，入场费必须锚定同一基准，否则
+        /// "150 进、期望 175 出"的结构性正 EV 对合谋者就是无限水龙头（入场 77 ≈ 单方期望得分 77）</summary>
+        private long Stake => PotMode ? PotEntry : GameTables.Tables.TbGlobal.DuelStake;
+
+        private static long PotEntry
+        {
+            get
+            {
+                var cfg = GameTables.Tables.TbChest[GameTables.Tables.TbGlobal.DuelChestId];
+                long pool = 0;
+                foreach (var v in cfg.SlotAmounts) pool += v;
+                return Math.Max(1, (long)Math.Round(pool * GameTables.Tables.TbGlobal.PotDuelEntryPct / 100.0));
+            }
+        }
 
         public int WaitingCount { get { lock (_gate) return _players.Count(p => p.Key > 0); } }
         public bool Joinable { get { lock (_gate) return _phase == Phase.Matching && _players.Count < 2; } }
@@ -224,7 +235,9 @@ namespace SimpleGameServer.Game
                 {
                     OwnerId = pid,
                     PaidPrice = Stake, // 保底技能兜底 60% 入场费（对决内有效）
-                    FreeEliminateBuff = 99,  // 对决内排除免费（节奏优先）
+                    // 普通对决排除免费（零和玩法，节奏优先）；竞宝房恢复单人模式成本曲线
+                    // （免费排除让合谋者零成本刷收购系数增益与勇气加成——收费后任何深挖策略期望为负）
+                    FreeEliminateBuff = PotMode ? 0 : 99,
                 };
                 chest.ShuffleAmounts(new Random(_rng.Next()));
                 _chests[pid] = chest;
@@ -245,8 +258,23 @@ namespace SimpleGameServer.Game
                 if (!CanAct(pid, out var chest, out var err)) { SendErr(pid, err); return (false, err); }
                 if (slot < 0 || slot >= chest.Amounts.Length) { SendErr(pid, "BAD_SLOT"); return (false, "BAD_SLOT"); }
                 chest.ExpireOfferIfNeeded();
-                var (revealed, special, err2) = chest.EliminateEx(slot, _players[pid]);
-                if (err2 != null) { SendErr(pid, err2); return (false, err2); }
+                var payer = _players[pid];
+                int cost = chest.ChargeEliminateCost(); // 竞宝模式：免费额度（5 次）后按单人曲线收费
+                if (cost > 0)
+                {
+                    lock (payer.Sync)
+                    {
+                        if (payer.Gold < cost) { SendErr(pid, "NOT_ENOUGH_GOLD"); return (false, "NOT_ENOUGH_GOLD"); }
+                        payer.Gold -= cost; // 先扣后退（检查+扣款同锁，防并发负币）
+                    }
+                }
+                var (revealed, special, err2) = chest.EliminateEx(slot, payer);
+                if (err2 != null)
+                {
+                    if (cost > 0) { lock (payer.Sync) payer.Gold += cost; }
+                    SendErr(pid, err2);
+                    return (false, err2);
+                }
                 if (special != 0)
                 {
                     var p = _players[pid];
@@ -312,8 +340,9 @@ namespace SimpleGameServer.Game
                 if (!CanAct(pid, out var chest, out var err)) { SendErr(pid, err); return (false, err); }
                 chest.ExpireOfferIfNeeded();
                 long score = chest.RemainingCount <= 1
-                    // 勇气加成：撑到最后一格开箱，得分 ×1.2（鼓励风险路线，破解"到价就卖"单一策略）
-                    ? (long)Math.Round(chest.SettleIncome(chest.OpenFinal()) * 1.2)
+                    // 勇气加成：撑到最后一格开箱得分 ×1.2（鼓励风险路线）——仅普通对决（零和，只影响谁赢）；
+                    // 竞宝房砍掉（赔付随内容走，×1.2 是对合谋重开者的直接注水）
+                    ? (long)Math.Round(chest.SettleIncome(chest.OpenFinal()) * (PotMode ? 1.0 : 1.2))
                     : chest.SettleIncome(Math.Max(1, (long)Math.Round(chest.BankerOffer)));
                 chest.State = ChestState.Finished;
                 LockScore(pid, score);
@@ -431,11 +460,13 @@ namespace SimpleGameServer.Game
             long s1 = _scores.GetValueOrDefault(ids[1]);
             long winner = s0 > s1 ? ids[0] : s1 > s0 ? ids[1] : 0; // 0 = 平局
 
-            // 竞宝房：胜者独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值
+            // 竞宝房：胜者独得双方得分之和（扣抽成，封顶 K×双方入场费——黑天鹅保险，正常打不到）；
+            // 平局各得自己得分×（1-抽成）——平局此前不抽成，是合谋收益的额外放大
             // 普通对决：赢家得固定奖池（入场费×2 扣抽成）；平局退入场费
+            long potCap = stake * 2 * Math.Max(1, g.PotDuelPayoutCapK);
             long potPayout(long pid) => PotMode
-                ? (winner == 0 ? _scores.GetValueOrDefault(pid)
-                    : (pid == winner ? (long)Math.Round((s0 + s1) * (1 - g.AuctionFeeRate)) : 0))
+                ? (winner == 0 ? (long)Math.Round(_scores.GetValueOrDefault(pid) * (1 - g.AuctionFeeRate))
+                    : (pid == winner ? Math.Min((long)Math.Round((s0 + s1) * (1 - g.AuctionFeeRate)), potCap) : 0))
                 : (winner == 0 ? stake : (pid == winner ? (long)Math.Round(stake * 2 * (1 - g.AuctionFeeRate)) : 0));
 
             // 真人入账（按 Id 排序加锁，遵守全局锁序）
@@ -579,6 +610,7 @@ namespace SimpleGameServer.Game
                 eliminated = c.Eliminated,
                 revealedAmounts = c.Eliminated.Select((e, i) => e ? (int?)c.Amounts[i] : (int?)null).ToArray(),
                 remainingCount = c.RemainingCount,
+                nextEliminateCost = c.NextEliminateCost, // 竞宝模式排除收费（普通对决恒 0）
                 remainingSum = c.RemainingSum,
                 expectedValue = Math.Round(c.ExpectedValue, 1),
                 bankerOffer = (long)Math.Round(c.BankerOffer),

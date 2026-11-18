@@ -172,6 +172,10 @@
             <var name="FriendMax" type="int"/>
             <var name="FriendReqDailyCap" type="int"/>
             <var name="FriendRoomTimeoutSec" type="int"/>
+            <!-- 竞宝房经济根治：入场费=奖池内容价值百分比 / 赔付封顶倍数K（赢家所得≤K×双方入场）/ 每日限次 -->
+            <var name="PotDuelEntryPct" type="int"/>
+            <var name="PotDuelPayoutCapK" type="int"/>
+            <var name="PotDuelDailyLimit" type="int"/>
         </bean>
     </module>
 

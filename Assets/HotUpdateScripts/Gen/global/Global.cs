@@ -41,6 +41,9 @@ public sealed partial class Global : Luban.BeanBase
         { if(!_buf["FriendMax"].IsNumber) { throw new SerializationException(); }  FriendMax = _buf["FriendMax"]; }
         { if(!_buf["FriendReqDailyCap"].IsNumber) { throw new SerializationException(); }  FriendReqDailyCap = _buf["FriendReqDailyCap"]; }
         { if(!_buf["FriendRoomTimeoutSec"].IsNumber) { throw new SerializationException(); }  FriendRoomTimeoutSec = _buf["FriendRoomTimeoutSec"]; }
+        { if(!_buf["PotDuelEntryPct"].IsNumber) { throw new SerializationException(); }  PotDuelEntryPct = _buf["PotDuelEntryPct"]; }
+        { if(!_buf["PotDuelPayoutCapK"].IsNumber) { throw new SerializationException(); }  PotDuelPayoutCapK = _buf["PotDuelPayoutCapK"]; }
+        { if(!_buf["PotDuelDailyLimit"].IsNumber) { throw new SerializationException(); }  PotDuelDailyLimit = _buf["PotDuelDailyLimit"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -72,6 +75,9 @@ public sealed partial class Global : Luban.BeanBase
     public readonly int FriendMax;
     public readonly int FriendReqDailyCap;
     public readonly int FriendRoomTimeoutSec;
+    public readonly int PotDuelEntryPct;
+    public readonly int PotDuelPayoutCapK;
+    public readonly int PotDuelDailyLimit;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -107,6 +113,9 @@ public sealed partial class Global : Luban.BeanBase
         + "FriendMax:" + FriendMax + ","
         + "FriendReqDailyCap:" + FriendReqDailyCap + ","
         + "FriendRoomTimeoutSec:" + FriendRoomTimeoutSec + ","
+        + "PotDuelEntryPct:" + PotDuelEntryPct + ","
+        + "PotDuelPayoutCapK:" + PotDuelPayoutCapK + ","
+        + "PotDuelDailyLimit:" + PotDuelDailyLimit + ","
         + "}";
     }
 }
