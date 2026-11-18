@@ -20,6 +20,10 @@ namespace Game.HotUpdate.ChestGame
         private bool _finished;
         /// <summary>竞宝房模式：胜者独得两个宝箱的结算总价值</summary>
         private bool _potMode;
+        /// <summary>好友私人房房间码（null=公共匹配房）</summary>
+        private string _roomCode;
+        /// <summary>好友房等待期的"邀请好友"按钮</summary>
+        private Button _inviteBtn;
         private readonly GameObject[] _slots = new GameObject[20];
         // 格子控件缓存：Redraw 每次 GetComponentInChildren×20 是纯浪费（每步操作都跑一遍）
         private readonly Text[] _slotTexts = new Text[20];
@@ -102,11 +106,23 @@ namespace Game.HotUpdate.ChestGame
                 UIRoot.ToastStatic(L10n.Get("加入失败：") + Screens.ErrText(r));
                 return;
             }
+            ShowPanel(potMode);
+        }
+
+        /// <summary>凭码进入好友私人对决房（调用前已 join 成功，服务端已扣入场费）</summary>
+        public static void ShowPrivate(string roomCode, bool potMode)
+        {
+            ShowPanel(potMode, roomCode);
+        }
+
+        private static void ShowPanel(bool potMode, string roomCode = null)
+        {
             var panel = UITheme.CreatePanel(UIRoot.Instance.CanvasTransform, "panel_dark", Vector2.zero, new Vector2(1040, 1560));
             var rt = panel.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             var self = panel.AddComponent<DuelPanel>();
             self._potMode = potMode;
+            self._roomCode = roomCode;
             self.Bind(panel);
         }
 
@@ -247,9 +263,17 @@ namespace Game.HotUpdate.ChestGame
             {
                 case "snapshot":
                     _phase = e["phase"].Value;
+                    if (!e["roomCode"].IsNull) _roomCode = e["roomCode"].Value;
                     _me = e["me"].IsNull ? null : e["me"];
                     if (!e["opp"].IsNull) _opp = e["opp"];
                     _offerHidden = false;
+                    if (_roomCode != null && _phase == "matching" && _inviteBtn == null)
+                    {
+                        _status.text = L10n.Get("好友房") + " <color=#F5D061>" + _roomCode + "</color> " + L10n.Get("等待好友…（分享房码或点邀请）");
+                        _inviteBtn = UITheme.ThemedButton(transform, new Vector2(0, -170), new Vector2(300, 56),
+                            L10n.Get("邀请好友"), "gold", 24);
+                        _inviteBtn.onClick.AddListener(() => FriendPanel.PickFriendToInvite(_roomCode, _potMode ? "pot" : "duel"));
+                    }
                     Redraw();
                     break;
                 case "joined":
@@ -260,6 +284,7 @@ namespace Game.HotUpdate.ChestGame
                     if (_phase == "countdown") _status.text = "<color=#E05D5D>" + L10n.Get("准备！") + "</color>";
                     else if (_phase == "match")
                     {
+                        if (_inviteBtn != null) { Destroy(_inviteBtn.gameObject); _inviteBtn = null; }
                         _status.text = "<color=#4DD0A5>" + L10n.Get("对决开始！随时可卖给银行锁定分数") + "</color>";
                         PushFeed(L10n.Get("对手与你共享同一金额池（格位不同），留意对手排除的金额！"));
                     }
@@ -319,6 +344,11 @@ namespace Game.HotUpdate.ChestGame
                     else UIRoot.ToastStatic(code);
                     break;
                 }
+                case "closed":
+                    // 好友房解散（等待超时未满员）：入场费已退
+                    _finished = true;
+                    _status.text = "<color=#E05D5D>" + L10n.Get("好友房已解散（入场费已退回）") + "</color>";
+                    break;
                 case "__disconnected":
                     // 断线（切后台/网络抖动）；已结算/已锁分不提示（服务端断线宽限接管）
                     if (!_finished && _phase == "match") _status.text = "<color=#E05D5D>" + L10n.Get("连接已断开，宽限重连中…") + "</color>";

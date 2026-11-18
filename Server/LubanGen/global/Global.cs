@@ -38,6 +38,9 @@ public sealed partial class Global : Luban.BeanBase
         { if(!_buf["DuelChestId"].IsNumber) { throw new SerializationException(); }  DuelChestId = _buf["DuelChestId"]; }
         { if(!_buf["DuelMatchSec"].IsNumber) { throw new SerializationException(); }  DuelMatchSec = _buf["DuelMatchSec"]; }
         { if(!_buf["GemToGold"].IsNumber) { throw new SerializationException(); }  GemToGold = _buf["GemToGold"]; }
+        { if(!_buf["FriendMax"].IsNumber) { throw new SerializationException(); }  FriendMax = _buf["FriendMax"]; }
+        { if(!_buf["FriendReqDailyCap"].IsNumber) { throw new SerializationException(); }  FriendReqDailyCap = _buf["FriendReqDailyCap"]; }
+        { if(!_buf["FriendRoomTimeoutSec"].IsNumber) { throw new SerializationException(); }  FriendRoomTimeoutSec = _buf["FriendRoomTimeoutSec"]; }
     }
 
     public static Global DeserializeGlobal(JSONNode _buf)
@@ -66,6 +69,9 @@ public sealed partial class Global : Luban.BeanBase
     public readonly int DuelChestId;
     public readonly int DuelMatchSec;
     public readonly int GemToGold;
+    public readonly int FriendMax;
+    public readonly int FriendReqDailyCap;
+    public readonly int FriendRoomTimeoutSec;
    
     public const int __ID__ = 1250542702;
     public override int GetTypeId() => __ID__;
@@ -98,6 +104,9 @@ public sealed partial class Global : Luban.BeanBase
         + "DuelChestId:" + DuelChestId + ","
         + "DuelMatchSec:" + DuelMatchSec + ","
         + "GemToGold:" + GemToGold + ","
+        + "FriendMax:" + FriendMax + ","
+        + "FriendReqDailyCap:" + FriendReqDailyCap + ","
+        + "FriendRoomTimeoutSec:" + FriendRoomTimeoutSec + ","
         + "}";
     }
 }

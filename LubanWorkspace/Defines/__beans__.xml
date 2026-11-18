@@ -168,6 +168,10 @@
             <var name="DuelMatchSec" type="int"/>
             <!-- 钻石→金币单向兑换比例（软硬双币隔离：IAP 发钻石，金币不可现金购买） -->
             <var name="GemToGold" type="int"/>
+            <!-- 好友系统：好友上限 / 每日发出请求数上限（防骚扰） / 私人房不满员解散超时秒 -->
+            <var name="FriendMax" type="int"/>
+            <var name="FriendReqDailyCap" type="int"/>
+            <var name="FriendRoomTimeoutSec" type="int"/>
         </bean>
     </module>
 

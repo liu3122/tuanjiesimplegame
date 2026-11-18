@@ -20,6 +20,9 @@
     "DuelStake": 100,
     "DuelChestId": 1,
     "DuelMatchSec": 120,
-    "GemToGold": 10
+    "GemToGold": 10,
+    "FriendMax": 50,
+    "FriendReqDailyCap": 20,
+    "FriendRoomTimeoutSec": 300
   }
 ]

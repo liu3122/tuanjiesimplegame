@@ -18,13 +18,22 @@ namespace Game.HotUpdate.ChestGame
 
         public void Connect(int roomId)
         {
+            ConnectByRoom(roomId.ToString());
+        }
+
+        /// <summary>好友私人房：以 6 位房间码连房（服务端 roomId 参数兼容档位 Id 与房码）</summary>
+        public void ConnectByRoom(string roomIdOrCode)
+        {
             _ws = WsConnectionFactory.Create();
-            string url = WsConnectionFactory.ToWsUrl(ApiClient.BaseUrl, $"/ws/rush?roomId={roomId}&token={ApiClient.Token}");
+            string url = WsConnectionFactory.ToWsUrl(ApiClient.BaseUrl, $"/ws/rush?roomId={roomIdOrCode}&token={ApiClient.Token}");
             _ws.Connect(url,
                 msg => _inbox.Enqueue(msg),
                 () => _inbox.Enqueue("{\"type\":\"__disconnected\"}")); // 断线通知面板（切后台 socket 必断）
-            Debug.Log($"[RushWs] 连接房间 {roomId}（URL 含鉴权 token，不打日志）");
+            Debug.Log($"[RushWs] 连接房间 {roomIdOrCode}（URL 含鉴权 token，不打日志）");
         }
+
+        /// <summary>好友房房主提前开局（不足满员）</summary>
+        public void Start() => _ws?.Send("{\"type\":\"start\"}");
 
         /// <summary>主线程每帧调用：派发收到的事件</summary>
         public void Pump(System.Action<JSONNode> handler)

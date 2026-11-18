@@ -48,5 +48,10 @@
     "Id": "referral",
     "Enabled": true,
     "Desc": "邀请双奖（绑定后新人首箱结算，双方得金币）"
+  },
+  {
+    "Id": "friend",
+    "Enabled": true,
+    "Desc": "好友系统：好友码互加/好友私人房/邀请"
   }
 ]

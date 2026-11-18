@@ -24,6 +24,8 @@ namespace SimpleGameServer.Game
         public const string Iap = "iap";
         /// <summary>宅邸改造（金币指数回收玩法）</summary>
         public const string Manor = "manor";
+        /// <summary>好友系统（好友码互加/好友私人房/邀请推送）</summary>
+        public const string Friend = "friend";
 
         public static bool IsOn(string id)
         {

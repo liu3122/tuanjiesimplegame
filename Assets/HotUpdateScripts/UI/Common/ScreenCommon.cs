@@ -45,6 +45,15 @@ namespace Game.HotUpdate.ChestGame
             if (err == "AUCTION_ENDED") return L10n.Get("拍卖已结束");
             if (err == "RUSH_LIMIT") return L10n.Get("今日次数已用完");
             if (err == "WRONG_SECRET") return L10n.Get("登录凭证不符：该昵称已在本机之外的设备登录过，请换昵称或清档重试");
+            if (err == "FRIEND_SELF") return L10n.Get("不能添加自己为好友");
+            if (err == "FRIEND_EXISTS") return L10n.Get("你们已经是好友了");
+            if (err == "ALREADY_REQUESTED") return L10n.Get("已发送过申请，等待对方处理");
+            if (err == "FRIEND_LIMIT") return L10n.Get("好友数已达上限");
+            if (err == "REQ_LIMIT") return L10n.Get("今日申请次数已达上限或对方申请箱已满");
+            if (err == "FRIEND_NOT_FOUND") return L10n.Get("好友码无效");
+            if (err == "REQ_NOT_FOUND") return L10n.Get("该申请不存在（可能已处理）");
+            if (err == "ROOM_NOT_FOUND") return L10n.Get("房间不存在或已结束");
+            if (err == "ROOM_NEED_TWO") return L10n.Get("至少 2 名玩家才能开局");
             if (err == "MANOR_MAX") return L10n.Get("宅邸已全部完工");
             if (err == "BAD_CHOICE") return L10n.Get("请先选择装饰方案");
             if (err == "NOT_ENOUGH_GEMS") return L10n.Get("钻石不足");

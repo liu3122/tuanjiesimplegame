@@ -62,10 +62,17 @@ namespace Game.HotUpdate.ChestGame
                 L10n.Get("宅 邸"), "gold", 24);
             manorBtn.name = "btn_manor_entry";
             manorBtn.onClick.AddListener(() => ManorPanel.Show());
+            // 好友（好友码互加/好友私人房；红点=有待处理申请，弹窗=收到房间邀请）
+            var friendBtn = UITheme.ThemedButton(root.transform, new Vector2(-190, -124), new Vector2(180, 56),
+                L10n.Get("好 友"), "green", 24);
+            friendBtn.name = "btn_friend_entry";
+            friendBtn.onClick.AddListener(() => FriendPanel.Show());
+            var poller = root.AddComponent<FriendInboxPoller>();
+            poller.Bind(friendBtn);
             UIRoot.Instance.RefreshTop();
 
-            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject, manorBtn.gameObject);
-            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject, manorBtn.gameObject);
+            ApplyFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject, manorBtn.gameObject, friendBtn.gameObject);
+            _ = RefreshFeatureGates(root, duelBtn.gameObject, adBtn.gameObject, questBtn.gameObject, signBtn.gameObject, inviteBtn.gameObject, manorBtn.gameObject, friendBtn.gameObject);
             _ = MaybeShowTutorial();
         }
 
@@ -105,7 +112,7 @@ namespace Game.HotUpdate.ChestGame
         }
 
         /// <summary>玩法开关：隐藏关闭的入口（大厅卡片 + 对决/福利按钮）</summary>
-        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null, GameObject manorBtn = null)
+        private static void ApplyFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null, GameObject manorBtn = null, GameObject friendBtn = null)
         {
             if (root == null) return;
             if (OnlineState.State == null) return; // 无快照时默认显示
@@ -118,11 +125,12 @@ namespace Game.HotUpdate.ChestGame
             if (signBtn != null) signBtn.SetActive(OnlineState.FeatureOn("sign"));
             if (inviteBtn != null) inviteBtn.SetActive(OnlineState.FeatureOn("referral"));
             if (manorBtn != null) manorBtn.SetActive(OnlineState.FeatureOn("manor"));
+            if (friendBtn != null) friendBtn.SetActive(OnlineState.FeatureOn("friend"));
         }
 
-        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null, GameObject manorBtn = null)
+        private static async Task RefreshFeatureGates(GameObject root, GameObject duelBtn, GameObject adBtn = null, GameObject questBtn = null, GameObject signBtn = null, GameObject inviteBtn = null, GameObject manorBtn = null, GameObject friendBtn = null)
         {
-            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn, signBtn, inviteBtn, manorBtn);
+            if (await OnlineState.Refresh() && root != null) ApplyFeatureGates(root, duelBtn, adBtn, questBtn, signBtn, inviteBtn, manorBtn, friendBtn);
         }
 
         /// <summary>邀请双奖面板：我的邀请码 / 复制邀请文案 / 新人绑定邀请人</summary>

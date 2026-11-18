@@ -33,6 +33,10 @@ namespace SimpleGameServer.Game
         private Timer? _timer;
 
         public long RoomId => _config.Id;
+        /// <summary>好友私人房房间码（6 位；null=公共档位房）。凭码即入，不补机器人，房主可提前开局</summary>
+        public string RoomCode { get; }
+        public bool IsPrivate => RoomCode != null;
+        private readonly long _hostId;
         public int WaitingCount { get { lock (_gate) return _players.Count(p => p.Key > 0); } }
 
         public RushRoom(GameStore store, RushManager manager, cfg.rush.RushRoom config)
@@ -40,6 +44,15 @@ namespace SimpleGameServer.Game
             _store = store;
             _manager = manager;
             _config = config;
+        }
+
+        public RushRoom(GameStore store, RushManager manager, cfg.rush.RushRoom config, string roomCode, long hostId)
+        {
+            _store = store;
+            _manager = manager;
+            _config = config;
+            RoomCode = roomCode;
+            _hostId = hostId;
         }
 
         // ---------------- 加入与连接 ----------------
@@ -91,7 +104,7 @@ namespace SimpleGameServer.Game
                 _sockets[playerId] = socket;
             }
             // 发送当前状态快照
-            SendTo(playerId, Snapshot());
+            SendTo(playerId, Snapshot(playerId));
         }
 
         /// <summary>连接断开。只清理"仍是这条连接"的槽位——玩家重连后旧连接的 finally 不许把新连接踢掉</summary>
@@ -106,12 +119,27 @@ namespace SimpleGameServer.Game
 
         // ---------------- 机器人与调度 ----------------
 
-        /// <summary>开始匹配流程：等待真人 → 机器人补满 → 倒计时 → 抢 → 结算</summary>
+        /// <summary>开始匹配流程：公共房=等待真人→机器人补满；好友房=等真人满员/房主开局，超时解散</summary>
         public void StartLifecycle()
         {
             var g = GameTables.Tables.TbGlobal;
-            _phaseEndUtc = DateTime.UtcNow.AddSeconds(g.RushBotFillDelaySec);
+            _phaseEndUtc = DateTime.UtcNow.AddSeconds(IsPrivate
+                ? RoomOptions.ResolvePrivateTimeoutSec()
+                : g.RushBotFillDelaySec);
             _timer = new Timer(_ => Tick(), null, 500, 250);
+        }
+
+        /// <summary>好友房房主提前开局（不足满员也开：奖池=门票×实际人数×倍率）；至少 2 人才有对抗</summary>
+        public (bool ok, string err) TryStart(long playerId)
+        {
+            lock (_gate)
+            {
+                if (!IsPrivate || _phase != Phase.Matching) return (false, "NOT_MATCHING");
+                if (playerId != _hostId) return (false, "NOT_HOST");
+                if (_players.Count(p => p.Key > 0) < 2) return (false, "ROOM_NEED_TWO");
+                BeginCountdown();
+                return (true, null);
+            }
         }
 
         private void Tick()
@@ -123,7 +151,19 @@ namespace SimpleGameServer.Game
                     switch (_phase)
                     {
                         case Phase.Matching:
-                            if (DateTime.UtcNow >= _phaseEndUtc || _players.Count >= _config.PlayerCount)
+                            if (IsPrivate)
+                            {
+                                // 好友房：不补机器人；满员自动开局，不足员由房主 TryStart，超时未满解散退款
+                                if (_players.Count >= _config.PlayerCount)
+                                {
+                                    BeginCountdown();
+                                }
+                                else if (DateTime.UtcNow >= _phaseEndUtc)
+                                {
+                                    Dissolve();
+                                }
+                            }
+                            else if (DateTime.UtcNow >= _phaseEndUtc || _players.Count >= _config.PlayerCount)
                             {
                                 // 机器人补位
                                 while (_players.Count < _config.PlayerCount)
@@ -269,14 +309,36 @@ namespace SimpleGameServer.Game
             _manager.OnRoomFinished(this);
         }
 
+        /// <summary>私人房解散（等待超时未开局）：逐真人退门票 + 清质押 + 广播 closed（调用方持 _gate）</summary>
+        private void Dissolve()
+        {
+            if (_phase == Phase.Settled) return;
+            _phase = Phase.Settled;
+            foreach (var p in _players.Values.Where(p => p.Id > 0).ToList())
+            {
+                lock (p.Sync)
+                {
+                    p.Gold += _config.Ticket;
+                    Db.SavePlayer(p);
+                }
+                Db.ClearStake(p.Id, "rush", _config.Id);
+                Db.AddGoldTx(p.Id, _config.Ticket, "friendroom_refund", _config.Id);
+            }
+            Broadcast(new { type = "closed", reason = "timeout" });
+            _timer?.Dispose();
+            _manager.OnRoomFinished(this);
+        }
+
         // ---------------- 通信 ----------------
 
-        private object Snapshot()
+        private object Snapshot(long forPid)
         {
             return new
             {
                 type = "snapshot",
                 roomId = _config.Id,
+                roomCode = RoomCode, // 私人房展示房码；公共房为 null
+                isHost = IsPrivate && forPid == _hostId,
                 phase = _phase.ToString().ToLowerInvariant(),
                 players = _players.Values.Select(p => new { name = p.Name, isBot = p.Id < 0 }).ToList(),
                 countdownSec = _phase == Phase.Countdown ? (int)Math.Ceiling((_phaseEndUtc - DateTime.UtcNow).TotalSeconds) : 0,
@@ -320,13 +382,15 @@ namespace SimpleGameServer.Game
         }
     }
 
-    /// <summary>抢宝房管理器</summary>
+    /// <summary>抢宝房管理器：公共档位房 + 好友私人房（凭码）</summary>
     public class RushManager
     {
         private readonly GameStore _store;
         private readonly GameService _svc;
         private readonly ConcurrentDictionary<int, RushRoom> _rooms = new();
         private readonly ConcurrentDictionary<int, byte> _starting = new();
+        /// <summary>好友私人房：房间码 → 房间</summary>
+        private readonly ConcurrentDictionary<string, RushRoom> _private = new();
         /// <summary>Join 串行锁（lock(this) 可被外部锁死，改私有对象）</summary>
         private readonly object _gate = new();
 
@@ -360,6 +424,43 @@ namespace SimpleGameServer.Game
             return room;
         }
 
+        public RushRoom? GetPrivate(string code)
+        {
+            _private.TryGetValue((code ?? "").Trim(), out var room);
+            return room;
+        }
+
+
+        /// <summary>创建好友私人抢宝房（档位由房主选择）：返回 6 位房间码</summary>
+        public (bool ok, string err, RushRoom? room, string? code) CreatePrivate(Player player, int configId)
+        {
+            var config = GameTables.Tables.TbRushRoom.GetOrDefault(configId);
+            if (config == null) return (false, "ROOM_NOT_FOUND", null, null);
+            lock (_gate)
+            {
+                string code;
+                do
+                {
+                    code = Random.Shared.Next(100000, 1000000).ToString();
+                } while (_private.ContainsKey(code));
+                var fresh = new RushRoom(_store, this, config, code, player.Id);
+                var (ok, err) = fresh.Join(player);
+                if (!ok) return (ok, err, null, null);
+                _private[code] = fresh;
+                _ = Task.Run(() => fresh.StartLifecycle()); // 私人房不进 _rooms，无公共档位替换竞态
+                return (true, null, fresh, code);
+            }
+        }
+
+        /// <summary>凭码加入好友私人抢宝房（码即门票）</summary>
+        public (bool ok, string err, RushRoom? room) JoinPrivate(string code, Player player)
+        {
+            if (!_private.TryGetValue((code ?? "").Trim(), out var room))
+                return (false, "ROOM_NOT_FOUND", null);
+            var (ok, err) = room.Join(player); // 幂等重进不重复扣费/计数
+            return (ok, err, ok ? room : null);
+        }
+
         public (bool ok, string err, RushRoom? room) Join(int roomId, Player player)
         {
             var config = GameTables.Tables.TbRushRoom.GetOrDefault(roomId);
@@ -389,7 +490,12 @@ namespace SimpleGameServer.Game
 
         public void OnRoomFinished(RushRoom room)
         {
-            // 房间结束：若该档位无等待中房间，移除（下次 join 新建）
+            // 房间结束：若该档位无等待中房间，移除（下次 join 新建）；私人房按房码移除（无锁，Settle 在 room 锁内回调）
+            if (room.RoomCode != null)
+            {
+                _private.TryRemove(room.RoomCode, out _);
+                return;
+            }
             if (_rooms.TryGetValue((int)room.RoomId, out var cur) && cur == room)
             {
                 _rooms.TryRemove((int)room.RoomId, out _);

@@ -39,13 +39,17 @@ namespace SimpleGameServer.Game
         public int DuelId { get; }
         /// <summary>竞宝房模式：入场费=宝箱售价，胜者独得两个宝箱的结算总价值（扣抽成）；平局各得自己箱子的价值</summary>
         public bool PotMode { get; }
+        /// <summary>好友私人房房间码（6 位数字；null=公共匹配房）。凭码即入，不补机器人，超时解散退款</summary>
+        public string RoomCode { get; }
+        public bool IsPrivate => RoomCode != null;
 
-        public DuelRoom(GameStore store, DuelManager manager, int duelId, bool potMode = false)
+        public DuelRoom(GameStore store, DuelManager manager, int duelId, bool potMode = false, string roomCode = null)
         {
             _store = store;
             _manager = manager;
             DuelId = duelId;
             PotMode = potMode;
+            RoomCode = roomCode;
         }
 
         /// <summary>入场费：普通对决=DuelStake；竞宝房=对决宝箱售价</summary>
@@ -56,6 +60,8 @@ namespace SimpleGameServer.Game
         public int WaitingCount { get { lock (_gate) return _players.Count(p => p.Key > 0); } }
         public bool Joinable { get { lock (_gate) return _phase == Phase.Matching && _players.Count < 2; } }
         public bool HasPlayer(long pid) { lock (_gate) return _players.ContainsKey(pid); }
+        /// <summary>玩家在本房且对局未结束（未锁定/未结算）——防一人多房</summary>
+        public bool PlayerActive(long pid) { lock (_gate) return _players.ContainsKey(pid) && !_finished.Contains(pid); }
 
         // ---------------- 加入与连接 ----------------
 
@@ -111,7 +117,10 @@ namespace SimpleGameServer.Game
         public void StartLifecycle()
         {
             var g = GameTables.Tables.TbGlobal;
-            _phaseEndUtc = DateTime.UtcNow.AddSeconds(g.RushBotFillDelaySec);
+            // 私人房：等待期为"解散超时"（不补机器人）；公共房：机器人补位等待
+            _phaseEndUtc = DateTime.UtcNow.AddSeconds(IsPrivate
+                ? RoomOptions.ResolvePrivateTimeoutSec()
+                : g.RushBotFillDelaySec);
             _timer = new Timer(_ => Tick(), null, 500, 250);
         }
 
@@ -124,7 +133,19 @@ namespace SimpleGameServer.Game
                     switch (_phase)
                     {
                         case Phase.Matching:
-                            if (DateTime.UtcNow >= _phaseEndUtc || _players.Count >= 2)
+                            if (IsPrivate)
+                            {
+                                // 好友房：不补机器人；满 2 人直接倒计时，超时未满解散退款
+                                if (_players.Count >= 2)
+                                {
+                                    BeginCountdown();
+                                }
+                                else if (DateTime.UtcNow >= _phaseEndUtc)
+                                {
+                                    Dissolve("timeout");
+                                }
+                            }
+                            else if (DateTime.UtcNow >= _phaseEndUtc || _players.Count >= 2)
                             {
                                 while (_players.Count < 2)
                                 {
@@ -428,40 +449,44 @@ namespace SimpleGameServer.Game
                 win = winner == id,
             }).OrderByDescending(b => b.score).ToList();
 
-            // 天梯 Elo + 经验（真人）：双真人标准 Elo；对机器人小分值防刷
-            var humans = ids.Where(id => id > 0).OrderBy(id => id).ToList();
-            if (humans.Count == 2)
+            // 天梯 Elo + 经验（真人）：双真人标准 Elo；对机器人小分值防刷。
+            // 好友私人局跳过全部进度（Elo/经验/任务）——防熟人互刷；金币结算照常（奖池零和+抽成，无刷金空间）
+            if (!IsPrivate)
             {
-                var pa = _players[humans[0]];
-                var pb = _players[humans[1]];
-                double sa = winner == 0 ? 0.5 : (winner == pa.Id ? 1 : 0);
-                lock (pa.Sync)
+                var humans = ids.Where(id => id > 0).OrderBy(id => id).ToList();
+                if (humans.Count == 2)
                 {
-                    lock (pb.Sync)
+                    var pa = _players[humans[0]];
+                    var pb = _players[humans[1]];
+                    double sa = winner == 0 ? 0.5 : (winner == pa.Id ? 1 : 0);
+                    lock (pa.Sync)
                     {
-                        int ra = pa.DuelRating, rb = pb.DuelRating;
-                        pa.DuelRating = Math.Max(100, Elo.NewRating(ra, rb, sa));
-                        pb.DuelRating = Math.Max(100, Elo.NewRating(rb, ra, 1 - sa));
+                        lock (pb.Sync)
+                        {
+                            int ra = pa.DuelRating, rb = pb.DuelRating;
+                            pa.DuelRating = Math.Max(100, Elo.NewRating(ra, rb, sa));
+                            pb.DuelRating = Math.Max(100, Elo.NewRating(rb, ra, 1 - sa));
+                        }
                     }
                 }
-            }
-            else if (humans.Count == 1)
-            {
-                var h = _players[humans[0]];
-                lock (h.Sync)
+                else if (humans.Count == 1)
                 {
-                    h.DuelRating = Math.Max(100, h.DuelRating + (winner == humans[0] ? 4 : (winner == 0 ? 0 : -2)));
+                    var h = _players[humans[0]];
+                    lock (h.Sync)
+                    {
+                        h.DuelRating = Math.Max(100, h.DuelRating + (winner == humans[0] ? 4 : (winner == 0 ? 0 : -2)));
+                    }
                 }
-            }
-            foreach (var pid in humans)
-            {
-                var p = _players[pid];
-                lock (p.Sync)
+                foreach (var pid in humans)
                 {
-                    Levels.AddXp(p, winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
-                    Quests.Progress(p, "duel");
-                    if (pid == winner) Quests.Progress(p, "duelwin");
-                    Db.SavePlayer(p);
+                    var p = _players[pid];
+                    lock (p.Sync)
+                    {
+                        Levels.AddXp(p, winner == 0 ? Levels.XpDuelTie : (pid == winner ? Levels.XpDuelWin : 0));
+                        Quests.Progress(p, "duel");
+                        if (pid == winner) Quests.Progress(p, "duelwin");
+                        Db.SavePlayer(p);
+                    }
                 }
             }
 
@@ -470,6 +495,30 @@ namespace SimpleGameServer.Game
                 long myDelta = potPayout(pid) - stake;
                 SendTo(pid, new { type = "settled", board, myDelta, tie = winner == 0, potMode = PotMode });
                 if (pid > 0) Db.ClearStake(pid, "duel", DuelId); // 正常结算，清除重启退款凭据
+            }
+            _grace.Clear();
+            _timer?.Dispose();
+            _manager.OnRoomFinished(this);
+        }
+
+        /// <summary>私人房解散（等待超时未满员）：逐真人退入场费 + 清质押 + 广播 closed。
+        /// 调用方持 _gate（Timer Tick）；清理经 OnRoomFinished 保持无锁铁律</summary>
+        private void Dissolve(string reason)
+        {
+            if (_phase == Phase.Settled) return;
+            _phase = Phase.Settled;
+            long stake = Stake;
+            foreach (var pid in _players.Keys.Where(id => id > 0).ToList())
+            {
+                var p = _players[pid];
+                lock (p.Sync)
+                {
+                    p.Gold += stake;
+                    Db.SavePlayer(p);
+                }
+                Db.ClearStake(pid, "duel", DuelId);
+                Db.AddGoldTx(pid, stake, "friendroom_refund", DuelId);
+                SendTo(pid, new { type = "closed", reason });
             }
             _grace.Clear();
             _timer?.Dispose();
@@ -489,6 +538,7 @@ namespace SimpleGameServer.Game
                     type = "snapshot",
                     duelId = DuelId,
                     potMode = PotMode,
+                    roomCode = RoomCode, // 私人房展示房码；公共房为 null
                     phase = _phase.ToString().ToLowerInvariant(),
                     players = _players.Values.Select(p => new { name = p.Name, isBot = p.Id < 0 }).ToList(),
                     countdownSec = _phase == Phase.Countdown ? (int)Math.Ceiling((_phaseEndUtc - DateTime.UtcNow).TotalSeconds) : 0,
@@ -577,7 +627,7 @@ namespace SimpleGameServer.Game
         }
     }
 
-    /// <summary>镜像对决管理器：普通/竞宝双队列（1v1），结束即回收</summary>
+    /// <summary>镜像对决管理器：普通/竞宝双队列（1v1）+ 好友私人房（凭码），结束即回收</summary>
     public class DuelManager
     {
         private readonly GameStore _store;
@@ -586,11 +636,23 @@ namespace SimpleGameServer.Game
         private DuelRoom? _currentPot;
         /// <summary>进行中房间（含被新 Join 替换下仍在跑的老房间，其玩家重连不再 404）</summary>
         private readonly ConcurrentDictionary<int, DuelRoom> _active = new();
+        /// <summary>好友私人房：房间码 → 房间（凭码即入，不参与公共匹配）</summary>
+        private readonly ConcurrentDictionary<string, DuelRoom> _private = new();
         private int _nextDuelId = 1;
 
         public DuelManager(GameStore store)
         {
             _store = store;
+        }
+
+        /// <summary>玩家是否仍在某局未结束的对决中（防重复加入多房导致 FindRoomOf 错乱）</summary>
+        public bool PlayerActive(long playerId)
+        {
+            foreach (var room in _active.Values)
+            {
+                if (room.PlayerActive(playerId)) return true;
+            }
+            return false;
         }
 
         public (bool ok, string err, DuelRoom? room) Join(Player player, bool potMode = false)
@@ -601,6 +663,7 @@ namespace SimpleGameServer.Game
                 {
                     return (false, "LEVEL_LOCKED", null);
                 }
+                if (PlayerActive(player.Id)) return (false, "ROOM_RUNNING", null);
                 var current = potMode ? _currentPot : _current;
                 if (current != null && current.Joinable)
                 {
@@ -618,10 +681,45 @@ namespace SimpleGameServer.Game
             }
         }
 
+        /// <summary>创建好友私人房（Mode=friend 无 Code）：返回 6 位房间码。不进公共匹配队列</summary>
+        public (bool ok, string err, DuelRoom? room, string? code) CreatePrivate(Player player, bool potMode)
+        {
+            lock (_gate)
+            {
+                if (potMode && player.Level < Levels.PotDuelMinLevel)
+                {
+                    return (false, "LEVEL_LOCKED", null, null);
+                }
+                if (PlayerActive(player.Id)) return (false, "ROOM_RUNNING", null, null);
+                string code;
+                do
+                {
+                    code = Random.Shared.Next(100000, 1000000).ToString();
+                } while (_private.ContainsKey(code)); // 码空间 90 万，撞码重试即可
+                var fresh = new DuelRoom(_store, this, _nextDuelId++, potMode, code);
+                var (ok, err) = fresh.Join(player);
+                if (!ok) return (ok, err, null, null);
+                _private[code] = fresh;
+                _active[fresh.DuelId] = fresh; // FindRoomOf（WS 连接）同样覆盖私人房
+                _ = Task.Run(() => fresh.StartLifecycle());
+                return (true, null, fresh, code);
+            }
+        }
+
+        /// <summary>凭码加入好友私人房（Mode=friend 带 Code）：码即门票，不校验好友关系</summary>
+        public (bool ok, string err, DuelRoom? room) JoinPrivate(string code, Player player)
+        {
+            if (!_private.TryGetValue((code ?? "").Trim(), out var room))
+                return (false, "ROOM_NOT_FOUND", null);
+            if (PlayerActive(player.Id)) return (false, "ROOM_RUNNING", null);
+            var (ok, err) = room.Join(player); // 幂等：已在房内重进不重复扣费
+            return (ok, err, ok ? room : null);
+        }
+
         public DuelRoom? FindRoomOf(long playerId)
         {
             // 无锁扫描（不持 manager 锁）：Settle 在 room 锁内回调 OnRoomFinished，
-            // 若此处再拿 manager 锁会与 Join（manager→room）构成相反序
+            // 若此处再拿 manager 锁会与 Join 的 manager→room 构成相反序
             foreach (var room in _active.Values)
             {
                 if (room.HasPlayer(playerId)) return room;
@@ -634,6 +732,7 @@ namespace SimpleGameServer.Game
             // 必须无锁（Settle 持 room._gate 时调用；旧实现取 manager._gate 与 Join 的 manager→room 成 AB-BA 死锁，
             // 一旦触发：该房间 Timer 永久持锁，所有后续 duel join 全部卡死）
             _active.TryRemove(room.DuelId, out _);
+            if (room.RoomCode != null) _private.TryRemove(room.RoomCode, out _);
             Interlocked.CompareExchange(ref _current, null, room);
             Interlocked.CompareExchange(ref _currentPot, null, room);
         }

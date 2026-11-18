@@ -21,6 +21,10 @@ namespace Game.HotUpdate.ChestGame
         private Text _feed;
         private Transform _gameArea;
         private readonly List<string> _feedLines = new List<string>();
+        /// <summary>好友私人房房间码（null=公共档位房）</summary>
+        private string _privateCode;
+        /// <summary>好友房房主"提前开局"按钮（快照 isHost 时显示）</summary>
+        private Button _startBtn;
 
         public static async void Show()
         {
@@ -28,6 +32,20 @@ namespace Game.HotUpdate.ChestGame
             if (root == null) { UIRoot.ToastStatic(L10n.Get("界面加载失败")); return; }
             var panel = root.GetComponent<RushPanel>() ?? root.AddComponent<RushPanel>();
             panel.Bind(root);
+        }
+
+        /// <summary>凭码进入好友私人抢宝房（已在好友面板完成 join，这里只连房）</summary>
+        public static async void ShowPrivate(string code)
+        {
+            var root = await UIManager.ShowAsync("RushScreen");
+            if (root == null) { UIRoot.ToastStatic(L10n.Get("界面加载失败")); return; }
+            var panel = root.GetComponent<RushPanel>() ?? root.AddComponent<RushPanel>();
+            panel._privateCode = code;
+            panel.Bind(root);
+            var list = root.transform.Find("room_list");
+            if (list != null) list.gameObject.SetActive(false); // 私人房不展示档位选择
+            var room = GameConfig.Tables.TbRushRoom.GetOrDefault(1); // 展示用默认档位文案（标题/颜色）
+            panel.EnterGame(room);
         }
 
         private void Bind(GameObject root)
@@ -125,7 +143,8 @@ namespace Game.HotUpdate.ChestGame
                 _slots[i].GetComponent<Button>().interactable = true;
             }
             _ws = new RushWsClient();
-            _ws.Connect(room.Id);
+            if (_privateCode != null) _ws.ConnectByRoom(_privateCode);
+            else _ws.Connect(room.Id);
         }
 
         private void Update()
@@ -139,7 +158,28 @@ namespace Game.HotUpdate.ChestGame
             switch (type)
             {
                 case "snapshot":
-                    break; // 快照信息由后续事件增量补齐
+                {
+                    // 好友私人房：展示房码；房主且等待中给"提前开局"按钮
+                    var code = e["roomCode"];
+                    if (code != null && !code.IsNull)
+                    {
+                        _privateCode = code.Value;
+                        PushFeed(L10n.Get("好友房房间码") + " <color=#F5D061>" + _privateCode + "</color>（分享给好友凭码加入）");
+                        if (e["isHost"].AsBool && e["phase"].Value == "matching" && _startBtn == null)
+                        {
+                            _startBtn = UITheme.ThemedButton(_gameArea, new Vector2(0, -460), new Vector2(320, 64),
+                                L10n.Get("开始游戏（不足员可开）"), "green", 22);
+                            _startBtn.onClick.AddListener(() => _ws?.Start());
+                        }
+                    }
+                    break;
+                }
+                case "closed":
+                    // 好友房解散（等待超时未开局）：已退款
+                    _status.text = L10n.Get("好友房已解散（入场费已退回）");
+                    _ws?.Close();
+                    _startBtn = null;
+                    break;
                 case "joined":
                     PushFeed(e["name"].Value + " 进入房间（" + e["count"].AsInt + "/" + e["need"].AsInt + "）");
                     break;
@@ -148,11 +188,13 @@ namespace Game.HotUpdate.ChestGame
                     string phase = e["phase"].Value;
                     if (phase == "countdown")
                     {
+                        if (_startBtn != null) { Destroy(_startBtn.gameObject); _startBtn = null; }
                         _status.text = "<color=#E05D5D>准备！</color>";
                         PushFeed(L10n.Get("房间已满，即将开始…"));
                     }
                     else if (phase == "rush")
                     {
+                        if (_startBtn != null) { Destroy(_startBtn.gameObject); _startBtn = null; }
                         var arr = e["amounts"];
                         _amounts = new int[arr.Count];
                         for (int i = 0; i < arr.Count; i++) _amounts[i] = arr[i].AsInt;

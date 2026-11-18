@@ -201,6 +201,45 @@ namespace Game.HotUpdate.ChestGame
         public static Task<JSONNode> ManorBuildAsync(int choice) =>
             PostAsync("/api/manor/build", $"{{\"choice\":{choice}}}");
 
+        // ---------------- 好友系统（好友码互加 / 私人房 / 邀请推送） ----------------
+
+        public static Task<JSONNode> FriendListAsync() => GetAsync("/api/friend/list");
+
+        /// <summary>大厅轻量轮询：申请数 + 房间邀请（读即消费）</summary>
+        public static Task<JSONNode> FriendInboxAsync() => GetAsync("/api/friend/inbox");
+
+        public static Task<JSONNode> FriendRequestAsync(string code) =>
+            PostAsync("/api/friend/request", $"{{\"code\":\"{EscapeJson(code)}\"}}");
+
+        public static Task<JSONNode> FriendAcceptAsync(long fromId) =>
+            PostAsync("/api/friend/accept", $"{{\"fromId\":{fromId}}}");
+
+        public static Task<JSONNode> FriendRejectAsync(long fromId) =>
+            PostAsync("/api/friend/reject", $"{{\"fromId\":{fromId}}}");
+
+        public static Task<JSONNode> FriendRemoveAsync(long friendId) =>
+            PostAsync("/api/friend/remove", $"{{\"fromId\":{friendId}}}");
+
+        /// <summary>房主向好友推送私人房邀请（仅好友）</summary>
+        public static Task<JSONNode> FriendInviteAsync(long toId, string code, string mode = "duel") =>
+            PostAsync("/api/friend/invite", $"{{\"toId\":{toId},\"code\":\"{EscapeJson(code)}\",\"mode\":\"{mode}\"}}");
+
+        /// <summary>创建好友私人对决房（pot=true 竞宝规则），返回 roomCode</summary>
+        public static Task<JSONNode> CreatePrivateDuelAsync(bool pot = false) =>
+            PostAsync("/api/duel/join", $"{{\"mode\":\"friend\",\"pot\":{(pot ? "true" : "false")}}}");
+
+        /// <summary>凭码加入好友私人对决房</summary>
+        public static Task<JSONNode> JoinPrivateDuelAsync(string code) =>
+            PostAsync("/api/duel/join", $"{{\"mode\":\"friend\",\"code\":\"{EscapeJson(code)}\"}}");
+
+        /// <summary>创建好友私人抢宝房（档位 roomId），返回 roomCode</summary>
+        public static Task<JSONNode> CreatePrivateRushAsync(int roomId) =>
+            PostAsync("/api/rush/private", $"{{\"roomId\":{roomId}}}");
+
+        /// <summary>凭码加入好友私人抢宝房</summary>
+        public static Task<JSONNode> JoinPrivateRushAsync(string code) =>
+            PostAsync("/api/rush/join", $"{{\"code\":\"{EscapeJson(code)}\"}}");
+
         // ---------------- 基础请求 ----------------
 
         private static Task<JSONNode> GetAsync(string path)

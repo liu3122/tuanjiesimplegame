@@ -11,6 +11,7 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<GameStore>();
 builder.Services.AddSingleton<AuctionEvents>();
 builder.Services.AddSingleton<GameService>();
+builder.Services.AddSingleton<FriendService>();
 builder.Services.AddHostedService<AuctionBotService>();
 builder.Services.AddHostedService<SeasonService>();
 builder.Services.AddHostedService<DbWriterService>();
@@ -33,6 +34,14 @@ Db.LoadSeasonRewards(store0);   // 赛季奖励缓存内存化
 Db.RefundOrphanStakes(store0);  // 房间随进程消失：退还抢宝门票/对决入场费
 PayService.LoadConfig(app.Configuration);  // 内购：沙箱开关 + 各店凭证（配置键见 PayService）
 Db.LoadPayOrders(PayService.Restore);      // 恢复订单簿（paid 订单防重启后收据重放）
+// 好友系统：关系/申请恢复 + 私人房超时覆盖（联调/测试用 --FriendRoomTimeoutSec 8）
+var friends = app.Services.GetRequiredService<FriendService>();
+Db.LoadFriends(friends.LoadLink, friends.LoadReq);
+if (int.TryParse(app.Configuration["FriendRoomTimeoutSec"], out var friendTimeout))
+{
+    RoomOptions.PrivateTimeoutSec = friendTimeout;
+    app.Logger.LogInformation("私人房解散超时覆盖：{Sec}s", friendTimeout);
+}
 app.Logger.LogInformation("Luban 配置加载完成：宝箱 {Chest} 档，角色 {Char} 个",
     GameTables.Tables.TbChest.DataList.Count, GameTables.Tables.TbCharacter.DataList.Count);
 
@@ -228,6 +237,70 @@ app.MapGet("/api/duel/rank", (HttpRequest http, GameService svc) =>
     return Results.Json(new { ok = true, data = svc.DuelRankList(p) });
 });
 
+// ---------- 好友系统 ----------
+app.MapPost("/api/friend/request", (FriendReq req, HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = svc.Request(p, req?.Code);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/friend/accept", (FriendTargetReq req, HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = svc.Accept(p, req?.FromId ?? 0);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/friend/reject", (FriendTargetReq req, HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = svc.Reject(p, req?.FromId ?? 0);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapPost("/api/friend/remove", (FriendTargetReq req, HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, data) = svc.Remove(p, req?.FromId ?? 0);
+    return Results.Json(new { ok, error = err, data });
+});
+
+app.MapGet("/api/friend/list", (HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    return Results.Json(new { ok = true, data = svc.List(p) });
+});
+
+/// <summary>大厅轻量轮询：申请数 + 房间邀请（读即消费）</summary>
+app.MapGet("/api/friend/inbox", (HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    return Results.Json(new { ok = true, data = svc.Inbox(p) });
+});
+
+/// <summary>房主推送私人房邀请（仅好友）</summary>
+app.MapPost("/api/friend/invite", (FriendInviteReq req, HttpRequest http, FriendService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err) = svc.Invite(p, req?.ToId ?? 0, req?.Code, string.IsNullOrEmpty(req?.Mode) ? "duel" : req.Mode);
+    return Results.Json(new { ok, error = err });
+});
+
 // ---------- 抢宝房 ----------
 app.MapGet("/api/rush/rooms", (HttpRequest http, GameService svc) =>
 {
@@ -242,8 +315,24 @@ app.MapPost("/api/rush/join", (RushJoinReq req, HttpRequest http, GameService sv
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
     if (!Features.IsOn(Features.Rush)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    // 带 Code = 凭码加入好友私人房；否则按档位进公共房
+    if (!string.IsNullOrEmpty(req?.Code))
+    {
+        var (pok, perr, proom) = svc.Rush.JoinPrivate(req.Code, p);
+        return Results.Json(new { ok = pok, error = perr, data = proom != null ? new { roomCode = proom.RoomCode } : null });
+    }
     var (ok, err, room) = svc.Rush.Join(req?.RoomId ?? 0, p);
     return Results.Json(new { ok, error = err, data = room != null ? new { roomId = (int)room.RoomId } : null });
+});
+
+/// <summary>创建好友私人抢宝房（档位由房主选择），返回房间码</summary>
+app.MapPost("/api/rush/private", (RushJoinReq req, HttpRequest http, GameService svc) =>
+{
+    var p = Auth(http);
+    var deny = Need(p); if (deny != null) return deny;
+    if (!Features.IsOn(Features.Rush) || !Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    var (ok, err, room, code) = svc.Rush.CreatePrivate(p, req?.RoomId ?? 0);
+    return Results.Json(new { ok, error = err, data = code != null ? new { roomCode = code } : null });
 });
 
 // ---------- 镜像对决 / 竞宝房 ----------
@@ -251,8 +340,21 @@ app.MapPost("/api/duel/join", (DuelJoinReq req, HttpRequest http, GameService sv
 {
     var p = Auth(http);
     var deny = Need(p); if (deny != null) return deny;
-    bool potMode = string.Equals(req?.Mode, "pot", StringComparison.OrdinalIgnoreCase);
+    bool potMode = string.Equals(req?.Mode, "pot", StringComparison.OrdinalIgnoreCase) || (req?.Pot == true); // friend 模式带 pot=true = 好友竞宝房
+    bool friendMode = string.Equals(req?.Mode, "friend", StringComparison.OrdinalIgnoreCase);
     if (!Features.IsOn(potMode ? Features.PotDuel : Features.Duel)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+    if (friendMode)
+    {
+        // 好友私人房：无 Code=建房（返回房码）；有 Code=凭码加入
+        if (!Features.IsOn(Features.Friend)) return Results.Json(new { ok = false, error = "FEATURE_DISABLED" });
+        if (string.IsNullOrEmpty(req.Code))
+        {
+            var (cok, cerr, croom, code) = svc.Duel.CreatePrivate(p, potMode);
+            return Results.Json(new { ok = cok, error = cerr, data = code != null ? new { roomCode = code, duelId = croom!.DuelId, potMode = croom.PotMode } : null });
+        }
+        var (jok, jerr, jroom) = svc.Duel.JoinPrivate(req.Code, p);
+        return Results.Json(new { ok = jok, error = jerr, data = jroom != null ? new { roomCode = jroom.RoomCode, duelId = jroom.DuelId, potMode = jroom.PotMode } : null });
+    }
     var (ok, err, room) = svc.Duel.Join(p, potMode);
     return Results.Json(new { ok, error = err, data = room != null ? new { duelId = room.DuelId, potMode = room.PotMode } : null });
 });
@@ -268,10 +370,16 @@ app.Use(async (context, next) =>
         var player = store.Validate(token);
         if (player == null) { context.Response.StatusCode = 401; return; }
         if (!Features.IsOn(Features.Rush)) { context.Response.StatusCode = 403; return; }
-        if (!int.TryParse(context.Request.Query["roomId"], out int roomId)) { context.Response.StatusCode = 400; return; }
+        string roomIdRaw = context.Request.Query["roomId"].ToString();
 
         var svc = context.RequestServices.GetRequiredService<GameService>();
-        var room = svc.Rush.GetRoom(roomId);
+        // roomId 兼容两种取值：公共档位 Id（1~4）或好友私人房 6 位房间码（100000+，数字可整型解析，须先查档位再回退码）
+        RushRoom? room = null;
+        if (int.TryParse(roomIdRaw, out int tierId))
+        {
+            room = svc.Rush.GetRoom(tierId);
+        }
+        room ??= svc.Rush.GetPrivate(roomIdRaw);
         if (room == null) { context.Response.StatusCode = 404; return; }
         if (!room.HasPlayer(player.Id)) { context.Response.StatusCode = 403; return; } // 未付门票不入流（防白嫖金额分布广播）
 
@@ -284,10 +392,15 @@ app.Use(async (context, next) =>
                 var msg = await ReceiveWsMessage(ws, context.RequestAborted);
                 if (msg == null) break;
                 if (!TryParseWsJson(msg, out var json)) continue; // 单条坏消息不断连（旧实现解析异常直接踢连接）
-                if (json.GetProperty("type").GetString() == "claim")
+                switch (json.GetProperty("type").GetString())
                 {
-                    int slot = json.GetProperty("slot").GetInt32();
-                    room.Claim(player.Id, slot);
+                    case "claim":
+                        int slot = json.GetProperty("slot").GetInt32();
+                        room.Claim(player.Id, slot);
+                        break;
+                    case "start": // 好友房房主提前开局（不足满员）
+                        room.TryStart(player.Id);
+                        break;
                 }
             }
         }
@@ -480,8 +593,11 @@ app.Run();
 // ---------- 请求模型 ----------
 public record LoginReq(string Name, string Secret = null, string Region = null);
 public record ShareReq(string Channel, string ContentId = "");
-public record RushJoinReq(int RoomId);
-public record DuelJoinReq(string Mode = "stake");
+public record RushJoinReq(int RoomId, string Code = null);
+public record DuelJoinReq(string Mode = "stake", string Code = null, bool Pot = false);
+public record FriendReq(string Code);
+public record FriendTargetReq(long? FromId);
+public record FriendInviteReq(long? ToId, string Code, string Mode = "duel");
 public record AdReq(string Placement);
 public record QuestReq(string QuestId, bool Double = false);
 public record SignReq(bool Double = false);

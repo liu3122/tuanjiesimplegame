@@ -148,6 +148,14 @@ CREATE TABLE IF NOT EXISTS gem_tx(
 CREATE TABLE IF NOT EXISTS rush_attempt(
   day TEXT NOT NULL, player_id INTEGER NOT NULL, room_id INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(day, player_id, room_id)
+);
+CREATE TABLE IF NOT EXISTS friend_link(
+  a_id INTEGER NOT NULL, b_id INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY(a_id, b_id)
+);
+CREATE TABLE IF NOT EXISTS friend_req(
+  from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY(from_id, to_id)
 );");
             try { Exec(conn, "ALTER TABLE player ADD COLUMN region TEXT NOT NULL DEFAULT 'CN'"); } catch (Exception) { }
             try { Exec(conn, "ALTER TABLE player ADD COLUMN skill_cooldowns TEXT NOT NULL DEFAULT '{}'"); } catch (Exception) { }
@@ -404,6 +412,62 @@ ON CONFLICT(row_id) DO UPDATE SET status=$st, receipt_hash=$rh, platform_txn_id=
         }
 
         /// <summary>钻石流水（gem_tx 与 gold_tx 同构；reason：iap_purchase / gem_exchange）</summary>
+        // ---------------- 好友（对称双行 link + 申请） ----------------
+
+        /// <summary>建立好友关系：对称写两行（A→B / B→A，列友扫描各取各的行）</summary>
+        public static void AddFriendLink(long a, long b)
+        {
+            string t = DateTime.UtcNow.ToString("o");
+            EnqueueWrite(conn => Exec(conn, "INSERT OR IGNORE INTO friend_link(a_id,b_id,created_at) VALUES($a,$b,$t),($b,$a,$t)",
+                ("$a", a), ("$b", b), ("$t", t)));
+        }
+
+        /// <summary>解除好友：对称删两行</summary>
+        public static void RemoveFriendLink(long a, long b)
+        {
+            EnqueueWrite(conn => Exec(conn, "DELETE FROM friend_link WHERE (a_id=$a AND b_id=$b) OR (a_id=$b AND b_id=$a)",
+                ("$a", a), ("$b", b)));
+        }
+
+        public static void AddFriendReq(long from, long to)
+        {
+            string t = DateTime.UtcNow.ToString("o");
+            EnqueueWrite(conn => Exec(conn, "INSERT OR IGNORE INTO friend_req(from_id,to_id,created_at) VALUES($f,$t,$at)",
+                ("$f", from), ("$t", to), ("$at", t)));
+        }
+
+        public static void DeleteFriendReq(long from, long to)
+        {
+            EnqueueWrite(conn => Exec(conn, "DELETE FROM friend_req WHERE from_id=$f AND to_id=$t",
+                ("$f", from), ("$t", to)));
+        }
+
+        /// <summary>启动恢复好友关系与待处理申请</summary>
+        public static void LoadFriends(Action<long, long> link, Action<long, long> req)
+        {
+            try
+            {
+                using var conn = Open();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT a_id,b_id FROM friend_link";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read()) link(r.GetInt64(0), r.GetInt64(1));
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT from_id,to_id FROM friend_req";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read()) req(r.GetInt64(0), r.GetInt64(1));
+                }
+                _log.LogInformation("好友关系恢复完成");
+            }
+            catch (Exception e)
+            {
+                _log.LogError(e, "LoadFriends 失败");
+            }
+        }
+
         public static void AddGemTx(long playerId, long delta, string reason, long refId)
         {
             string t = DateTime.UtcNow.ToString("o");
