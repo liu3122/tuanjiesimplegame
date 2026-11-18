@@ -241,7 +241,11 @@ namespace SimpleGameServer.Game
                 };
                 chest.ShuffleAmounts(new Random(_rng.Next()));
                 _chests[pid] = chest;
-                if (pid < 0) _botTargets[pid] = (double)Stake * (1.0 + _rng.NextDouble() * 1.2);
+                if (pid < 0)
+                {
+                    _botTargets[pid] = (double)Stake * (1.0 + _rng.NextDouble() * 1.2);
+                    if (PotMode) _players[pid].Gold = Math.Max(_players[pid].Gold, 2000); // 竞宝排除收费：给机器人预算（免费额度后会 NOT_ENOUGH_GOLD 卡死）
+                }
             }
             _phase = Phase.Match;
             _phaseEndUtc = DateTime.UtcNow.AddSeconds(g.DuelMatchSec);
@@ -271,9 +275,14 @@ namespace SimpleGameServer.Game
                 var (revealed, special, err2) = chest.EliminateEx(slot, payer);
                 if (err2 != null)
                 {
-                    if (cost > 0) { lock (payer.Sync) payer.Gold += cost; }
+                    if (cost > 0) { lock (payer.Sync) payer.Gold += cost; } // 失败退款不留痕（与单人模式一致）
                     SendErr(pid, err2);
                     return (false, err2);
+                }
+                if (cost > 0)
+                {
+                    Db.SavePlayer(payer); // 排除费入账落库（失败退款路径未 Save，内存即真相）
+                    Db.AddGoldTx(pid, -cost, "eliminate_fee", DuelId); // 经济报表可对账（否则竞宝费用成静默漂移）
                 }
                 if (special != 0)
                 {
@@ -470,12 +479,13 @@ namespace SimpleGameServer.Game
                 : (winner == 0 ? stake : (pid == winner ? (long)Math.Round(stake * 2 * (1 - g.AuctionFeeRate)) : 0));
 
             // 真人入账（按 Id 排序加锁，遵守全局锁序）
-            foreach (var pid in ids.Where(id => id > 0).OrderBy(id => id))
+            foreach (var pid in ids.Where(id => id > 0).OrderBy(id => id).ToList())
             {
                 long payout = potPayout(pid);
                 lock (_players[pid].Sync)
                 {
                     if (payout > 0) _players[pid].Gold += payout;
+                    Db.SavePlayer(_players[pid]); // 无条件落库：私房跳过下方进度块，赔付不能只改内存（重启即丢）
                 }
                 if (payout > 0)
                 {

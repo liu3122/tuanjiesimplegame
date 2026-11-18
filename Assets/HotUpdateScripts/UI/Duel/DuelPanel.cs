@@ -89,7 +89,7 @@ namespace Game.HotUpdate.ChestGame
                 {
                     b.interactable = false;
                     b.GetComponentInChildren<Text>().text =
-                        "<color=#A8B4C2>竞宝房 · Lv." + Screens.PotDuelMinLevel + L10n.Get(" 解锁") + "</color>\n<color=#77808C>胜者独得两个宝箱的全部价值（扣 5%）</color>";
+                        "<color=#A8B4C2>竞宝房 · Lv." + Screens.PotDuelMinLevel + L10n.Get(" 解锁") + "</color>\n<color=#77808C>入场费锚定奖池 · 胜者独得双方得分（扣 5% 封顶）· 每日限次</color>";
                 }
                 b.onClick.AddListener(() => { Object.Destroy(panel); Show(true); });
             }
@@ -442,7 +442,12 @@ namespace Game.HotUpdate.ChestGame
             if (_me["priceBuffNext"].AsBool) buff += "\n抬价 +15% 已就绪";
             if (_me["insuranceActive"].AsBool) buff += "\n保底已生效";
             int nextCost = _me["nextEliminateCost"].AsInt; // 竞宝模式：免费额度后收费（普通对决恒 0）
-            if (nextCost > 0) buff += "\n<color=#E05D5D>下次排除 " + nextCost + " 金币</color>";
+            if (nextCost > 0)
+            {
+                if (_me["taxReductionCount"].AsInt > 0)
+                    nextCost = (nextCost + 1) / 2; // 税务官减半（向上取整），展示对齐实收
+                buff += "\n<color=#E05D5D>下次排除 " + nextCost + " 金币</color>";
+            }
             _meInfo.text = L10n.Get("剩余") + " " + _me["remainingCount"].AsInt + " " + L10n.Get("格") + " · " + L10n.Get("总和") + " " + _me["remainingSum"].AsLong.ToString("N0")
                 + "\nEV " + _me["expectedValue"].AsDouble.ToString("F1") + " · " + L10n.Get("银行收购") + " " + _me["bankerOffer"].AsLong.ToString("N0") + buff;
             RefreshOppView();
