@@ -76,3 +76,4 @@ Server/simplegame.db*
 /TextToolDatas/
 __pycache__/
 *.pyc
+.zcode/
